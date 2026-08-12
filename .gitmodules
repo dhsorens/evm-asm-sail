@@ -1,0 +1,3 @@
+[submodule "extraction/evm-sail"]
+	path = extraction/evm-sail
+	url = https://github.com/frisitano/evm-sail

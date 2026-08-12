@@ -1,0 +1,21 @@
+# evm-asm-sail: proofs connecting evm-asm's SpecRef to the evm-sail Lean extraction.
+#
+# - `EvmAsm` comes from git, pinned to a specific revision of Verified-zkEVM/evm-asm.
+# - `evm` is the upstream-committed Lean extraction of evm-sail, consumed in place
+#   from the pinned submodule (run scripts/setup.sh once after cloning: it provisions
+#   the submodule and the Sail support library the extraction requires by path).
+name = "evmAsmSail"
+version = "0.1.0"
+defaultTargets = ["EvmAsmSail"]
+
+[[lean_lib]]
+name = "EvmAsmSail"
+
+[[require]]
+name = "EvmAsm"
+git = "https://github.com/Verified-zkEVM/evm-asm"
+rev = "6a43f7d94bdfe2cef0b5d6eb1a5197c656994fc6"
+
+[[require]]
+name = "evm"
+path = "extraction/evm-sail/extractions/lean/src"
