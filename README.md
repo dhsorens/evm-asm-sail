@@ -24,6 +24,8 @@ spec it asks for, and puts evm-sail's theorem-prover backend to work.
 | path | what |
 |---|---|
 | `EvmAsmSail/` | the proofs connecting SpecRef ↔ `Evm` (the extraction) |
+| `docs/comparison-matrix.md` | living SpecRef ↔ `Evm` semantic coverage matrix |
+| `docs/opcode-coverage.md` | living per-opcode proof coverage matrix |
 | `extraction/evm-sail` | pinned submodule; its `extractions/lean/src` is required by path |
 | `scripts/setup.sh` | post-clone provisioning (submodule + Sail Lean support library) |
 | `PROGRESS.md` | live plan and status |

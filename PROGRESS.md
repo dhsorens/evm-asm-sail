@@ -71,23 +71,40 @@ Notes / risks:
 - Regeneration (`make extract-lean`) needs the custom compiler; we consume the committed
   extraction and leave drift-gating to upstream CI. Track the submodule pin deliberately.
 
-### M1 — Statement skeleton + first equivalences
+### M1 — Comparison foundations + the ADD vertical slice  ← **current**
 
-- [ ] Map the surface: SpecRef's `Machine`/`EvmM` (Nat/List-based) vs `Evm`'s
-      `StateT HostState SailM` (BitVec + HostState); identify the cleanest anchor pair
-      (per-opcode `execute` vs `opImplementation`; `process_transaction` vs
-      `process_message_call`; `run_stateless_guest` vs `main`)
-- [ ] `EvmAsmSail/StateRel.lean`: state relation
-- [ ] Pure-function equivalences: 256-bit ALU, gas schedule constants (fork-gated)
-- [ ] `EvmAsmSail/Statement.lean`: target theorems; obligation registry (no `sorry` on main)
+Methodology per the `/evm-spec-comparison` skill: observation boundary first, explicit
+state relations, full-outcome (`StepResultRel`) step theorems, assumption + mismatch
+ledgers, living coverage matrices. Both sides surveyed in depth 2026-08-12; key finding:
+**both represent EVM words as `Nat`** (SpecRef `U256`, Evm `word`), so the arithmetic core
+needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
-### M2 — Per-opcode step equivalence
+- [x] Living docs seeded: [`docs/comparison-matrix.md`](docs/comparison-matrix.md)
+      (observable components × both-side reprs × relations),
+      [`docs/opcode-coverage.md`](docs/opcode-coverage.md) (90 `ast` constructors, all
+      `unstated` except KECCAK256 `n/a`),
+      [`docs/mismatches.md`](docs/mismatches.md) (MM-1 operation order, MM-2 gas
+      vocabularies — ALU constants verified equal, MM-3 partial dispatch)
+- [ ] `EvmAsmSail/Assumptions.lean` — the assumptions ledger (fork profile, representation
+      invariants, scope restrictions, extraction/crypto trust)
+- [ ] Representation layer: `Representation/EvmMonad.lean` (register-monad algebra),
+      `Representation/EvmStack.lean` (host stack abstraction + cursor invariant),
+      `Representation/SpecRefLemmas.lean` (EvmM run-shape lemmas, private-def strategy)
+- [ ] Relations layer: `Relations/{Word,Stack,Gas,Outcome,State}.lean` —
+      `WordRel`/`StackRel`/`GasRel`/inductive `StepResultRel` + `ErrorRel`/minimal `StateRel`
+- [ ] `Opcodes/Add.lean` — `add_step_equiv`, all four outcomes (success/OOG/underflow/
+      overflow); refactor the relation before widening
+- [ ] `Opcodes/BinopFamily.lean` — generic lemma + harvest (~19 binops), unop analogue
+      (ISZERO/NOT), POP/DUP validators
+- [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
 
-- [ ] `execute(op)` (Evm) ≈ `opImplementation op` (SpecRef) under the state relation, by family:
-      arith/bitwise/comparison → stack → memory → env/calldata/code → storage → control flow.
-      Note upstream's state-passing convention (handlers take/return pc, gas, stack cursor,
-      memory cursor) — likely *easier* to relate than the old register-mutation style.
-- [ ] Loop lemma: compose step equivalence at matched fuel
+### M2 — Shape validators across machinery (next tranche)
+
+- [ ] PUSHn (fetch/immediate), MLOAD/MSTORE (memory + expansion gas), JUMP/JUMPI
+      (control + jumpdest), RETURN (halt/output), SLOAD (storage + the
+      HostState↔`Evm.Contracts` connective tissue) — each full `StepResultRel`
+- [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
+      measure from gas)
 
 ### M3 — Transaction level
 
