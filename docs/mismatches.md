@@ -28,9 +28,23 @@ unreachable / ambiguity / needs investigation).
 - **Fork**: all. **Reachability**: trivially reachable. **Severity**: none expected.
 - **Likely cause**: intentional — evm-sail hoists the YP exceptional-halt predicate;
   execution-specs (and SpecRef) inline it per operation.
-- **Disposition**: *intentional abstraction* — to be **proven** equivalent at the halt
-  observation boundary by the `StepResultRel` failure cases, not assumed. Status: open
-  until `add_step_equiv` lands.
+- **Disposition**: *intentional abstraction* — **proven** equivalent at the halt
+  observation boundary for ADD (`add_step_equiv`, EvmAsmSail/Opcodes/Add.lean: the
+  underflow and OOG cases pair SpecRef throws with `Evm` `Exceptional` statuses; both
+  sides check stack shape before gas, so the kinds align case by case). Remains to be
+  re-established per shape class as families land.
+
+## MM-4: Step-boundary pc convention
+
+- **Area**: program-counter advancement.
+- **SpecRef**: handlers advance `pc` themselves (`pcAdd 1` inside `binOp`).
+- **`Evm`**: `fetch` advances `pc` past the opcode *before* `execute`; ALU handlers
+  return `pc_in` unchanged.
+- **Impact**: at handler entry the pcs differ by one; they re-align at step boundaries.
+  Encoded in the theorems as `pc_in = sRef.evm.pc + 1` (hypothesis) and
+  `returned pc = post.evm.pc` (conclusion, inside `AluPost`).
+- **Disposition**: *intentional abstraction* (decode/fetch layering difference),
+  handled by the statement shape; will need care at JUMP/JUMPI and PUSH.
 
 ## MM-2: Gas constant vocabularies and the storage-access schedule
 

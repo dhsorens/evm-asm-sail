@@ -85,15 +85,20 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `unstated` except KECCAK256 `n/a`),
       [`docs/mismatches.md`](docs/mismatches.md) (MM-1 operation order, MM-2 gas
       vocabularies — ALU constants verified equal, MM-3 partial dispatch)
-- [ ] `EvmAsmSail/Assumptions.lean` — the assumptions ledger (fork profile, representation
+- [x] `EvmAsmSail/Assumptions.lean` — the assumptions ledger (fork profile, representation
       invariants, scope restrictions, extraction/crypto trust)
-- [ ] Representation layer: `Representation/EvmMonad.lean` (register-monad algebra),
-      `Representation/EvmStack.lean` (host stack abstraction + cursor invariant),
-      `Representation/SpecRefLemmas.lean` (EvmM run-shape lemmas, private-def strategy)
-- [ ] Relations layer: `Relations/{Word,Stack,Gas,Outcome,State}.lean` —
+- [x] Representation layer: `Representation/EvmMonad.lean` (`runS` algebra incl. fused
+      binds), `Representation/EvmStack.lean` (private host helpers characterized via
+      `open private`; prefix-up-to-cursor refinement — popped entries linger as scratch;
+      `take_writeListAt`; wrapping-cursor arithmetic), `Representation/EvmGas.lean`
+      (`charge`/`exc_halt`/`refill`/`validate_stack` run shapes, `haltRegs`),
+      `Representation/SpecRefLemmas.lean` (`runR` algebra; stack/gas case splits)
+- [x] Relations layer: `Relations/{Word,Stack,Gas,Outcome,State}.lean` —
       `WordRel`/`StackRel`/`GasRel`/inductive `StepResultRel` + `ErrorRel`/minimal `StateRel`
-- [ ] `Opcodes/Add.lean` — `add_step_equiv`, all four outcomes (success/OOG/underflow/
-      overflow); refactor the relation before widening
+- [x] `Opcodes/Add.lean` — **`add_step_equiv` proven**: all reachable outcomes
+      (success/underflow/OOG; overflow unreachable for 2-in/1-out, noted in docstring).
+      Axioms: only `propext, Classical.choice, Quot.sound`. MM-1 (operation order) and
+      MM-4 (pc convention) resolved as proven-equivalent for ADD.
 - [ ] `Opcodes/BinopFamily.lean` — generic lemma + harvest (~19 binops), unop analogue
       (ISZERO/NOT), POP/DUP validators
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables

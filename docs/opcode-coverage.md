@@ -27,7 +27,7 @@ are total.
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
 | STOP | 0x00 | `iStop` | `execute_stop` | system | unstated |
-| ADD | 0x01 | `iAdd` | `execute_add` | binop | unstated |
+| ADD | 0x01 | `iAdd` | `execute_add` | binop | **full** (`add_step_equiv`, EvmAsmSail/Opcodes/Add.lean — success/underflow/OOG; overflow unreachable for 2-in/1-out) |
 | MUL | 0x02 | `iMul` | `execute_mul` | binop | unstated |
 | SUB | 0x03 | `iSub` | `execute_sub` | binop | unstated |
 | DIV | 0x04 | `iDiv` | `execute_div` | binop | unstated |
@@ -139,6 +139,7 @@ are total.
 
 | status | count |
 |---|---|
-| unstated | 89 |
+| full | 1 |
+| unstated | 88 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
