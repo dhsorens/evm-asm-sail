@@ -11,6 +11,9 @@ description: >
 
 # EVM specification comparison
 
+Related skills: `evm-bridge-gotchas` (failure modes), `opcode-slice` (one-opcode
+ritual), `coverage-hygiene` (matrices / refresh). Standing rules: `AGENTS.md`.
+
 ## Objective
 
 Compare **SpecRef** (evm-asm's internal Lean EVM semantics) and **`Evm`** (the
