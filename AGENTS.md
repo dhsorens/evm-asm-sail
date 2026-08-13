@@ -82,7 +82,8 @@ workflows:
 | `coverage-hygiene` | updating matrices / regenerating the coverage site or canvas |
 | `acquiring-skills` | creating or updating skills after real friction |
 
-Commands under `.claude/commands/`: `/reflect`, `/plan-slice`.
+Commands under `.claude/commands/`: `/work` (default contribute entrypoint),
+`/plan-slice`, `/reflect`.
 
 ## Off-limits
 
