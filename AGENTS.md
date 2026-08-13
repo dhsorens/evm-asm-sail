@@ -101,8 +101,11 @@ workflows:
 | `coverage-hygiene` | updating matrices / regenerating the coverage site or canvas |
 | `acquiring-skills` | creating or updating skills after real friction |
 
-Commands under `.claude/commands/`: `/work` (default contribute entrypoint),
+Commands under `.claude/commands/`: `/work` (default contribute entrypoint —
+branch, slice, coverage hygiene, **open a PR**, then `/reflect`),
 `/plan-slice`, `/reflect`, `/prove` (Aleph Prover for hard closed-form proofs).
+`/work` does not commit slice work on `main`; include regenerated
+`docs/index.html` in the PR (live site updates on merge).
 
 When a theorem statement is sound but the proof is tactically hard after real
 attempts: first check for a false property / bad relation / mismatch; only then

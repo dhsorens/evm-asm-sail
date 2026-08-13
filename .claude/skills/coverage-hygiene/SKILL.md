@@ -34,8 +34,9 @@ are projections. Chat is not a coverage document.
 python3 scripts/refresh-proof-coverage-canvas.py
 ```
 
-3. Commit generated `docs/index.html` together with the matrix edits when
-   publishing; push to `main` to update the live site.
+3. Commit generated `docs/index.html` together with the matrix edits on the
+   **`/work` branch / PR** — do not push coverage straight to `main` from a
+   worker session. The live site updates when that PR merges.
 4. Keep the proof-coverage canvas open beside chat when doing slice work so the
    next opcode filter stays honest.
 
@@ -71,5 +72,8 @@ Before ending a proof session that touched theorems:
 
 - [ ] Matrices match reality
 - [ ] Refresh script run if matrices changed
+- [ ] Regenerated `docs/index.html` staged with the matrix edits
 - [ ] Mismatches / assumptions updated if new disagreements or hypotheses appeared
 - [ ] No progress claimed beyond the matrices
+- [ ] When invoked from `/work`: changes are on a feature branch headed for a PR
+  (not pushed straight to `main`)

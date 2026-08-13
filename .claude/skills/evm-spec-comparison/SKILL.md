@@ -72,7 +72,9 @@ statuses):
 2. Refresh canvas + site source from the matrices (one DATA snapshot for both):
    `python3 scripts/refresh-proof-coverage-canvas.py`
    (writes `docs/index.html` and, if present, the Cursor canvas DATA).
-3. Commit and push `docs/index.html` on `main` so the live site updates.
+3. Commit `docs/index.html` with the matrix edits on the `/work` branch / PR
+   (live site updates on merge to `main` — do not push coverage straight to
+   `main` from a worker session).
 4. Keep the proof-coverage canvas open beside chat so the next slice and filters
    stay honest. Expand opcode rows to inspect theorem links (`openFile` into
    `EvmAsmSail/…`); verify claims against the named `StepResultRel` theorem.

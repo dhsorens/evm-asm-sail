@@ -1,7 +1,8 @@
 # Work — contribute a slice
 
 You are a **worker** session for this repo. Execute one coherent contribution
-toward SpecRef ↔ `Evm` equivalence, then leave coverage artifacts honest.
+toward SpecRef ↔ `Evm` equivalence, leave coverage artifacts honest, and
+**open a pull request** with the result.
 
 Do **not** reimplement rituals here — load and follow the skills below.
 
@@ -29,6 +30,18 @@ only if it is ambiguous between two deliverables.
 Do not invent progress from chat or stale HTML alone — if HTML and markdown
 disagree, **markdown wins**; regenerate later via `coverage-hygiene`.
 
+## Branch (before editing)
+
+`/work` never lands slice work directly on `main`.
+
+1. `git fetch origin` (if networked) and note current branch.
+2. If you are on `main` (or detached / unrelated): create and check out
+   `work/<short-slug>` from up-to-date `origin/main`
+   (e.g. `work/iszero`, `work/memory-rel`, `work/unop-family`).
+3. If you are already on a `work/…` (or user-named feature) branch for this
+   goal: keep it; do not create a second branch.
+4. Announce the branch name with the goal.
+
 ## Orient (always)
 
 Before editing Lean:
@@ -48,18 +61,18 @@ Before editing Lean:
 | One opcode / family member with `StepResultRel` | Skill **`opcode-slice`** (full ritual) |
 | Shared lemma / relation / representation prerequisite | `evm-spec-comparison` + small scoped Lean change; then coverage rows if status changes |
 | Docs / status / site only | Skill **`coverage-hygiene`** only |
-| “Plan several next items, don’t code” | Command **`/plan-slice`** instead — stop after planning |
+| “Plan several next items, don’t code” | Command **`/plan-slice`** instead — stop after planning (**no PR**) |
 | Named theorem already stated, proof too hard | Command **`/prove`** (`.claude/commands/prove.md`) — Aleph Prover |
 
 Keep the slice **atomic** (one logical concern). If it balloons, stop after a
-compiling subset, run coverage hygiene for what landed, and note the residual
-(or suggest `/plan-slice`).
+compiling subset, run coverage hygiene for what landed, open the PR for that
+subset, and note the residual (or suggest `/plan-slice`).
 
 ## Execute
 
 1. Implement per the dispatched skill(s).
 2. `lake build` — do not continue past errors; no new `axiom`s; no `sorry` for
-   `main` except as a temporary placeholder before Aleph (next step).
+   mergeable work except as a temporary placeholder before Aleph (next step).
    **Clear compiler warnings** in files you touched (unused variables /
    hypotheses, unused simp args, deprecated tactics, dead `omega`). An unused
    hypothesis usually means the lemma is not tight — drop it from the
@@ -74,16 +87,41 @@ compiling subset, run coverage hygiene for what landed, and note the residual
 4. Update living docs as the skills require (`opcode-coverage`, comparison
    matrix, mismatches, `PROGRESS.md` as appropriate).
 5. Run skill **`coverage-hygiene`** (refresh script; never hand-edit
-   `docs/index.html` / canvas DATA).
+   `docs/index.html` / canvas DATA). Include regenerated `docs/index.html` in
+   the PR — do **not** push coverage straight to `main` from `/work`.
+
+## Ship: commit + pull request
+
+After a contribution that changed the tree (Lean, docs, matrices, generated
+site, skills, …):
+
+1. `git status` / `git diff` / recent `git log` — draft a concise commit message
+   (why, not file list).
+2. Stage intentional files only; commit on the `work/…` branch.
+3. `git push -u origin HEAD`.
+4. Open or update a PR against `main`:
+   - If no PR for this branch: `gh pr create` with title + body
+     (Summary bullets, Test plan: `lake build`, coverage rows touched).
+   - If a PR already exists for this branch: push only; do not open a second.
+5. Put the **PR URL** in the session summary.
+
+**Skip the PR** only when:
+
+- Nothing landed (plan-only `/plan-slice`, user aborted, or falsify-and-stop
+  with no file changes worth reviewing).
+- The user explicitly said not to open a PR.
+
+Do **not** merge the PR unless the user asks.
 
 ## Finish with `/reflect`
 
 After the contribution is done (or cleanly stopped):
 
-1. Summarize in a few bullets: goal, what landed, theorem names, coverage
-   status deltas.
+1. Summarize in a few bullets: goal, branch, what landed, theorem names,
+   coverage status deltas, **PR URL** (or “no PR: &lt;reason&gt;”).
 2. Run **`/reflect`** (`.claude/commands/reflect.md`). Apply only high-signal
-   skill/`AGENTS.md` tweaks; avoid prompt bloat.
+   skill/`AGENTS.md` tweaks; avoid prompt bloat. Reflect edits that belong with
+   this slice go on the same branch/PR when practical.
 3. Do not open follow-up work in the same turn unless the user asks.
 
 ## Off-limits (reminder)
@@ -91,3 +129,4 @@ After the contribution is done (or cleanly stopped):
 - No edits inside `extraction/evm-sail` or the Lake `EvmAsm` checkout.
 - No Sail→Lean regeneration here.
 - Do not claim `full` unless the matrix row and theorem say so.
+- Do not commit slice work on `main`; do not force-push.
