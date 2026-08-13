@@ -43,7 +43,7 @@ are total.
 | SLT | 0x12 | `iSlt` | `execute_slt` | binop | **full** (`slt_step_equiv`, EvmAsmSail/Opcodes/Slt.lean — success/underflow/OOG; overflow unreachable) |
 | SGT | 0x13 | `iSgt` | `execute_sgt` | binop | **full** (`sgt_step_equiv`, EvmAsmSail/Opcodes/Sgt.lean — success/underflow/OOG; overflow unreachable) |
 | EQ | 0x14 | `iEq` | `execute_eq` | binop | **full** (`eq_step_equiv`, EvmAsmSail/Opcodes/Eq.lean — success/underflow/OOG; overflow unreachable) |
-| ISZERO | 0x15 | `iIszero` | `execute_iszero` | unop | unstated |
+| ISZERO | 0x15 | `iIszero` | `execute_iszero` | unop | **full** (`iszero_step_equiv`, EvmAsmSail/Opcodes/Iszero.lean — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
 | AND | 0x16 | `iAnd` | `execute_and` | binop | **full** (`and_step_equiv`, EvmAsmSail/Opcodes/And.lean — success/underflow/OOG; overflow unreachable) |
 | OR | 0x17 | `iOr` | `execute_or` | binop | **full** (`or_step_equiv`, EvmAsmSail/Opcodes/Or.lean — success/underflow/OOG; overflow unreachable) |
 | XOR | 0x18 | `iXor` | `execute_xor` | binop | **full** (`xor_step_equiv`, EvmAsmSail/Opcodes/Xor.lean — success/underflow/OOG; overflow unreachable) |
@@ -139,7 +139,7 @@ are total.
 
 | status | count |
 |---|---|
-| full | 20 |
-| unstated | 69 |
+| full | 21 |
+| unstated | 68 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
