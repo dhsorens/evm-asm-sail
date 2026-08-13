@@ -101,7 +101,8 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 | --- | --- |
 | Success-only theorem "for now" | Inductive `StepResultRel` covering reachable failures; mark unreachable cases in the docstring / registry |
 | Restrict `StateRel` until both sides agree | Ask whether the restriction is an EVM invariant; else mismatch ledger |
-| Add `axiom` for a stuck lemma | `sorry` on a branch, or decompose; never silent axioms |
+| Add `axiom` for a stuck lemma | Compiling `sorry`, then `/prove` (Aleph) if the statement is sound; else decompose / restate. Never silent axioms |
+| Send a bad / incomplete statement to Aleph | Fix the relation or record a mismatch first; Aleph is for hard proofs of goals that already typecheck |
 | Equate SpecRef and host stacks structurally | Use `StackRel` (cursor-prefix refinement) |
 | Prove against `opImplementation` | Prove against the handler `def` |
 | Hand-edit `docs/index.html` after a status change | Update markdown matrices → run refresh script |

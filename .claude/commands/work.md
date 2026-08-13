@@ -48,6 +48,7 @@ Before editing Lean:
 | Shared lemma / relation / representation prerequisite | `evm-spec-comparison` + small scoped Lean change; then coverage rows if status changes |
 | Docs / status / site only | Skill **`coverage-hygiene`** only |
 | “Plan several next items, don’t code” | Command **`/plan-slice`** instead — stop after planning |
+| Named theorem already stated, proof too hard | Command **`/prove`** (`.claude/commands/prove.md`) — Aleph Prover |
 
 Keep the slice **atomic** (one logical concern). If it balloons, stop after a
 compiling subset, run coverage hygiene for what landed, and note the residual
@@ -57,10 +58,16 @@ compiling subset, run coverage hygiene for what landed, and note the residual
 
 1. Implement per the dispatched skill(s).
 2. `lake build` — do not continue past errors; no new `axiom`s; no `sorry` for
-   `main`.
-3. Update living docs as the skills require (`opcode-coverage`, comparison
+   `main` except as a temporary placeholder before Aleph (next step).
+3. **Hard proof?** If the statement is sound but the proof is stuck after
+   several real attempts, leave a compiling `sorry` and follow
+   **`.claude/commands/prove.md`** (`/prove <theorem> in <file>`) to dispatch
+   to Aleph Prover. Do **not** use Aleph to paper over a bad statement,
+   missing relation, or mismatch — record those and stop. Needs
+   `PROVER_API_KEY`. After a successful apply, `lake build` again.
+4. Update living docs as the skills require (`opcode-coverage`, comparison
    matrix, mismatches, `PROGRESS.md` as appropriate).
-4. Run skill **`coverage-hygiene`** (refresh script; never hand-edit
+5. Run skill **`coverage-hygiene`** (refresh script; never hand-edit
    `docs/index.html` / canvas DATA).
 
 ## Finish with `/reflect`

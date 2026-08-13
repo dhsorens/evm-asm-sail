@@ -83,7 +83,12 @@ workflows:
 | `acquiring-skills` | creating or updating skills after real friction |
 
 Commands under `.claude/commands/`: `/work` (default contribute entrypoint),
-`/plan-slice`, `/reflect`.
+`/plan-slice`, `/reflect`, `/prove` (Aleph Prover for hard closed-form proofs).
+
+When a theorem statement is sound but the proof is tactically hard after real
+attempts: leave a compiling `sorry` and follow `.claude/commands/prove.md`
+(`PROVER_API_KEY` required). Do not send unsound or under-specified goals to
+Aleph; do not replace a stuck proof with an `axiom`.
 
 ## Off-limits
 

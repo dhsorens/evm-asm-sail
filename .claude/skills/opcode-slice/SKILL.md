@@ -94,10 +94,15 @@ See `coverage-hygiene` for the full artifact rules.
 
 ### 6. Stop conditions
 
-- **Stuck after 3 fundamentally different approaches**: stop. Write the blocker
-  (missing lemma shape, relation bug, upstream `partial`) into
-  `docs/mismatches.md` or a short note in `PROGRESS.md`. Do not weaken the
-  theorem to fake progress.
+- **Statement / infrastructure problem** (unsound goal, missing bridge,
+  relation bug, upstream `partial`): stop. Write concrete evidence into
+  `docs/mismatches.md` or `PROGRESS.md`. Do **not** weaken the theorem, and do
+  **not** send it to Aleph — fix or restate first.
+- **Proof is tactically hard** (statement looks right; `lake build` accepts the
+  `sorry`; 3+ failed proof approaches): leave a compiling `sorry`, then
+  dispatch that theorem via **`/prove`** — read and follow
+  `.claude/commands/prove.md` (Aleph Prover). After Aleph applies a proof,
+  re-run `lake build` and continue from step 5. Requires `PROVER_API_KEY`.
 - **Slice too large** (new memory model + opcode + gas schedule): split —
   representation/relation PR first, opcode theorem second. Prefer
   `/plan-slice` sizing.
