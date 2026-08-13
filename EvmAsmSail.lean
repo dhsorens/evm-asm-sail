@@ -29,3 +29,5 @@ import EvmAsmSail.Opcodes.Xor
 import EvmAsmSail.Opcodes.Shl
 import EvmAsmSail.Opcodes.Shr
 import EvmAsmSail.Opcodes.Byte
+import EvmAsmSail.Opcodes.Signextend
+import EvmAsmSail.Opcodes.Sar

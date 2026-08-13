@@ -24,6 +24,15 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `u256` reduction. `StackRel.wf` is an EVM invariant, not a free lunch — do not
   drop it from hypotheses without a plan to prove preservation.
 
+- **`omega` fails on goals typed at `U256`/`word` abbrevs and on `Int` powers.**
+  Trigger: an equality whose `Eq` lives at `U256` (SpecRef) or `word` (`Evm`) —
+  omega matches types syntactically and won't see the `Nat` underneath; likewise
+  `(2 : Int) ^ 256` in a hypothesis or goal is opaque to omega (Nat powers are
+  fine). Wrong move: fight the goal with `unfold`/`simp` roulette. Right move:
+  `exact (by omega : <same statement ascribed at Nat>)` for the abbrev case;
+  rewrite `Int` powers to numerals via `show (2:Int)^(256:Nat) = <numeral> from
+  by decide` first (see `Representation/SignedWord.lean`, `fromSigned_eq`).
+
 ## Stack geometry
 
 - SpecRef stack is **head = top** (`List U256`). Host stack is **bottom-indexed**
