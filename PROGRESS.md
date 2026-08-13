@@ -107,9 +107,17 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       (BitVec round-trips, disjoint-bit `or_fill`, `div_parity_iff`)
 - [x] `Opcodes/UnopFamily.lean` — unop analogue of the binop family (`unopShape` +
       generic run lemmas + `unop_step_equiv`, full `StepResultRel`; overflow
-      unreachable for 1-in/1-out); **ISZERO harvested** (`iszero_step_equiv`,
-      `Opcodes/Iszero.lean`, 3 classical axioms).
-      Residual: NOT/CLZ unops, ternops (ADDMOD/MULMOD), EXP, POP/DUP validators
+      unreachable for 1-in/1-out); **all 3 unops harvested** (ISZERO, NOT, CLZ —
+      one file per opcode, 3 classical axioms each). Bridges: `word_not_eq`
+      (existing), bit-length section in `Representation/BitwiseWord.lean`
+      (`clzAuxRec` highest-set-bit scan ↔ `Nat.log2`, limb-wise
+      `word_bit_length_eq`) for CLZ. CLZ's Osaka gate lives in decode, upstream
+      of the `execute` step boundary.
+- [x] `Opcodes/TernopFamily.lean` — ternop analogue (`ternOp` names SpecRef's
+      literal do-block shape, `ternopShape` the extraction's; `ternop_step_equiv`
+      full `StepResultRel`; overflow unreachable for 3-in/1-out);
+      **ADDMOD harvested** (`addmod_step_equiv`, `Opcodes/Addmod.lean`).
+      Residual: MULMOD ternop, EXP, POP/DUP validators
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
 
 ### M2 — Shape validators across machinery (next tranche)

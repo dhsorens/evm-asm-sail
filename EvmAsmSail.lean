@@ -33,3 +33,7 @@ import EvmAsmSail.Opcodes.Signextend
 import EvmAsmSail.Opcodes.Sar
 import EvmAsmSail.Opcodes.UnopFamily
 import EvmAsmSail.Opcodes.Iszero
+import EvmAsmSail.Opcodes.Not
+import EvmAsmSail.Opcodes.Clz
+import EvmAsmSail.Opcodes.TernopFamily
+import EvmAsmSail.Opcodes.Addmod
