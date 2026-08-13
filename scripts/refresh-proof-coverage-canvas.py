@@ -30,6 +30,7 @@ OPCODE_DOC = REPO / "docs" / "opcode-coverage.md"
 COMPARISON_DOC = REPO / "docs" / "comparison-matrix.md"
 HTML_OUT = REPO / "docs" / "index.html"
 SITE_URL = "https://derekhsorensen.com/evm-asm-sail/"
+GITHUB_BLOB = "https://github.com/dhsorens/evm-asm-sail/blob/main/"
 CANVAS = (
     Path.home()
     / ".cursor"
@@ -276,10 +277,11 @@ def esc(value: object) -> str:
 
 
 def repo_href(rel_path: str, line: int | None = None) -> str:
-    """Href from docs/ into the repo (local file open + Pages with `/docs` source)."""
-    href = f"../{rel_path}"
+    """GitHub blob link: only docs/ is published, so in-repo relative paths 404 on the site."""
+    href = GITHUB_BLOB + rel_path
     if line:
-        href += f"#L{line}"
+        # markdown renders by default on GitHub, where line anchors do nothing
+        href += f"?plain=1#L{line}" if rel_path.endswith(".md") else f"#L{line}"
     return href
 
 
@@ -312,6 +314,10 @@ def render_html(data: dict) -> str:
     unrelated = sum(1 for c in components if c["statusKind"] == "unrelated")
     slice_rows = next_slice(opcodes)
     outcome = data["links"]["outcomeRel"]
+    legend = data["links"]["opcodeLegend"]
+    legend_href = repo_href(legend["path"], legend.get("line"))
+    comparison_href = repo_href(data["source"]["comparisonDoc"])
+    opcode_doc_href = repo_href(data["source"]["opcodeDoc"])
 
     family_bars = "".join(
         f'<div class="bar-row"><span class="bar-label">{esc(name)}</span>'
@@ -402,7 +408,7 @@ def render_html(data: dict) -> str:
             body_parts.append(f"<p class='muted'>Reason: {esc(proof['note'])}</p>")
 
         body_parts.append(
-            "<p class='links'><a href='opcode-coverage.md'>Status legend (docs)</a></p>"
+            f"<p class='links'><a href='{esc(legend_href)}'>Status legend (docs)</a></p>"
         )
 
         search = " ".join(
@@ -592,8 +598,8 @@ def render_html(data: dict) -> str:
   </p>
   <div class="banner">
     Source of truth:
-    <a href="opcode-coverage.md">docs/opcode-coverage.md</a> ·
-    <a href="comparison-matrix.md">docs/comparison-matrix.md</a>.
+    <a href="{esc(opcode_doc_href)}">docs/opcode-coverage.md</a> ·
+    <a href="{esc(comparison_href)}">docs/comparison-matrix.md</a>.
     Live at <a href="{esc(SITE_URL)}">{esc(SITE_URL)}</a>.
     Refresh canvas + this page with <code>python3 scripts/refresh-proof-coverage-canvas.py</code>, then push on <code>main</code> to publish.
   </div>
@@ -608,7 +614,7 @@ def render_html(data: dict) -> str:
   <div class="card">
     <h2 style="margin-top:0">What opcode statuses mean</h2>
     {glossary_html}
-    <p class="links"><a href="opcode-coverage.md">Legend in docs</a> ·
+    <p class="links"><a href="{esc(legend_href)}">Legend in docs</a> ·
     <a href="{esc(repo_href(outcome['relationFile'], outcome.get('stepResultRelLine')))}">StepResultRel</a></p>
   </div>
 
