@@ -24,7 +24,7 @@ shapes), out-of-gas. Overflow is unreachable (2 in, 1 out: the height
 decreases), per `validate_stack`'s bound.
 -/
 
-open private binOp pcAdd from EvmAsm.Stateless.SpecRef.InstructionsCore
+open private binOp pcAdd boolPush from EvmAsm.Stateless.SpecRef.InstructionsCore
 open private writeListAt from Evm.HostAxioms
 
 set_option maxHeartbeats 1000000
@@ -41,6 +41,21 @@ def AluPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
   StateRel sR' step.2.1 step.2.2.2 hs' ss' ∧
   step.1 = sR'.evm.pc ∧ step.2.2.1 = mem
+
+/-! ## Shared facts for per-opcode pure lemmas -/
+
+/-- lean-sail's `HPow Int Int Int` is `x ^ n.toNat` (Sail.lean:860), so
+Sail's `2 ^i 256` is definitionally `((2 : Int) ^ (256 : Nat)).toNat`. -/
+theorem two_pow_toNat : ((2 : Int) ^ (256 : Nat)).toNat = 2 ^ 256 := by
+  decide
+
+theorem wrap256_wf (n : Nat) : WordWf (wrap256 n) :=
+  Nat.mod_lt _ (Nat.two_pow_pos 256)
+
+theorem boolPush_wf (b : Bool) : WordWf (boolPush b) := by
+  unfold WordWf
+  show (if b = true then 1 else 0) < 2 ^ 256
+  split <;> decide
 
 /-! ## SpecRef side: `binOp cost f`, generically -/
 

@@ -11,3 +11,10 @@ import EvmAsmSail.Relations.State
 import EvmAsmSail.Assumptions
 import EvmAsmSail.Opcodes.BinopFamily
 import EvmAsmSail.Opcodes.Add
+import EvmAsmSail.Opcodes.Mul
+import EvmAsmSail.Opcodes.Sub
+import EvmAsmSail.Opcodes.Div
+import EvmAsmSail.Opcodes.Mod
+import EvmAsmSail.Opcodes.Lt
+import EvmAsmSail.Opcodes.Gt
+import EvmAsmSail.Opcodes.Eq
