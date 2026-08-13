@@ -7,19 +7,15 @@ all) the equivalence proofs between them.
 
 ## Proof coverage dashboard
 
-**[Open the coverage report](docs/coverage/index.html)** — generated HTML snapshot of SpecRef ↔ `Evm`
+**[Live coverage report](https://derekhsorensen.com/evm-asm-sail/)** — SpecRef ↔ `Evm`
 proof progress (opcode statuses, expandable theorem links, comparison-matrix components).
 
-> GitHub’s file viewer shows HTML as source. Open the file locally in a browser for the
-> interactive view; later this link will point at the published site (Pages).
-
-Regenerate after matrix edits:
+Regenerate after matrix edits (updates `docs/index.html` + the Cursor canvas from the same
+snapshot; push `docs/index.html` on `main` to publish the site):
 
 ```sh
 python3 scripts/refresh-proof-coverage-canvas.py
 ```
-
-(That command also refreshes the Cursor canvas DATA blob when present.)
 
 ## Why
 
@@ -40,7 +36,7 @@ spec it asks for, and puts evm-sail's theorem-prover backend to work.
 | path | what |
 |---|---|
 | `EvmAsmSail/` | the proofs connecting SpecRef ↔ `Evm` (the extraction) |
-| `docs/coverage/index.html` | generated coverage dashboard (sync with canvas) |
+| `docs/index.html` | generated site root ([live](https://derekhsorensen.com/evm-asm-sail/); sync with canvas) |
 | `docs/comparison-matrix.md` | living SpecRef ↔ `Evm` semantic coverage matrix |
 | `docs/opcode-coverage.md` | living per-opcode proof coverage matrix |
 | `scripts/refresh-proof-coverage-canvas.py` | refresh HTML report + Cursor canvas from the two docs |
@@ -66,4 +62,4 @@ generated sources at the submodule pin.
 
 ## Status
 
-Early bootstrap — see [PROGRESS.md](PROGRESS.md). Coverage snapshot: [docs/coverage/index.html](docs/coverage/index.html).
+Early bootstrap — see [PROGRESS.md](PROGRESS.md). Coverage: [derekhsorensen.com/evm-asm-sail](https://derekhsorensen.com/evm-asm-sail/).

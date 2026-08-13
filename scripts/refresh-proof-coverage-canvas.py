@@ -6,8 +6,11 @@ Markdown is source of truth:
   docs/comparison-matrix.md
 
 Outputs (kept in sync from the same DATA snapshot):
-  docs/coverage/index.html          — in-repo HTML report (GitHub Pages–ready)
+  docs/index.html                   — site source (Pages `/docs` → live URL below)
   ~/.cursor/.../proof-coverage.canvas.tsx — Cursor canvas DATA blob (if present)
+
+Live site (after pushing docs/index.html on main):
+  https://derekhsorensen.com/evm-asm-sail/
 
   python3 scripts/refresh-proof-coverage-canvas.py
 """
@@ -25,7 +28,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 OPCODE_DOC = REPO / "docs" / "opcode-coverage.md"
 COMPARISON_DOC = REPO / "docs" / "comparison-matrix.md"
-HTML_OUT = REPO / "docs" / "coverage" / "index.html"
+HTML_OUT = REPO / "docs" / "index.html"
+SITE_URL = "https://derekhsorensen.com/evm-asm-sail/"
 CANVAS = (
     Path.home()
     / ".cursor"
@@ -272,8 +276,8 @@ def esc(value: object) -> str:
 
 
 def repo_href(rel_path: str, line: int | None = None) -> str:
-    """Href from docs/coverage/ into the repo (works for local file open + Pages at repo root)."""
-    href = f"../../{rel_path}"
+    """Href from docs/ into the repo (local file open + Pages with `/docs` source)."""
+    href = f"../{rel_path}"
     if line:
         href += f"#L{line}"
     return href
@@ -398,7 +402,7 @@ def render_html(data: dict) -> str:
             body_parts.append(f"<p class='muted'>Reason: {esc(proof['note'])}</p>")
 
         body_parts.append(
-            "<p class='links'><a href='../opcode-coverage.md'>Status legend (docs)</a></p>"
+            "<p class='links'><a href='opcode-coverage.md'>Status legend (docs)</a></p>"
         )
 
         search = " ".join(
@@ -588,10 +592,10 @@ def render_html(data: dict) -> str:
   </p>
   <div class="banner">
     Source of truth:
-    <a href="../opcode-coverage.md">docs/opcode-coverage.md</a> ·
-    <a href="../comparison-matrix.md">docs/comparison-matrix.md</a>.
-    Refresh with <code>python3 scripts/refresh-proof-coverage-canvas.py</code>.
-    GitHub’s file viewer shows HTML source; open this file locally (or later via Pages) for the interactive view.
+    <a href="opcode-coverage.md">docs/opcode-coverage.md</a> ·
+    <a href="comparison-matrix.md">docs/comparison-matrix.md</a>.
+    Live at <a href="{esc(SITE_URL)}">{esc(SITE_URL)}</a>.
+    Refresh canvas + this page with <code>python3 scripts/refresh-proof-coverage-canvas.py</code>, then push on <code>main</code> to publish.
   </div>
 
   <div class="stats">
@@ -604,7 +608,7 @@ def render_html(data: dict) -> str:
   <div class="card">
     <h2 style="margin-top:0">What opcode statuses mean</h2>
     {glossary_html}
-    <p class="links"><a href="../opcode-coverage.md">Legend in docs</a> ·
+    <p class="links"><a href="opcode-coverage.md">Legend in docs</a> ·
     <a href="{esc(repo_href(outcome['relationFile'], outcome.get('stepResultRelLine')))}">StepResultRel</a></p>
   </div>
 

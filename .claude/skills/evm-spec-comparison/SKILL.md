@@ -52,7 +52,8 @@ content:
 | Master comparison matrix | [`docs/comparison-matrix.md`](../../../docs/comparison-matrix.md) — update in place |
 | Opcode coverage matrix | [`docs/opcode-coverage.md`](../../../docs/opcode-coverage.md) — update in place |
 | Proof coverage canvas | Cursor canvas `proof-coverage.canvas.tsx` (beside chat) — **view only**; markdown wins on conflict |
-| Coverage HTML report | [`docs/coverage/index.html`](../../../docs/coverage/index.html) — generated; same DATA as the canvas |
+| Coverage site (source) | [`docs/index.html`](../../../docs/index.html) — generated; same DATA as the canvas; Pages `/docs` entry |
+| Coverage site (live) | [https://derekhsorensen.com/evm-asm-sail/](https://derekhsorensen.com/evm-asm-sail/) — published from `docs/index.html` on `main` |
 
 Every semantically relevant field or behavior should eventually have both-side
 representations, a relation, invariants, proof coverage, and a status. Add rows rather
@@ -65,14 +66,16 @@ After any edit to either matrix (or at the end of a proof session that changes
 statuses):
 
 1. Update the markdown matrices in place (source of truth).
-2. Refresh the HTML report + canvas snapshot from the matrices:
+2. Refresh canvas + site source from the matrices (one DATA snapshot for both):
    `python3 scripts/refresh-proof-coverage-canvas.py`
-   (writes `docs/coverage/index.html` and, if present, the Cursor canvas DATA).
-3. Keep the proof-coverage canvas open beside chat so the next slice and filters
+   (writes `docs/index.html` and, if present, the Cursor canvas DATA).
+3. Commit and push `docs/index.html` on `main` so the live site updates.
+4. Keep the proof-coverage canvas open beside chat so the next slice and filters
    stay honest. Expand opcode rows to inspect theorem links (`openFile` into
    `EvmAsmSail/…`); verify claims against the named `StepResultRel` theorem.
 
-Do not invent progress in chat that is not reflected in the matrices.
+Do not invent progress in chat that is not reflected in the matrices. Do not edit
+the canvas or `docs/index.html` by hand — always regenerate via the refresh script.
 
 ## Working principles
 
