@@ -51,11 +51,28 @@ content:
 | --- | --- |
 | Master comparison matrix | [`docs/comparison-matrix.md`](../../../docs/comparison-matrix.md) — update in place |
 | Opcode coverage matrix | [`docs/opcode-coverage.md`](../../../docs/opcode-coverage.md) — update in place |
+| Proof coverage canvas | Cursor canvas `proof-coverage.canvas.tsx` (beside chat) — **view only**; markdown wins on conflict |
+| Coverage HTML report | [`docs/coverage/index.html`](../../../docs/coverage/index.html) — generated; same DATA as the canvas |
 
 Every semantically relevant field or behavior should eventually have both-side
 representations, a relation, invariants, proof coverage, and a status. Add rows rather
 than hiding concepts in prose. Prefer generating opcode rows from the opcode
 datatype when practical.
+
+### Coverage canvas refresh ritual
+
+After any edit to either matrix (or at the end of a proof session that changes
+statuses):
+
+1. Update the markdown matrices in place (source of truth).
+2. Refresh the HTML report + canvas snapshot from the matrices:
+   `python3 scripts/refresh-proof-coverage-canvas.py`
+   (writes `docs/coverage/index.html` and, if present, the Cursor canvas DATA).
+3. Keep the proof-coverage canvas open beside chat so the next slice and filters
+   stay honest. Expand opcode rows to inspect theorem links (`openFile` into
+   `EvmAsmSail/…`); verify claims against the named `StepResultRel` theorem.
+
+Do not invent progress in chat that is not reflected in the matrices.
 
 ## Working principles
 

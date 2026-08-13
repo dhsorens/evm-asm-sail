@@ -5,6 +5,22 @@ Connecting [`evm-asm`](https://github.com/Verified-zkEVM/evm-asm) and
 evm-asm and the Lean extraction of the evm-sail EVM specification, and (the point of it
 all) the equivalence proofs between them.
 
+## Proof coverage dashboard
+
+**[Open the coverage report](docs/coverage/index.html)** — generated HTML snapshot of SpecRef ↔ `Evm`
+proof progress (opcode statuses, expandable theorem links, comparison-matrix components).
+
+> GitHub’s file viewer shows HTML as source. Open the file locally in a browser for the
+> interactive view; later this link will point at the published site (Pages).
+
+Regenerate after matrix edits:
+
+```sh
+python3 scripts/refresh-proof-coverage-canvas.py
+```
+
+(That command also refreshes the Cursor canvas DATA blob when present.)
+
 ## Why
 
 - **evm-asm** is a verified macro assembler in Lean 4 building a zkEVM stateless block
@@ -24,8 +40,10 @@ spec it asks for, and puts evm-sail's theorem-prover backend to work.
 | path | what |
 |---|---|
 | `EvmAsmSail/` | the proofs connecting SpecRef ↔ `Evm` (the extraction) |
+| `docs/coverage/index.html` | generated coverage dashboard (sync with canvas) |
 | `docs/comparison-matrix.md` | living SpecRef ↔ `Evm` semantic coverage matrix |
 | `docs/opcode-coverage.md` | living per-opcode proof coverage matrix |
+| `scripts/refresh-proof-coverage-canvas.py` | refresh HTML report + Cursor canvas from the two docs |
 | `extraction/evm-sail` | pinned submodule; its `extractions/lean/src` is required by path |
 | `scripts/setup.sh` | post-clone provisioning (submodule + Sail Lean support library) |
 | `PROGRESS.md` | live plan and status |
@@ -48,4 +66,4 @@ generated sources at the submodule pin.
 
 ## Status
 
-Early bootstrap — see [PROGRESS.md](PROGRESS.md).
+Early bootstrap — see [PROGRESS.md](PROGRESS.md). Coverage snapshot: [docs/coverage/index.html](docs/coverage/index.html).
