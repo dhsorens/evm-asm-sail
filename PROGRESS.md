@@ -104,9 +104,12 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       SLT SGT EQ AND OR XOR BYTE SHL SHR SAR — one file per opcode, full `StepResultRel`,
       3 classical axioms each). Bridges: `Representation/SignedWord.lean`
       (toSigned/fromSigned ↔ sign-bit/magnitude), `Representation/BitwiseWord.lean`
-      (BitVec round-trips, disjoint-bit `or_fill`, `div_parity_iff`).
-      Residual: unop analogue (ISZERO/NOT/CLZ), ternops (ADDMOD/MULMOD), EXP,
-      POP/DUP validators
+      (BitVec round-trips, disjoint-bit `or_fill`, `div_parity_iff`)
+- [x] `Opcodes/UnopFamily.lean` — unop analogue of the binop family (`unopShape` +
+      generic run lemmas + `unop_step_equiv`, full `StepResultRel`; overflow
+      unreachable for 1-in/1-out); **ISZERO harvested** (`iszero_step_equiv`,
+      `Opcodes/Iszero.lean`, 3 classical axioms).
+      Residual: NOT/CLZ unops, ternops (ADDMOD/MULMOD), EXP, POP/DUP validators
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
 
 ### M2 — Shape validators across machinery (next tranche)

@@ -31,3 +31,5 @@ import EvmAsmSail.Opcodes.Shr
 import EvmAsmSail.Opcodes.Byte
 import EvmAsmSail.Opcodes.Signextend
 import EvmAsmSail.Opcodes.Sar
+import EvmAsmSail.Opcodes.UnopFamily
+import EvmAsmSail.Opcodes.Iszero
