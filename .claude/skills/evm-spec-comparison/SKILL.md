@@ -92,6 +92,27 @@ the canvas or `docs/index.html` by hand — always regenerate via the refresh sc
 8. Prefer small compositional lemmas feeding a small number of top-level simulation theorems.
 9. Keep the living matrices current.
 10. When adding an assumption, ask whether it is an EVM invariant or only avoids a hard case.
+11. Treat proof attempts as bug-finding: a failed theorem, counterexample, or
+    specification flaw can beat a completed proof of a weakened statement.
+12. Keep layers distinct — upstream SpecRef/`Evm`, bridge relations, stated
+    observation property, Lean proof — and audit 1–3 explicitly; Lean only
+    certifies layer 4.
+
+## Crown-jewel properties (this project)
+
+Prioritize by semantic impact, not ease of proof. For SpecRef ↔ `Evm`, the
+catastrophic failures to prevent in the bridge are roughly:
+
+- observably different halt / error kinds (underflow, OOG, invalid jump, …);
+- gas or PC disagreement at the observation boundary;
+- stack / memory / storage content that should be related but is not;
+- silently restricted `StateRel` that excludes reachable EVM states;
+- fork / profile mix-ups (Amsterdam pin vs accidental Cancun/Prague);
+- treating SpecRef `partial` dispatch as proved (MM-3);
+- unverified gas-schedule disagreement on storage/account ops (MM-2).
+
+For each, prefer a mismatch ledger entry or an honest "unknown" over a green
+but vacuous theorem.
 
 ## What “the same” means
 
@@ -199,6 +220,8 @@ Before accepting an equivalence theorem:
 - [ ] Reachable EVM states can meet stated preconditions
 - [ ] Relation does not identify observably different states
 - [ ] Opcode constructors mechanically accounted for; unsupported cases enumerated
+- [ ] Proof difficulty was checked for semantic signal (bug / mismatch / bad
+      statement) before proof-engineering or Aleph
 
 ## Interaction style
 

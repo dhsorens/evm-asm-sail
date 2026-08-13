@@ -72,8 +72,10 @@ Requirements:
 lake build
 ```
 
-Fix errors before touching docs. No new `axiom`s. No `sorry` destined for
-`main`.
+Fix errors **and warnings** in touched files before docs. Unused hypotheses /
+simp args mean the statement or proof is loose — tighten (drop unused
+assumptions) rather than `set_option linter… false`. No new `axiom`s. No
+`sorry` destined for `main`.
 
 ### 5. Coverage hygiene
 
@@ -98,11 +100,13 @@ See `coverage-hygiene` for the full artifact rules.
   relation bug, upstream `partial`): stop. Write concrete evidence into
   `docs/mismatches.md` or `PROGRESS.md`. Do **not** weaken the theorem, and do
   **not** send it to Aleph — fix or restate first.
-- **Proof is tactically hard** (statement looks right; `lake build` accepts the
-  `sorry`; 3+ failed proof approaches): leave a compiling `sorry`, then
-  dispatch that theorem via **`/prove`** — read and follow
-  `.claude/commands/prove.md` (Aleph Prover). After Aleph applies a proof,
-  re-run `lake build` and continue from step 5. Requires `PROVER_API_KEY`.
+- **Stuck after real attempts**: before more tactics or Aleph, run a short
+  falsification pass — could the property be false on a reachable state? is
+  `StateRel` / the observation boundary wrong? is this MM-* material? If yes,
+  record and stop. If the statement still looks sound and `lake build` accepts
+  a compiling `sorry`, then dispatch via **`/prove`** (read
+  `.claude/commands/prove.md`). After Aleph applies a proof, re-run
+  `lake build` and continue from step 5. Requires `PROVER_API_KEY`.
 - **Slice too large** (new memory model + opcode + gas schedule): split —
   representation/relation PR first, opcode theorem second. Prefer
   `/plan-slice` sizing.
@@ -121,7 +125,7 @@ When ADD (or another archetype) is `full` and the next op shares the shape:
 
 - [ ] Both-side run shapes for every reachable outcome
 - [ ] Top-level `StepResultRel` theorem compiles
-- [ ] `lake build` green
+- [ ] `lake build` green **without warnings** in touched modules
 - [ ] `docs/opcode-coverage.md` updated
 - [ ] Comparison matrix / mismatches updated if needed
 - [ ] Coverage refresh script run

@@ -16,7 +16,10 @@ docs live in `docs/`. Read those for design; this file is operational doctrine.
 ## Lean
 
 - Build with `lake build`, not `lean` directly. Check diagnostics after every
-  coherent step; do not continue past errors.
+  coherent step; do not continue past errors **or leave new warnings**. Treat
+  `unused variable` / `unused simp argument` / deprecated tactics as build
+  debt to clear before claiming the slice done — especially unused hypotheses,
+  which usually mean the theorem is not tight (drop the hyp or use it).
 - Never introduce an `axiom`. This includes converting a broken `theorem` into
   an `axiom`. Unfinished proofs use `sorry` (grep-able, warned). `axiom` is silent.
 - No `sorry` merged to `main`; unfinished obligations belong in a registry or
@@ -30,17 +33,33 @@ docs live in `docs/`. Read those for design; this file is operational doctrine.
 
 ## Proof hygiene
 
+Optimize for real SpecRef ↔ `Evm` assurance, not theorem count. Prefer, in order:
+discovering a real semantic disagreement; showing an intended guarantee is false
+or vacuous; recording a model/relation blind spot; proving a meaningful theorem
+with an explicit trust base; clearly stating what remains unknown.
+
+Keep four layers distinct: (1) upstream SpecRef / `Evm` behavior, (2) our Lean
+bridge model and relations, (3) the stated observation / `StepResultRel`
+property, (4) the Lean proof. A green proof of a weak or mis-aimed statement
+is not progress.
+
 - Success-only opcode theorems are not acceptable. Target full inductive
   `StepResultRel` (success and every reachable failure).
 - Do not silently weaken a relation or add a vacuous precondition to make a
   proof go through. Record discovered disagreements in `docs/mismatches.md`
-  **before** adjusting the proof.
+  **before** adjusting the proof. "I cannot prove this without assuming X" is
+  better than silently assuming X — ledger it in `Assumptions.lean`.
+- Prefer properties about reachable EVM states. Do not assume the invariant you
+  claim to establish (e.g. `(hInv : Invariant s) → Safe s` with no reachability
+  story).
 - When a plan or issue asks for a theorem whose statement looks unsound or
   unsupported by current infrastructure: stop, write concrete evidence
   (counterexample, missing bridge, wrong observation boundary), and leave the
   work claimable for a revised statement. Do not invent `sorry`/`axiom` to bash
   through.
-- Awkward proofs: question the relation before adding tactics or assumptions.
+- Awkward or stuck proofs: first ask whether the property is false, the relation
+  is wrong, or a mismatch is hiding — **then** try more tactics or `/prove`.
+  Do not send unsound goals to Aleph.
 
 ## Coverage artifacts (source of truth)
 
@@ -86,9 +105,10 @@ Commands under `.claude/commands/`: `/work` (default contribute entrypoint),
 `/plan-slice`, `/reflect`, `/prove` (Aleph Prover for hard closed-form proofs).
 
 When a theorem statement is sound but the proof is tactically hard after real
-attempts: leave a compiling `sorry` and follow `.claude/commands/prove.md`
-(`PROVER_API_KEY` required). Do not send unsound or under-specified goals to
-Aleph; do not replace a stuck proof with an `axiom`.
+attempts: first check for a false property / bad relation / mismatch; only then
+leave a compiling `sorry` and follow `.claude/commands/prove.md`
+(`PROVER_API_KEY` required). Do not send unsound goals to Aleph; do not replace
+a stuck proof with an `axiom`.
 
 ## Off-limits
 

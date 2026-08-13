@@ -60,11 +60,16 @@ compiling subset, run coverage hygiene for what landed, and note the residual
 1. Implement per the dispatched skill(s).
 2. `lake build` — do not continue past errors; no new `axiom`s; no `sorry` for
    `main` except as a temporary placeholder before Aleph (next step).
-3. **Hard proof?** If the statement is sound but the proof is stuck after
-   several real attempts, leave a compiling `sorry` and follow
-   **`.claude/commands/prove.md`** (`/prove <theorem> in <file>`) to dispatch
-   to Aleph Prover. Do **not** use Aleph to paper over a bad statement,
-   missing relation, or mismatch — record those and stop. Needs
+   **Clear compiler warnings** in files you touched (unused variables /
+   hypotheses, unused simp args, deprecated tactics, dead `omega`). An unused
+   hypothesis usually means the lemma is not tight — drop it from the
+   signature (or the lambda) rather than silencing the linter. Prefer a
+   warning-free `lake build` before coverage hygiene.
+3. **Hard proof?** If stuck after several real attempts: first falsify — wrong
+   statement, bad relation, reachable counterexample, or mismatch? If so,
+   record in `docs/mismatches.md` / `Assumptions.lean` and stop. Only if the
+   statement still looks sound, leave a compiling `sorry` and follow
+   **`.claude/commands/prove.md`** (`/prove <theorem> in <file>`). Needs
    `PROVER_API_KEY`. After a successful apply, `lake build` again.
 4. Update living docs as the skills require (`opcode-coverage`, comparison
    matrix, mismatches, `PROGRESS.md` as appropriate).
