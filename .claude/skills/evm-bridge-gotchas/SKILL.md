@@ -104,6 +104,20 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 - Never edit `extraction/evm-sail` or the Lake `EvmAsm` checkout to make a
   bridge theorem hold.
 
+## Tactic traps
+
+- **`if_pos`/`if_neg`/`rw` with inferred conditions bind the leftmost `if`.**
+  Trigger: goals with `if`s on both sides of an equality (extraction LHS,
+  SpecRef RHS) — the side-condition tactic elaborates against whichever `if`
+  comes first, producing baffling "pattern not found" or wrong-branch errors.
+  Right move: pin every conditional rewrite (`if_pos (show c from …)`,
+  `show`-typed `decide` proofs), and eliminate the LHS `if` before touching
+  the RHS's. See any `Opcodes/S*.lean` sign-case block.
+- **`lake env lean <file>` checks against *stale imported oleans*.**
+  Trigger: editing a `Representation/` file and immediately checking a
+  dependent opcode file — phantom "unknown identifier" errors for lemmas you
+  just added. Right move: `lake build <module>` the edited dependency first.
+
 ## Anti-patterns (stop and record)
 
 | temptation | do this instead |
