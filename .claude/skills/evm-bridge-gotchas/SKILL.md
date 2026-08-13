@@ -113,6 +113,15 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   Right move: pin every conditional rewrite (`if_pos (show c from …)`,
   `show`-typed `decide` proofs), and eliminate the LHS `if` before touching
   the RHS's. See any `Opcodes/S*.lean` sign-case block.
+- **Sail's `Int.ofNat` spelling evades `Nat.cast` simp lemmas.**
+  Trigger: simping a goal containing `Sail.BitVec.toNatInt` (or other
+  extraction code that writes `Int.ofNat n` literally) with cast lemmas like
+  `Int.natCast_eq_zero` / `Int.toNat_natCast` — they never fire (different
+  discrimination-tree key, though the terms are defeq), and the failure
+  surfaces later as a baffling `rw` "pattern not found". Right move: add a
+  local `have hofNat : ∀ n : Nat, Int.ofNat n = (n : Int) := fun _ => rfl`
+  to the simp set first; see `word_bit_length_eq`
+  (`Representation/BitwiseWord.lean`).
 - **`omega` won't reduce tuple projections in `StepResultRel` post-state goals.**
   Trigger: after `refine StepResultRel.success ?_`, `AluPost`/`StateRel` goals
   mention the step tuple's projections (`(pc_in, top', mem, g').2.1.toNat`),
