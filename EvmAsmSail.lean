@@ -9,4 +9,5 @@ import EvmAsmSail.Relations.Gas
 import EvmAsmSail.Relations.Outcome
 import EvmAsmSail.Relations.State
 import EvmAsmSail.Assumptions
+import EvmAsmSail.Opcodes.BinopFamily
 import EvmAsmSail.Opcodes.Add
