@@ -24,6 +24,15 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `u256` reduction. `StackRel.wf` is an EVM invariant, not a free lunch — do not
   drop it from hypotheses without a plan to prove preservation.
 
+- **`omega` fails on goals typed at `U256`/`word` abbrevs and on `Int` powers.**
+  Trigger: an equality whose `Eq` lives at `U256` (SpecRef) or `word` (`Evm`) —
+  omega matches types syntactically and won't see the `Nat` underneath; likewise
+  `(2 : Int) ^ 256` in a hypothesis or goal is opaque to omega (Nat powers are
+  fine). Wrong move: fight the goal with `unfold`/`simp` roulette. Right move:
+  `exact (by omega : <same statement ascribed at Nat>)` for the abbrev case;
+  rewrite `Int` powers to numerals via `show (2:Int)^(256:Nat) = <numeral> from
+  by decide` first (see `Representation/SignedWord.lean`, `fromSigned_eq`).
+
 ## Stack geometry
 
 - SpecRef stack is **head = top** (`List U256`). Host stack is **bottom-indexed**
@@ -94,6 +103,20 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   (`Assumptions.lean`). Do not regenerate Sail→Lean here to "fix" a proof.
 - Never edit `extraction/evm-sail` or the Lake `EvmAsm` checkout to make a
   bridge theorem hold.
+
+## Tactic traps
+
+- **`if_pos`/`if_neg`/`rw` with inferred conditions bind the leftmost `if`.**
+  Trigger: goals with `if`s on both sides of an equality (extraction LHS,
+  SpecRef RHS) — the side-condition tactic elaborates against whichever `if`
+  comes first, producing baffling "pattern not found" or wrong-branch errors.
+  Right move: pin every conditional rewrite (`if_pos (show c from …)`,
+  `show`-typed `decide` proofs), and eliminate the LHS `if` before touching
+  the RHS's. See any `Opcodes/S*.lean` sign-case block.
+- **`lake env lean <file>` checks against *stale imported oleans*.**
+  Trigger: editing a `Representation/` file and immediately checking a
+  dependent opcode file — phantom "unknown identifier" errors for lemmas you
+  just added. Right move: `lake build <module>` the edited dependency first.
 
 ## Anti-patterns (stop and record)
 

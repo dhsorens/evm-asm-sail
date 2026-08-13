@@ -99,8 +99,14 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       (success/underflow/OOG; overflow unreachable for 2-in/1-out, noted in docstring).
       Axioms: only `propext, Classical.choice, Quot.sound`. MM-1 (operation order) and
       MM-4 (pc convention) resolved as proven-equivalent for ADD.
-- [ ] `Opcodes/BinopFamily.lean` — generic lemma + harvest (~19 binops), unop analogue
-      (ISZERO/NOT), POP/DUP validators
+- [x] `Opcodes/BinopFamily.lean` — `binopShape` + generic run lemmas + `binop_step_equiv`;
+      **all 19 remaining ALU binops harvested** (MUL SUB DIV SDIV MOD SMOD SIGNEXTEND LT GT
+      SLT SGT EQ AND OR XOR BYTE SHL SHR SAR — one file per opcode, full `StepResultRel`,
+      3 classical axioms each). Bridges: `Representation/SignedWord.lean`
+      (toSigned/fromSigned ↔ sign-bit/magnitude), `Representation/BitwiseWord.lean`
+      (BitVec round-trips, disjoint-bit `or_fill`, `div_parity_iff`).
+      Residual: unop analogue (ISZERO/NOT/CLZ), ternops (ADDMOD/MULMOD), EXP,
+      POP/DUP validators
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
 
 ### M2 — Shape validators across machinery (next tranche)
