@@ -276,6 +276,16 @@ def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
 
 
+def ext_a(href: str, text: str, *, title: str | None = None) -> str:
+    """External/site link: always open in a new tab. Use for every <a> in docs/index.html."""
+    attrs = (
+        f"href='{esc(href)}' target='_blank' rel='noopener noreferrer'"
+    )
+    if title is not None:
+        attrs += f" title='{esc(title)}'"
+    return f"<a {attrs}>{text}</a>"
+
+
 def repo_href(rel_path: str, line: int | None = None) -> str:
     """GitHub blob link: only docs/ is published, so in-repo relative paths 404 on the site."""
     href = GITHUB_BLOB + rel_path
@@ -286,22 +296,50 @@ def repo_href(rel_path: str, line: int | None = None) -> str:
 
 
 def next_slice(opcodes: list[dict]) -> list[dict]:
-    preferred = ["ADD", "MUL", "SUB", "DIV", "SDIV", "MOD", "SMOD"]
-    cand = [
+    """Preferred unstated follow-ups after the ALU binop sweep (PROGRESS M1 residual → M2)."""
+    preferred = [
+        "ISZERO",
+        "NOT",
+        "CLZ",
+        "ADDMOD",
+        "MULMOD",
+        "EXP",
+        "POP",
+        "PUSH (n, w)",
+        "DUP n",
+        "MLOAD",
+        "JUMPI",
+        "SLOAD",
+        "RETURN",
+    ]
+    by_name = {o["opcode"]: o for o in opcodes if o["statusKind"] == "unstated"}
+    ranked = [by_name[name] for name in preferred if name in by_name]
+    if ranked:
+        return ranked[:8]
+    # Fallback: any remaining unstated ALU-family rows, then other unstated
+    alu = [
         o
         for o in opcodes
-        if o["statusKind"] == "unstated"
-        and o["shapeFamily"] == "binop"
-        and o["family"] == "ALU family"
+        if o["statusKind"] == "unstated" and o["family"] == "ALU family"
     ]
+    if alu:
+        return alu[:8]
+    return [o for o in opcodes if o["statusKind"] == "unstated"][:8]
 
-    def rank(o: dict) -> tuple[int, str]:
-        try:
-            return preferred.index(o["opcode"]), o["opcode"]
-        except ValueError:
-            return 999, o["opcode"]
 
-    return sorted(cand, key=rank)[:8]
+def next_slice_blurb(slice_rows: list[dict], full_count: int) -> str:
+    if not slice_rows:
+        return (
+            f"<code>{esc(full_count)}</code> opcodes are <code>full</code>. "
+            "No unstated suggested-next rows remain in the default queue."
+        )
+    heads = ", ".join(f"<code>{esc(o['opcode'])}</code>" for o in slice_rows[:3])
+    return (
+        f"<code>{esc(full_count)}</code> opcodes are <code>full</code> "
+        "(ALU binop sweep landed). Suggested next: "
+        f"{heads}, then continue the M1 residual / M2 shape validators "
+        "(unops, ternops, EXP, PUSHn, DUPn, MLOAD, JUMPI, SLOAD, RETURN)."
+    )
 
 
 def render_html(data: dict) -> str:
@@ -313,6 +351,7 @@ def render_html(data: dict) -> str:
     families = Counter(o["family"] for o in opcodes)
     unrelated = sum(1 for c in components if c["statusKind"] == "unrelated")
     slice_rows = next_slice(opcodes)
+    slice_blurb = next_slice_blurb(slice_rows, counts.get("full", 0))
     outcome = data["links"]["outcomeRel"]
     legend = data["links"]["opcodeLegend"]
     legend_href = repo_href(legend["path"], legend.get("line"))
@@ -379,9 +418,17 @@ def render_html(data: dict) -> str:
                 + "</p>"
             )
             links = [
-                f"<a href='{esc(repo_href(proof['file'], line))}'>{esc(proof['file'])}</a>",
-                f"<a href='{esc(repo_href(outcome['relationFile'], outcome.get('stepResultRelLine')))}'>StepResultRel</a>",
-                f"<a href='{esc(repo_href(outcome['relationFile'], outcome.get('errorRelLine')))}'>ErrorRel</a>",
+                ext_a(repo_href(proof["file"], line), esc(proof["file"])),
+                ext_a(
+                    repo_href(
+                        outcome["relationFile"], outcome.get("stepResultRelLine")
+                    ),
+                    "StepResultRel",
+                ),
+                ext_a(
+                    repo_href(outcome["relationFile"], outcome.get("errorRelLine")),
+                    "ErrorRel",
+                ),
             ]
             body_parts.append("<p class='links'>" + " · ".join(links) + "</p>")
 
@@ -402,13 +449,15 @@ def render_html(data: dict) -> str:
 
         if o["statusKind"] == "unstated":
             body_parts.append(
-                "<p class='muted'>Not proved yet — prefer the next ALU binop slice after ADD.</p>"
+                "<p class='muted'>Not proved yet — see Suggested next vertical slice.</p>"
             )
         elif o["statusKind"] == "n/a" and proof.get("note"):
             body_parts.append(f"<p class='muted'>Reason: {esc(proof['note'])}</p>")
 
         body_parts.append(
-            f"<p class='links'><a href='{esc(legend_href)}'>Status legend (docs)</a></p>"
+            "<p class='links'>"
+            + ext_a(legend_href, "Status legend (docs)")
+            + "</p>"
         )
 
         search = " ".join(
@@ -598,9 +647,9 @@ def render_html(data: dict) -> str:
   </p>
   <div class="banner">
     Source of truth:
-    <a href="{esc(opcode_doc_href)}">docs/opcode-coverage.md</a> ·
-    <a href="{esc(comparison_href)}">docs/comparison-matrix.md</a>.
-    Live at <a href="{esc(SITE_URL)}">{esc(SITE_URL)}</a>.
+    {ext_a(opcode_doc_href, "docs/opcode-coverage.md")} ·
+    {ext_a(comparison_href, "docs/comparison-matrix.md")}.
+    Live at {ext_a(SITE_URL, esc(SITE_URL))}.
     Refresh canvas + this page with <code>python3 scripts/refresh-proof-coverage-canvas.py</code>, then push on <code>main</code> to publish.
   </div>
 
@@ -614,8 +663,8 @@ def render_html(data: dict) -> str:
   <div class="card">
     <h2 style="margin-top:0">What opcode statuses mean</h2>
     {glossary_html}
-    <p class="links"><a href="{esc(legend_href)}">Legend in docs</a> ·
-    <a href="{esc(repo_href(outcome['relationFile'], outcome.get('stepResultRelLine')))}">StepResultRel</a></p>
+    <p class="links">{ext_a(legend_href, "Legend in docs")} ·
+    {ext_a(repo_href(outcome['relationFile'], outcome.get('stepResultRelLine')), "StepResultRel")}</p>
   </div>
 
   <div class="card">
@@ -626,7 +675,7 @@ def render_html(data: dict) -> str:
 
   <div class="card">
     <h2 style="margin-top:0">Suggested next vertical slice</h2>
-    <p><code>ADD</code> is <code>full</code> (<code>add_step_equiv</code>). Continue ALU binops with <code>MUL</code> / <code>SUB</code>, then PUSHn, DUPn, MLOAD, JUMPI, SLOAD, RETURN.</p>
+    <p>{slice_blurb}</p>
     <table>
       <thead><tr><th>Opcode</th><th>Byte</th><th>SpecRef</th><th>Evm</th><th>Shape</th><th>Status</th></tr></thead>
       <tbody>{slice_html}</tbody>

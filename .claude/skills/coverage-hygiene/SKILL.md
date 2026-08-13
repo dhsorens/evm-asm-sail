@@ -43,6 +43,9 @@ python3 scripts/refresh-proof-coverage-canvas.py
 
 - **Do not hand-edit** `docs/index.html` or canvas DATA blocks. Always
   regenerate.
+- Site links must open in a new tab: use `ext_a(...)` in
+  `scripts/refresh-proof-coverage-canvas.py` (never raw `<a href>` without
+  `target="_blank" rel="noopener noreferrer"`).
 - **Do not claim** `full` / `proven-*` in chat or `PROGRESS.md` unless the
   matrix row says so and the named theorem exists.
 - Opcode statuses: `unstated` · `stated` · `success-proven` (not acceptable as
