@@ -1,4 +1,3 @@
-import EvmAsmSail.Smoke
 import EvmAsmSail.Representation.EvmMonad
 import EvmAsmSail.Representation.EvmStack
 import EvmAsmSail.Representation.SpecRefLemmas
@@ -18,3 +17,8 @@ import EvmAsmSail.Opcodes.Mod
 import EvmAsmSail.Opcodes.Lt
 import EvmAsmSail.Opcodes.Gt
 import EvmAsmSail.Opcodes.Eq
+import EvmAsmSail.Representation.SignedWord
+import EvmAsmSail.Opcodes.Sdiv
+import EvmAsmSail.Opcodes.Smod
+import EvmAsmSail.Opcodes.Slt
+import EvmAsmSail.Opcodes.Sgt
