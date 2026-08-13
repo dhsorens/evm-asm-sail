@@ -22,3 +22,10 @@ import EvmAsmSail.Opcodes.Sdiv
 import EvmAsmSail.Opcodes.Smod
 import EvmAsmSail.Opcodes.Slt
 import EvmAsmSail.Opcodes.Sgt
+import EvmAsmSail.Representation.BitwiseWord
+import EvmAsmSail.Opcodes.And
+import EvmAsmSail.Opcodes.Or
+import EvmAsmSail.Opcodes.Xor
+import EvmAsmSail.Opcodes.Shl
+import EvmAsmSail.Opcodes.Shr
+import EvmAsmSail.Opcodes.Byte
