@@ -131,12 +131,15 @@ theorem runS_binopShape_ok (cost : Nat) (aluF : Nat → Nat → Nat)
     (hframe : hs.stackFrames = l :: frest)
     (hpfx : l.take top.toNat = (x :: y :: rest).reverse)
     (htop : top.toNat = (x :: y :: rest).length)
-    (hlen : top.toNat ≤ l.length)
     (hgas : cost ≤ g) :
     runS (binopShape cost aluF top g) hs ss =
       .ok ((top - BitVec.ofNat 64 1, g - cost),
         { hs with stackFrames :=
             writeListAt l (top.toNat - 2) (aluF x y) :: frest }) ss := by
+  have hlen : top.toNat ≤ l.length := by
+    have : (l.take top.toNat).length = top.toNat := by
+      rw [hpfx]; simp [htop]
+    simpa [List.length_take] using this
   have hn : top.toNat = rest.length + 2 := by simpa using htop
   have hbound := top.isLt
   have hpfx1 : l.take (top - BitVec.ofNat 64 1).toNat = (y :: rest).reverse := by
@@ -216,7 +219,6 @@ theorem runS_execute_binop_success (op : ast) (cost : Nat)
     (hframe : hs.stackFrames = l :: frest)
     (hpfx : l.take top.toNat = (x :: y :: rest).reverse)
     (htop : top.toNat = (x :: y :: rest).length)
-    (hlen : top.toNat ≤ l.length)
     (hlim : top.toNat ≤ 1024)
     (hgas : cost ≤ g) :
     runS (Evm.Functions.execute op pc_in top mem g) hs ss =
@@ -232,7 +234,7 @@ theorem runS_execute_binop_success (op : ast) (cost : Nat)
   rw [dif_pos rfl, hop.2]
   refine runS_bind_ok
     (runS_binopShape_ok cost aluF top g hs ss l frest x y rest hframe hpfx
-      htop hlen hgas) ?_
+      htop hgas) ?_
   exact runS_pure _ _ _
 
 open Evm.Functions in
@@ -303,7 +305,7 @@ theorem binop_step_equiv (op : ast) (cost : Nat) (aluF : Nat → Nat → Nat)
       (runS (Evm.Functions.execute op pc_in top mem g) hs ss) := by
   subst hspec hcost
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
-  obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR
+  obtain ⟨⟨l, frest, hframe, hpfx, _hlen⟩, htop, hlim, hwfS⟩ := hstackR
   obtain ⟨hlive, hres, hsp⟩ := hgasR
   match hS : sRef.evm.stack with
   | [] =>
@@ -333,11 +335,11 @@ theorem binop_step_equiv (op : ast) (cost : Nat) (aluF : Nat → Nat → Nat)
           (by rw [hlive]; exact hg)]
       exact StepResultRel.halted ErrorRel.outOfGas
         (haltRegs_frame_status ss msg .OutOfGas)
-    · push_neg at hg
+    · push Not at hg
       have hn : top.toNat = rest.length + 2 := by simpa using htop
       rw [runR_binOp_success _ _ sRef x y rest hS hg (by rw [hS]; exact hlim),
         runS_execute_binop_success op _ _ hop pc_in top g mem hs ss l frest
-          x y rest hframe hpfx htop hlen hlim' (by rw [hlive]; exact hg)]
+          x y rest hframe hpfx htop hlim' (by rw [hlive]; exact hg)]
       refine StepResultRel.success ?_
       refine ⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE, ⟨prof, hprof, hfork⟩,
         ⟨msg, hmsg⟩⟩, by simp [hpc], rfl⟩

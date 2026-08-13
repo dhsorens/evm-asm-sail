@@ -51,7 +51,7 @@ theorem byte_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.BYTE ()) G_verylow alu_byte iByte GasCosts.OPCODE_BYTE
     (fun i x => if i ≥ 32 then 0 else (x >>> ((31 - i) * 8)) &&& 0xFF) rfl rfl
     ⟨rfl, fun _ _ _ _ => rfl⟩
-    (fun x y hx hy => alu_byte_eq x y hy)
+    (fun x y _ hy => alu_byte_eq x y hy)
     (fun x y _ _ => byte_wf x y)
     sRef top g hs ss mem pc_in hrel hpc
 

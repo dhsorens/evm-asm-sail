@@ -170,9 +170,9 @@ theorem alu_sdiv_eq (x y : Nat) (hx : WordWf x) (hy : WordWf y) :
           omega)]
       omega
 
-private theorem sdivSpec_wf (x y : Nat) (hx : WordWf x) (hy : WordWf y) :
+private theorem sdivSpec_wf (x y : Nat) :
     WordWf (sdivSpec x y) := by
-  unfold WordWf at *
+  unfold WordWf
   rw [sdivSpec]
   split
   · omega
@@ -191,7 +191,7 @@ theorem sdiv_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.SDIV ()) G_low alu_sdiv iSdiv GasCosts.OPCODE_SDIV
     (fun x y => sdivSpec x y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩
     (fun x y hx hy => alu_sdiv_eq x y hx hy)
-    (fun x y hx hy => sdivSpec_wf x y hx hy)
+    (fun x y _ _ => sdivSpec_wf x y)
     sRef top g hs ss mem pc_in hrel hpc
 
 end EvmAsmSail

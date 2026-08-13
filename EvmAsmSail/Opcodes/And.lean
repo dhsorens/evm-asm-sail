@@ -20,7 +20,7 @@ theorem alu_and_eq (a b : Nat) (ha : WordWf a) (hb : WordWf b) :
     Evm.Functions.alu_and a b = a &&& b := by
   rw [Evm.Functions.alu_and, word_and_eq a b ha hb]
 
-private theorem and_wf (a b : Nat) (ha : WordWf a) (hb : WordWf b) :
+private theorem and_wf (a b : Nat) (hb : WordWf b) :
     WordWf (a &&& b) := Nat.and_lt_two_pow a hb
 
 open Evm.Functions in
@@ -34,7 +34,7 @@ theorem and_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.AND ()) G_verylow alu_and iAnd GasCosts.OPCODE_AND
     (fun x y => x &&& y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩
     (fun x y hx hy => alu_and_eq x y hx hy)
-    (fun x y hx hy => and_wf x y hx hy)
+    (fun x y _ hy => and_wf x y hy)
     sRef top g hs ss mem pc_in hrel hpc
 
 end EvmAsmSail

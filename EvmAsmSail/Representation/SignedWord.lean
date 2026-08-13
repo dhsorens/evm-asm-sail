@@ -47,7 +47,7 @@ theorem get_slice_int_256 (a : Nat) :
 theorem testBit_255_eq (a : Nat) :
     a.testBit 255 = decide (2 ^ 255 ≤ a % 2 ^ 256) := by
   rw [Nat.testBit_eq_decide_div_mod_eq]
-  by_cases h : 2 ^ 255 ≤ a % 2 ^ 256 <;> simp [h] <;> omega
+  by_cases h : 2 ^ 255 ≤ a % 2 ^ 256 <;> simp <;> omega
 
 /-- The sign bit reads as "at or above `2^255`". -/
 theorem word_bit_255_iff (a : Nat) (ha : a < 2 ^ 256) :

@@ -65,8 +65,7 @@ theorem runS_refill (g : Nat) (hs : HostState) (ss : SeqState)
   simp only at hfork
   simp only [Evm.Functions.refill_frame_state_gas, runS_bind,
     runS_readReg _ _ _ _ hprof]
-  simp only [ProtocolProfileFields.fork, ExecutionProfileFields.protocol,
-    decide_eq_true_eq]
+  simp only [ProtocolProfileFields.fork, decide_eq_true_eq]
   rw [if_pos (by simpa using hfork)]
   simp only [runS_bind, runS_readReg _ _ _ _ hsp, runS_readReg _ _ _ _ hmsg,
     runS_pure, runS_writeReg, Evm.Functions.conserved_gas_add]

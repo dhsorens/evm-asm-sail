@@ -43,7 +43,7 @@ theorem shr_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.SHR ()) G_verylow alu_shr iShr GasCosts.OPCODE_SHR
     (fun s v => if s < 256 then v >>> s else 0) rfl rfl
     ⟨rfl, fun _ _ _ _ => rfl⟩
-    (fun x y hx hy => alu_shr_eq x y hy)
+    (fun x y _ hy => alu_shr_eq x y hy)
     (fun x y _ hy => shr_wf x y hy)
     sRef top g hs ss mem pc_in hrel hpc
 

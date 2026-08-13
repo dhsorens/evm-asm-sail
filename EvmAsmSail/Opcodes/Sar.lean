@@ -143,9 +143,9 @@ theorem alu_sar_eq (s v : Nat) (hv : WordWf v) :
           omega)]
       decide
 
-private theorem sarSpec_wf (s v : Nat) (hv : WordWf v) :
+private theorem sarSpec_wf (s v : Nat) :
     WordWf (sarSpec s v) := by
-  unfold WordWf at *
+  unfold WordWf
   simp only [sarSpec]
   split
   · rw [fromSigned_eq]
@@ -166,7 +166,7 @@ theorem sar_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.SAR ()) G_verylow alu_sar iSar GasCosts.OPCODE_SAR
     (fun s v => sarSpec s v) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩
     (fun x y _ hy => alu_sar_eq x y hy)
-    (fun x y _ hy => sarSpec_wf x y hy)
+    (fun x y _ _ => sarSpec_wf x y)
     sRef top g hs ss mem pc_in hrel hpc
 
 end EvmAsmSail

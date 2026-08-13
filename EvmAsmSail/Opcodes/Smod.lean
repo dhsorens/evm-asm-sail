@@ -82,9 +82,9 @@ theorem alu_smod_eq (x y : Nat) (hx : WordWf x) (hy : WordWf y) :
           omega)]
       omega
 
-private theorem smodSpec_wf (x y : Nat) (hx : WordWf x) (hy : WordWf y) :
+private theorem smodSpec_wf (x y : Nat) :
     WordWf (smodSpec x y) := by
-  unfold WordWf at *
+  unfold WordWf
   rw [smodSpec]
   split
   · omega
@@ -101,7 +101,7 @@ theorem smod_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
   binop_step_equiv (.SMOD ()) G_low alu_smod iSmod GasCosts.OPCODE_SMOD
     (fun x y => smodSpec x y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩
     (fun x y hx hy => alu_smod_eq x y hx hy)
-    (fun x y hx hy => smodSpec_wf x y hx hy)
+    (fun x y _ _ => smodSpec_wf x y)
     sRef top g hs ss mem pc_in hrel hpc
 
 end EvmAsmSail

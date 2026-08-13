@@ -21,7 +21,7 @@ theorem alu_gt_eq (a b : Nat) :
     Evm.Functions.alu_gt a b = boolPush (a > b) := by
   show (if (b < a : Bool) = true then ((1 : Int)).toNat else ((0 : Int)).toNat)
       = if (a > b : Bool) = true then 1 else 0
-  split <;> rename_i h <;> simp at h <;> simp [Nat.lt_iff_add_one_le] <;> omega
+  split <;> rename_i h <;> simp_all
 
 open Evm.Functions in
 /-- **GT, all reachable outcomes.** -/
