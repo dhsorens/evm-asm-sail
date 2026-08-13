@@ -7,10 +7,10 @@ Lean proofs that SpecRef (from **evm-asm**) and the Lean extraction of
 
 | Directory | Role |
 | --- | --- |
-| [`Representation/`](Representation/) | **How each side runs** — `runR` / `runS`, stack/gas/word characterizations |
-| [`Relations/`](Relations/) | **When the sides correspond** — `StateRel`, `StepResultRel`, … |
-| `Opcodes/` | Per-opcode (or family) simulation theorems |
-| `Assumptions.lean` | Explicit trust base / deferred hypotheses |
+| [`Representation/`](Representation/README.md) | **How each side runs** — [`runR`](Representation/SpecRefLemmas.lean#L24) / [`runS`](Representation/EvmMonad.lean#L32), stack/gas/word characterizations |
+| [`Relations/`](Relations/README.md) | **When the sides correspond** — [`StateRel`](Relations/State.lean#L36), [`StepResultRel`](Relations/Outcome.lean#L53), … |
+| [`Opcodes/`](Opcodes/) | Per-opcode (or family) simulation theorems — start from [`Add.lean`](Opcodes/Add.lean) / [`BinopFamily.lean`](Opcodes/BinopFamily.lean) |
+| [`Assumptions.lean`](Assumptions.lean) | Explicit trust base / deferred hypotheses |
 
 ```text
   SpecRef                         Evm extraction
@@ -25,10 +25,11 @@ Lean proofs that SpecRef (from **evm-asm**) and the Lean extraction of
 ```
 
 **Representation** = facts about one model's definitions (rewritable run
-shapes, BitVec↔Nat, host stack prefix, …).  
-**Relations** = predicates between models (the comparison boundary).
+shapes, BitVec↔Nat, host stack prefix, …) — see
+[`Representation/README.md`](Representation/README.md).  
+**Relations** = predicates between models (the comparison boundary) — see
+[`Relations/README.md`](Relations/README.md).
 
-Read those two READMEs before extending the bridge. Living coverage:
-[`docs/opcode-coverage.md`](../docs/opcode-coverage.md),
+Living coverage: [`docs/opcode-coverage.md`](../docs/opcode-coverage.md),
 [`docs/comparison-matrix.md`](../docs/comparison-matrix.md). Standing rules:
 [`AGENTS.md`](../AGENTS.md).
