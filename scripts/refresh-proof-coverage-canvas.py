@@ -173,6 +173,41 @@ def parse_proof(status: str) -> dict | None:
     return proof
 
 
+# Preferred unstated follow-ups (M1 residual → M2). Landed names are skipped
+# at render time; keep this list stable so canvas + HTML stay aligned.
+NEXT_SLICE_PREFERRED = [
+    "ISZERO",
+    "NOT",
+    "CLZ",
+    "ADDMOD",
+    "MULMOD",
+    "EXP",
+    "POP",
+    "PUSH (n, w)",
+    "DUP n",
+    "MLOAD",
+    "JUMPI",
+    "SLOAD",
+    "RETURN",
+]
+
+
+def next_slice(opcodes: list[dict]) -> list[dict]:
+    """Unstated follow-ups in queue order. Already-`full` names drop out."""
+    by_name = {o["opcode"]: o for o in opcodes if o["statusKind"] == "unstated"}
+    ranked = [by_name[name] for name in NEXT_SLICE_PREFERRED if name in by_name]
+    if ranked:
+        return ranked[:8]
+    alu = [
+        o
+        for o in opcodes
+        if o["statusKind"] == "unstated" and o["family"] == "ALU family"
+    ]
+    if alu:
+        return alu[:8]
+    return [o for o in opcodes if o["statusKind"] == "unstated"][:8]
+
+
 def load_data() -> dict:
     opc = parse_md_tables(OPCODE_DOC.read_text())
     cmp = parse_md_tables(COMPARISON_DOC.read_text())
@@ -250,6 +285,7 @@ def load_data() -> dict:
     return {
         "opcodes": opcodes,
         "components": components,
+        "nextSlice": [o["opcode"] for o in next_slice(opcodes)],
         "opcodeCounts": opcode_counts,
         "glossary": {
             "unstated": "No SpecRef ↔ Evm step theorem yet for this opcode.",
@@ -305,38 +341,6 @@ def repo_href(rel_path: str, line: int | None = None) -> str:
     return href
 
 
-def next_slice(opcodes: list[dict]) -> list[dict]:
-    """Preferred unstated follow-ups after the ALU binop sweep (PROGRESS M1 residual → M2)."""
-    preferred = [
-        "ISZERO",
-        "NOT",
-        "CLZ",
-        "ADDMOD",
-        "MULMOD",
-        "EXP",
-        "POP",
-        "PUSH (n, w)",
-        "DUP n",
-        "MLOAD",
-        "JUMPI",
-        "SLOAD",
-        "RETURN",
-    ]
-    by_name = {o["opcode"]: o for o in opcodes if o["statusKind"] == "unstated"}
-    ranked = [by_name[name] for name in preferred if name in by_name]
-    if ranked:
-        return ranked[:8]
-    # Fallback: any remaining unstated ALU-family rows, then other unstated
-    alu = [
-        o
-        for o in opcodes
-        if o["statusKind"] == "unstated" and o["family"] == "ALU family"
-    ]
-    if alu:
-        return alu[:8]
-    return [o for o in opcodes if o["statusKind"] == "unstated"][:8]
-
-
 def next_slice_blurb(slice_rows: list[dict], full_count: int) -> str:
     if not slice_rows:
         return (
@@ -345,10 +349,9 @@ def next_slice_blurb(slice_rows: list[dict], full_count: int) -> str:
         )
     heads = ", ".join(f"<code>{esc(o['opcode'])}</code>" for o in slice_rows[:3])
     return (
-        f"<code>{esc(full_count)}</code> opcodes are <code>full</code> "
-        "(ALU binop sweep landed). Suggested next: "
-        f"{heads}, then continue the M1 residual / M2 shape validators "
-        "(unops, ternops, EXP, PUSHn, DUPn, MLOAD, JUMPI, SLOAD, RETURN)."
+        f"<code>{esc(full_count)}</code> opcodes are <code>full</code>. "
+        f"Suggested next: {heads}, then the rest of the unstated queue "
+        "(M1 residual / M2 shape validators)."
     )
 
 

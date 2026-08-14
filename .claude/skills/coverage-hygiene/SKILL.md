@@ -38,7 +38,7 @@ python3 scripts/refresh-proof-coverage-canvas.py
    **`/work` branch / PR** — do not push coverage straight to `main` from a
    worker session. The live site updates when that PR merges.
 4. Keep the proof-coverage canvas open beside chat when doing slice work so the
-   next opcode filter stays honest.
+   suggested-next queue (derived from unstated rows) stays honest.
 
 ## Rules
 
@@ -55,6 +55,10 @@ python3 scripts/refresh-proof-coverage-canvas.py
 - Comparison-matrix statuses: `unrelated` · `related` · `proven-<scope>` ·
   `n/a`. Add rows rather than hiding components in prose.
 - When markdown and canvas disagree, **markdown wins** — regenerate.
+- Do not hardcode next-opcode names in canvas UI copy. The suggested-next
+  queue lives in `scripts/refresh-proof-coverage-canvas.py`
+  (`NEXT_SLICE_PREFERRED` / `next_slice`); landed rows drop out automatically.
+  Canvas prose must read `DATA.nextSlice`.
 
 ## Minimal status edit pattern
 
