@@ -134,9 +134,36 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 ### M2 — Shape validators across machinery (next tranche)
 
-- [ ] PUSHn (fetch/immediate), MLOAD/MSTORE (memory + expansion gas), JUMP/JUMPI
-      (control + jumpdest), RETURN (halt/output), SLOAD (storage + the
-      HostState↔`Evm.Contracts` connective tissue) — each full `StepResultRel`
+- [x] `Opcodes/Dup.lean` — DUP1–DUP16 (`dup_step_equiv`, full `StepResultRel`):
+      first reachable stack overflow and first charge-first SpecRef handler.
+      Discovered **MM-5**: on double-fault states (bad stack shape ∧ OOG) the
+      sides halt with different kinds; ledgered and encoded as the documented
+      `StepResultRel.haltedChargeFirst` constructor
+- [x] `Opcodes/Push.lean` — PUSH0–PUSH32 (`push_step_equiv`, full
+      `StepResultRel`): decode-fidelity hypothesis ties the `.PUSH (n, v)` AST
+      immediate to SpecRef's `buffer_read` at `pc+1` (fetch is out of scope
+      while dispatch is `partial`, MM-3); MM-4 pc hypothesis extended to
+      `pc + 1 + n`; pushed-word wf proven via `fromBytesBE_lt`
+- [x] `Opcodes/Jumpi.lean` + `Relations/Jumpdest.lean` — JUMPI
+      (`jumpi_step_equiv`, full `StepResultRel`): first control-flow opcode;
+      `JumpdestRel` ties `validJumpDestinations` to the frame jump table;
+      `ErrorRel` gains `invalidJumpDest ↔ InvalidJump`; `JumpiPost` preserves
+      the jumpdest relation. JUMP itself is a near-mechanical harvest of the
+      same machinery (single pop, no fall-through case)
+- [ ] MLOAD/MSTORE — needs the memory representation tranche first:
+      `MemoryRel` (SpecRef `Bytes` ↔ `memoryBytes` + `EvmMemorySlice` Sigma),
+      host memory-axiom run lemmas, expansion-gas equality
+      (`calculate_gas_extend_memory` ↔ the extraction's word-count charge),
+      and a `MemPost` (the returned `mem` slice is no longer a pass-through)
+- [ ] SLOAD — needs `WarmRel` (epoch-stamped `warmSlots` vs SpecRef's
+      accessed-key set), `StorageRel` over `storageTx/storageBlock`, the
+      `k_sload`/`k_slot_mark_warm` host lemmas, and resolves part of MM-2's
+      open repriced-constant question (`sload_cost` vs
+      `WARM_ACCESS`/`COLD_STORAGE_ACCESS`)
+- [ ] RETURN — needs the memory layer (output is read from memory) plus a
+      **normal-halt** case in `StepResultRel` (`running := false` + output vs
+      `Halted` frame status + output slice; today only success and
+      exceptional halts exist) and an `OutputRel`
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 
