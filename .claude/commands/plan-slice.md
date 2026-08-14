@@ -21,9 +21,9 @@ Each work item must be **one logical concern**, ideally:
   prerequisite that unblocks a named opcode
 - Never span multiple `PROGRESS.md` milestones in one item
 
-When in doubt, split. Harvesting a binop family member is one item per opcode
-until a shared `BinopFamily` lemma exists — then "instantiate OP via family
-lemma + coverage row" is one item.
+When in doubt, split. Harvesting a binop member is one item per opcode until a
+shared shape lemma exists (`Opcodes/Shapes/Binop.lean`) — then "instantiate OP
+via shape lemma + coverage row" is one item.
 
 ## Issue / task body template
 

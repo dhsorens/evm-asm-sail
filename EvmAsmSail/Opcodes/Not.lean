@@ -1,10 +1,10 @@
-import EvmAsmSail.Opcodes.UnopFamily
+import EvmAsmSail.Opcodes.Shapes.Unop
 import EvmAsmSail.Representation.BitwiseWord
 
 /-!
 # NOT
 
-Derived through `unop_step_equiv` (`Opcodes/UnopFamily.lean`); per-opcode
+Derived through `unop_step_equiv` (`Opcodes/Shapes/Unop.lean`); per-opcode
 content is the pure-function lemma (the extraction complements through
 `BitVec 256`, SpecRef subtracts from `U256_MAX` — `word_not_eq` collapses
 the round trip) and the wf bound. Reachable outcomes: success / stack

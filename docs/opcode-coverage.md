@@ -16,9 +16,11 @@ are total.
 
 ## Shape classes
 
-- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`)
-- **unop**: 1-in/1-out analogue
-- **ternop**: 3-in/1-out (ADDMOD, MULMOD)
+ALU step skeletons live in [`EvmAsmSail/Opcodes/Shapes/`](../EvmAsmSail/Opcodes/Shapes/README.md).
+
+- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`) — [`Shapes/Binop.lean`](../EvmAsmSail/Opcodes/Shapes/Binop.lean)
+- **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmAsmSail/Opcodes/Shapes/Unop.lean)
+- **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmAsmSail/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
 - **memory / control / env / storage / system**: as named
 

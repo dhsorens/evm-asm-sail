@@ -1,10 +1,10 @@
-import EvmAsmSail.Opcodes.UnopFamily
+import EvmAsmSail.Opcodes.Shapes.Unop
 import EvmAsmSail.Representation.BitwiseWord
 
 /-!
 # CLZ
 
-Derived through `unop_step_equiv` (`Opcodes/UnopFamily.lean`); per-opcode
+Derived through `unop_step_equiv` (`Opcodes/Shapes/Unop.lean`); per-opcode
 content is the pure-function lemma (the extraction counts leading zeros
 limb-wise via `BitVec.clz`, SpecRef via `Nat.log2` — `word_bit_length_eq`
 identifies the two) and the wf bound. Reachable outcomes: success / stack

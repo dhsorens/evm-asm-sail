@@ -1,9 +1,9 @@
-import EvmAsmSail.Opcodes.TernopFamily
+import EvmAsmSail.Opcodes.Shapes.Ternop
 
 /-!
 # ADDMOD
 
-Derived through `ternop_step_equiv` (`Opcodes/TernopFamily.lean`);
+Derived through `ternop_step_equiv` (`Opcodes/Shapes/Ternop.lean`);
 per-opcode content is the pure-function lemma and the wf bound. Reachable
 outcomes: success / stack underflow / out-of-gas (overflow unreachable for
 3-in/1-out).

@@ -1,9 +1,9 @@
 ---
 name: opcode-slice
 description: >
-  End-to-end ritual for landing one SpecRef ↔ Evm opcode (or one shape-family
+  End-to-end ritual for landing one SpecRef ↔ Evm opcode (or one shape-class
   member) with full StepResultRel coverage. Use when proving a new opcode,
-  harvesting a binop/unop family member from an existing pattern, or when the
+  harvesting a binop/unop/ternop member from an existing pattern, or when the
   user asks to do the next vertical slice / next opcode.
 ---
 
@@ -19,7 +19,7 @@ For relation design and observation-boundary questions, also read
 ## Preconditions
 
 - Know the **shape class** (binop / unop / ternop / stack / memory / control /
-  …) from `docs/opcode-coverage.md`.
+  …) from `docs/opcode-coverage.md`. ALU skeletons live in `Opcodes/Shapes/`.
 - Prefer harvesting within a proven class (e.g. next ALU binop after ADD) over
   inventing a new relation shape mid-slice.
 - If the slice needs a new observable component in `StateRel`, update
@@ -90,7 +90,7 @@ python3 scripts/refresh-proof-coverage-canvas.py
 ```
 
 5. Update `PROGRESS.md` checkboxes / notes if the milestone list mentions this
-   opcode or family.
+   opcode or shape class.
 
 See `coverage-hygiene` for the full artifact rules.
 
@@ -111,15 +111,15 @@ See `coverage-hygiene` for the full artifact rules.
   representation/relation PR first, opcode theorem second. Prefer
   `/plan-slice` sizing.
 
-## Family harvest (binop / unop)
+## Shape harvest (binop / unop / ternop)
 
 When ADD (or another archetype) is `full` and the next op shares the shape:
 
 1. Extract shared structure only when the second instance proves the
-   duplication is real (`Opcodes/BinopFamily.lean` direction in `PROGRESS.md`).
+   duplication is real (`Opcodes/Shapes/` — see that directory's README).
 2. Each harvested opcode still gets its own coverage-row update to `full`.
-3. Do not mark a whole family `full` from a generic lemma until every member
-   is instantiated or an exhaustive registry says so.
+3. Do not mark a whole shape class `full` from a generic lemma until every
+   member is instantiated or an exhaustive registry says so.
 
 ## Done checklist
 

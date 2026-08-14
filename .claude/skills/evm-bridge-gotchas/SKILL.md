@@ -128,7 +128,7 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   which omega treats as atoms distinct from `top'.toNat` — "could not prove"
   with a baffling counterexample naming the projection. Right move: `show` the
   defeq-reduced statement (or `simp` projections away) before `omega`; see the
-  `show top.toNat ≤ _` bullet in `unop_step_equiv` (`Opcodes/UnopFamily.lean`).
+  `show top.toNat ≤ _` bullet in `unop_step_equiv` (`Opcodes/Shapes/Unop.lean`).
 - **`lake env lean <file>` checks against *stale imported oleans*.**
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you

@@ -1,4 +1,4 @@
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 
 /-!
 # The ALU ternop family

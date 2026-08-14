@@ -1,4 +1,4 @@
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 
 /-!
 # The ALU unop family
@@ -10,7 +10,7 @@ Every 1-in/1-out ALU opcode has the same shape on both sides:
 * `Evm`: `execute_<op>` is byte-identical to `execute_iszero` modulo the gas
   constant and the `alu_*` function (`charge → pop → alu → push_word`).
 
-The unop analogue of `Opcodes/BinopFamily.lean` (which also supplies the
+The unop analogue of `Opcodes/Shapes/Binop.lean` (which also supplies the
 shared `AluPost` success relation): `unopShape` names the extraction's
 shape; generic run lemmas cover each outcome for arbitrary `(cost, aluF)` /
 `(cost, fSpec)`; `unop_step_equiv` is the full-outcome step theorem. Each

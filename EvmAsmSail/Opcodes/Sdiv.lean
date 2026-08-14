@@ -1,4 +1,4 @@
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 import EvmAsmSail.Representation.SignedWord
 import Mathlib.Tactic.Push
 

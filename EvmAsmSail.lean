@@ -8,7 +8,7 @@ import EvmAsmSail.Relations.Gas
 import EvmAsmSail.Relations.Outcome
 import EvmAsmSail.Relations.State
 import EvmAsmSail.Assumptions
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 import EvmAsmSail.Opcodes.Add
 import EvmAsmSail.Opcodes.Mul
 import EvmAsmSail.Opcodes.Sub
@@ -31,9 +31,9 @@ import EvmAsmSail.Opcodes.Shr
 import EvmAsmSail.Opcodes.Byte
 import EvmAsmSail.Opcodes.Signextend
 import EvmAsmSail.Opcodes.Sar
-import EvmAsmSail.Opcodes.UnopFamily
+import EvmAsmSail.Opcodes.Shapes.Unop
 import EvmAsmSail.Opcodes.Iszero
 import EvmAsmSail.Opcodes.Not
 import EvmAsmSail.Opcodes.Clz
-import EvmAsmSail.Opcodes.TernopFamily
+import EvmAsmSail.Opcodes.Shapes.Ternop
 import EvmAsmSail.Opcodes.Addmod

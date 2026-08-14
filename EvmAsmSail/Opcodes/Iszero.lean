@@ -1,9 +1,9 @@
-import EvmAsmSail.Opcodes.UnopFamily
+import EvmAsmSail.Opcodes.Shapes.Unop
 
 /-!
 # ISZERO
 
-Derived through `unop_step_equiv` (`Opcodes/UnopFamily.lean`); per-opcode
+Derived through `unop_step_equiv` (`Opcodes/Shapes/Unop.lean`); per-opcode
 content is the pure-function lemma and the wf bound. Reachable outcomes:
 success / stack underflow / out-of-gas (overflow unreachable for 1-in/1-out).
 -/

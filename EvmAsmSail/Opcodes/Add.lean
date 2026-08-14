@@ -1,10 +1,10 @@
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 
 /-!
 # ADD
 
 The archetype ALU binop, derived through `binop_step_equiv`
-(`Opcodes/BinopFamily.lean`). Per-opcode content: the pure-function
+(`Opcodes/Shapes/Binop.lean`). Per-opcode content: the pure-function
 equivalence `alu_add_eq_wrap256` and the wf bound; everything else is `rfl`.
 
 Reachable outcomes: success / stack underflow / out-of-gas. Stack overflow is

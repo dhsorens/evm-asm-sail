@@ -97,7 +97,7 @@ workflows:
 | --- | --- |
 | `evm-spec-comparison` | designing / reviewing SpecRef ↔ `Evm` relations and theorems |
 | `evm-bridge-gotchas` | proving lemmas, stuck on a simulation, about to add a `StateRel` precondition |
-| `opcode-slice` | landing one opcode (or shape-family member) end-to-end |
+| `opcode-slice` | landing one opcode (or shape-class member) end-to-end |
 | `coverage-hygiene` | updating matrices / regenerating the coverage site or canvas |
 | `acquiring-skills` | creating or updating skills after real friction |
 

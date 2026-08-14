@@ -99,13 +99,13 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       (success/underflow/OOG; overflow unreachable for 2-in/1-out, noted in docstring).
       Axioms: only `propext, Classical.choice, Quot.sound`. MM-1 (operation order) and
       MM-4 (pc convention) resolved as proven-equivalent for ADD.
-- [x] `Opcodes/BinopFamily.lean` — `binopShape` + generic run lemmas + `binop_step_equiv`;
+- [x] `Opcodes/Shapes/Binop.lean` — `binopShape` + generic run lemmas + `binop_step_equiv`;
       **all 19 remaining ALU binops harvested** (MUL SUB DIV SDIV MOD SMOD SIGNEXTEND LT GT
       SLT SGT EQ AND OR XOR BYTE SHL SHR SAR — one file per opcode, full `StepResultRel`,
       3 classical axioms each). Bridges: `Representation/SignedWord.lean`
       (toSigned/fromSigned ↔ sign-bit/magnitude), `Representation/BitwiseWord.lean`
       (BitVec round-trips, disjoint-bit `or_fill`, `div_parity_iff`)
-- [x] `Opcodes/UnopFamily.lean` — unop analogue of the binop family (`unopShape` +
+- [x] `Opcodes/Shapes/Unop.lean` — unop analogue of the binop family (`unopShape` +
       generic run lemmas + `unop_step_equiv`, full `StepResultRel`; overflow
       unreachable for 1-in/1-out); **all 3 unops harvested** (ISZERO, NOT, CLZ —
       one file per opcode, 3 classical axioms each). Bridges: `word_not_eq`
@@ -113,7 +113,7 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       (`clzAuxRec` highest-set-bit scan ↔ `Nat.log2`, limb-wise
       `word_bit_length_eq`) for CLZ. CLZ's Osaka gate lives in decode, upstream
       of the `execute` step boundary.
-- [x] `Opcodes/TernopFamily.lean` — ternop analogue (`ternOp` names SpecRef's
+- [x] `Opcodes/Shapes/Ternop.lean` — ternop analogue (`ternOp` names SpecRef's
       literal do-block shape, `ternopShape` the extraction's; `ternop_step_equiv`
       full `StepResultRel`; overflow unreachable for 3-in/1-out);
       **ADDMOD harvested** (`addmod_step_equiv`, `Opcodes/Addmod.lean`).
