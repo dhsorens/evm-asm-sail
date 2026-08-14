@@ -1,30 +1,24 @@
-import EvmAsmSail.Relations.State
+import EvmAsmSail.Opcodes.Shapes.Alu
 import EvmAsmSail.Representation.EvmGas
 import EvmAsmSail.Representation.SpecRefLemmas
 import Batteries.Tactic.OpenPrivate
 
 /-!
-# The ALU binop family
+# ALU binop shape (2-in/1-out)
 
-Every 2-in/1-out ALU opcode has the same shape on both sides:
+Sibling of [`Unop`](Unop.lean) / [`Ternop`](Ternop.lean) — do not import
+those, or this file from them. Shared Post and wf lemmas:
+[`Alu`](Alu.lean).
 
-* SpecRef: `i<Op> = binOp cost fSpec` (the shared private combinator —
-  pop ×2 → charge → push → pc+1, InstructionsCore.lean:122);
-* `Evm`: `execute_<op>` is byte-identical to `execute_add` modulo the gas
-  constant and the `alu_*` function (`charge → pop ×2 → alu → push_word`).
+SpecRef: `i<Op> = binOp cost fSpec` (pop ×2 → charge → push → pc+1).
+`Evm`: `execute_<op>` is `execute_add` modulo gas constant and `alu_*`.
 
-This file proves the family **once**: `binopShape` names the extraction's
-shape; generic run lemmas replay the ADD proofs for arbitrary
-`(cost, aluF)` / `(cost, fSpec)`; `binop_step_equiv` is the full-outcome
-step theorem. Each opcode then needs only `rfl` shape equations, one pure
-lemma `aluF = fSpec`, and a wf bound.
-
-Reachable outcomes for the whole family: success, stack underflow (×2
-shapes), out-of-gas. Overflow is unreachable (2 in, 1 out: the height
-decreases), per `validate_stack`'s bound.
+[`binop_step_equiv`](#binop_step_equiv) is the full-outcome step theorem.
+Reachable: success, stack underflow (×2), out-of-gas. Overflow unreachable
+(height decreases).
 -/
 
-open private binOp pcAdd boolPush from EvmAsm.Stateless.SpecRef.InstructionsCore
+open private binOp pcAdd from EvmAsm.Stateless.SpecRef.InstructionsCore
 open private writeListAt from Evm.HostAxioms
 
 set_option maxHeartbeats 1000000
@@ -33,29 +27,6 @@ namespace EvmAsmSail
 
 open EvmAsm.Stateless.SpecRef
 open Evm.Defs
-
-/-- The success post-relation for the ALU family: the state relation holds on
-the returned live values, the returned pc is the SpecRef post-pc (step
-boundaries re-align; mismatch ledger MM-4), and memory is a pass-through. -/
-def AluPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
-    (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
-  StateRel sR' step.2.1 step.2.2.2 hs' ss' ∧
-  step.1 = sR'.evm.pc ∧ step.2.2.1 = mem
-
-/-! ## Shared facts for per-opcode pure lemmas -/
-
-/-- lean-sail's `HPow Int Int Int` is `x ^ n.toNat` (Sail.lean:860), so
-Sail's `2 ^i 256` is definitionally `((2 : Int) ^ (256 : Nat)).toNat`. -/
-theorem two_pow_toNat : ((2 : Int) ^ (256 : Nat)).toNat = 2 ^ 256 := by
-  decide
-
-theorem wrap256_wf (n : Nat) : WordWf (wrap256 n) :=
-  Nat.mod_lt _ (Nat.two_pow_pos 256)
-
-theorem boolPush_wf (b : Bool) : WordWf (boolPush b) := by
-  unfold WordWf
-  show (if b = true then 1 else 0) < 2 ^ 256
-  split <;> decide
 
 /-! ## SpecRef side: `binOp cost f`, generically -/
 

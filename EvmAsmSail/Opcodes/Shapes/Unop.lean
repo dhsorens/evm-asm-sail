@@ -1,25 +1,21 @@
-import EvmAsmSail.Opcodes.Shapes.Binop
+import EvmAsmSail.Opcodes.Shapes.Alu
+import EvmAsmSail.Representation.EvmGas
+import EvmAsmSail.Representation.SpecRefLemmas
+import Batteries.Tactic.OpenPrivate
 
 /-!
-# The ALU unop family
+# ALU unop shape (1-in/1-out)
 
-Every 1-in/1-out ALU opcode has the same shape on both sides:
+Sibling of [`Binop`](Binop.lean) / [`Ternop`](Ternop.lean) — do not import
+those, or this file from them. Shared Post and wf lemmas:
+[`Alu`](Alu.lean).
 
-* SpecRef: `i<Op> = unOp cost fSpec` (the shared private combinator —
-  pop → charge → push → pc+1, InstructionsCore.lean:128);
-* `Evm`: `execute_<op>` is byte-identical to `execute_iszero` modulo the gas
-  constant and the `alu_*` function (`charge → pop → alu → push_word`).
+SpecRef: `i<Op> = unOp cost fSpec` (pop → charge → push → pc+1).
+`Evm`: `execute_<op>` is `execute_iszero` modulo gas constant and `alu_*`.
 
-The unop analogue of `Opcodes/Shapes/Binop.lean` (which also supplies the
-shared `AluPost` success relation): `unopShape` names the extraction's
-shape; generic run lemmas cover each outcome for arbitrary `(cost, aluF)` /
-`(cost, fSpec)`; `unop_step_equiv` is the full-outcome step theorem. Each
-opcode then needs only `rfl` shape equations, one pure lemma
-`aluF = fSpec`, and a wf bound.
-
-Reachable outcomes for the whole family: success, stack underflow,
-out-of-gas. Overflow is unreachable (1 in, 1 out: the height is preserved
-and already within the limit), per `validate_stack`'s bound.
+[`unop_step_equiv`](#unop_step_equiv) is the full-outcome step theorem.
+Reachable: success, stack underflow, out-of-gas. Overflow unreachable
+(height preserved, already within the limit).
 -/
 
 open private unOp pcAdd from EvmAsm.Stateless.SpecRef.InstructionsCore

@@ -118,6 +118,9 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       full `StepResultRel`; overflow unreachable for 3-in/1-out);
       **ADDMOD harvested** (`addmod_step_equiv`, `Opcodes/Addmod.lean`).
       Residual: MULMOD ternop, EXP, POP/DUP validators
+- [x] `Relations/Alu.lean` + `Opcodes/Shapes/Alu.lean` — `AluPost` and wf lemmas
+      extracted so Binop/Unop/Ternop are siblings (a shape file never imports
+      another). Blueprint for later Env/Memory Posts.
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
 
 ### M2 — Shape validators across machinery (next tranche)

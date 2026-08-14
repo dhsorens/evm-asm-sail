@@ -60,8 +60,14 @@ python3 scripts/refresh-proof-coverage-canvas.py
 
 For an opcode that just landed `full`:
 
-1. In `docs/opcode-coverage.md`, set the row status to
-   `**full** (\`<theorem>\`, path — outcomes…)`.
+1. In `docs/opcode-coverage.md`, set the row status to a **clickable theorem
+   name** (path lives in the href, `#L` is the `theorem` line):
+
+```markdown
+**full** ([`add_step_equiv`](../EvmAsmSail/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out)
+```
+
+   Do not leave a bare ``add_step_equiv`` in the status column.
 2. Run the refresh script.
 3. If the theorem newly ties a machine-frame component, bump that row in
    `docs/comparison-matrix.md` to `proven-<scope>` with the theorem name.

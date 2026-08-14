@@ -19,7 +19,8 @@ For relation design and observation-boundary questions, also read
 ## Preconditions
 
 - Know the **shape class** (binop / unop / ternop / stack / memory / control /
-  …) from `docs/opcode-coverage.md`. ALU skeletons live in `Opcodes/Shapes/`.
+  …) from `docs/opcode-coverage.md`. ALU skeletons live in `Opcodes/Shapes/`
+  (siblings: they import `Shapes/Alu.lean`, never each other).
 - Prefer harvesting within a proven class (e.g. next ALU binop after ADD) over
   inventing a new relation shape mid-slice.
 - If the slice needs a new observable component in `StateRel`, update
@@ -80,7 +81,9 @@ assumptions) rather than `set_option linter… false`. No new `axiom`s. No
 ### 5. Coverage hygiene
 
 1. Set the opcode row status to `full` (or honest intermediate: never leave
-   success-only as the final claimed status).
+   success-only as the final claimed status). The theorem name in the status
+   column must be a markdown link to the `theorem` line — see
+   `coverage-hygiene`.
 2. Update comparison-matrix rows if this slice newly preserves a component.
 3. Add or update mismatch entries if you discovered a new disagreement.
 4. Run:
@@ -116,7 +119,8 @@ See `coverage-hygiene` for the full artifact rules.
 When ADD (or another archetype) is `full` and the next op shares the shape:
 
 1. Extract shared structure only when the second instance proves the
-   duplication is real ([`Opcodes/Shapes/`](../../../EvmAsmSail/Opcodes/Shapes/README.md)).
+   duplication is real ([`Opcodes/Shapes/`](../../../EvmAsmSail/Opcodes/Shapes/README.md);
+   new files import `Shapes/Alu.lean`, not a sibling arity).
 2. Each harvested opcode still gets its own coverage-row update to `full`.
 3. Do not mark a whole shape class `full` from a generic lemma until every
    member is instantiated or an exhaustive registry says so.

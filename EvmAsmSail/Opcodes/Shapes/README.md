@@ -10,44 +10,62 @@ pops, when gas is charged, how the stack cursor moves, which failures are
 reachable. It is not the ALU arithmetic, and it is not the Yellow-Paper
 "ALU family" grouping of opcodes.
 
-| Shape | Arity | Step theorem |
+## Dependency rule
+
+**A shape file never imports a sibling.** Shared facts go down:
+
+```text
+Relations/State.lean     StateRel          (pre)
+Relations/Alu.lean       AluPost           (ALU success Post)
+        │
+        ▼
+Opcodes/Shapes/Alu.lean  wrap256_wf, boolPush_wf, two_pow_toNat
+        │
+        ├──────────────┬──────────────┐
+        ▼              ▼              ▼
+     Binop.lean     Unop.lean     Ternop.lean
+      (2,1)          (1,1)          (3,1)
+```
+
+Future slices copy this: a new Post in [`Relations/`](../../Relations/)
+(`MemPost`, …), harvest helpers in `Shapes/<Slice>.lean` if needed, then
+one arity file that imports **that** layer — never Binop/Unop/Ternop.
+
+## ALU shapes
+
+| Layer | File | Role |
 | --- | --- | --- |
-| [`Binop.lean`](Binop.lean) | 2-in/1-out | [`binop_step_equiv`](Binop.lean#L293) |
-| [`Unop.lean`](Unop.lean) | 1-in/1-out | [`unop_step_equiv`](Unop.lean#L230) |
-| [`Ternop.lean`](Ternop.lean) | 3-in/1-out | [`ternop_step_equiv`](Ternop.lean#L308) |
+| Post | [`Relations/Alu.lean`](../../Relations/Alu.lean) | [`AluPost`](../../Relations/Alu.lean#L24) |
+| Helpers | [`Alu.lean`](Alu.lean) | [`wrap256_wf`](Alu.lean#L26), [`boolPush_wf`](Alu.lean#L29), [`two_pow_toNat`](Alu.lean#L23) |
+| (2,1) | [`Binop.lean`](Binop.lean) | [`binopShape`](Binop.lean#L85), [`binop_step_equiv`](Binop.lean#L264) |
+| (1,1) | [`Unop.lean`](Unop.lean) | [`unopShape`](Unop.lean#L74), [`unop_step_equiv`](Unop.lean#L226) |
+| (3,1) | [`Ternop.lean`](Ternop.lean) | [`ternopShape`](Ternop.lean#L122), [`ternop_step_equiv`](Ternop.lean#L303) |
 
 Each harvested [`Opcodes/<Op>.lean`](../) file is `rfl` dispatch + `aluF = fSpec` + [`WordWf`](../../Relations/Word.lean#L20).
 
 | File | SpecRef | `Evm` | Instantiations |
 | --- | --- | --- | --- |
-| [`Binop.lean`](Binop.lean) | `binOp cost f` | [`binopShape`](Binop.lean#L114) | [`ADD`](../Add.lean) [`MUL`](../Mul.lean) [`SUB`](../Sub.lean) [`DIV`](../Div.lean) [`SDIV`](../Sdiv.lean) [`MOD`](../Mod.lean) [`SMOD`](../Smod.lean) [`SIGNEXTEND`](../Signextend.lean) [`LT`](../Lt.lean) [`GT`](../Gt.lean) [`SLT`](../Slt.lean) [`SGT`](../Sgt.lean) [`EQ`](../Eq.lean) [`AND`](../And.lean) [`OR`](../Or.lean) [`XOR`](../Xor.lean) [`BYTE`](../Byte.lean) [`SHL`](../Shl.lean) [`SHR`](../Shr.lean) [`SAR`](../Sar.lean) |
-| [`Unop.lean`](Unop.lean) | `unOp cost f` | [`unopShape`](Unop.lean#L78) | [`ISZERO`](../Iszero.lean) [`NOT`](../Not.lean) [`CLZ`](../Clz.lean) |
-| [`Ternop.lean`](Ternop.lean) | [`ternOp`](Ternop.lean#L55) (named here; SpecRef has no combinator) | [`ternopShape`](Ternop.lean#L127) | [`ADDMOD`](../Addmod.lean); MULMOD residual |
+| [`Binop.lean`](Binop.lean) | `binOp cost f` | [`binopShape`](Binop.lean#L85) | [`ADD`](../Add.lean) [`MUL`](../Mul.lean) [`SUB`](../Sub.lean) [`DIV`](../Div.lean) [`SDIV`](../Sdiv.lean) [`MOD`](../Mod.lean) [`SMOD`](../Smod.lean) [`SIGNEXTEND`](../Signextend.lean) [`LT`](../Lt.lean) [`GT`](../Gt.lean) [`SLT`](../Slt.lean) [`SGT`](../Sgt.lean) [`EQ`](../Eq.lean) [`AND`](../And.lean) [`OR`](../Or.lean) [`XOR`](../Xor.lean) [`BYTE`](../Byte.lean) [`SHL`](../Shl.lean) [`SHR`](../Shr.lean) [`SAR`](../Sar.lean) |
+| [`Unop.lean`](Unop.lean) | `unOp cost f` | [`unopShape`](Unop.lean#L74) | [`ISZERO`](../Iszero.lean) [`NOT`](../Not.lean) [`CLZ`](../Clz.lean) |
+| [`Ternop.lean`](Ternop.lean) | [`ternOp`](Ternop.lean#L50) (named here; SpecRef has no combinator) | [`ternopShape`](Ternop.lean#L122) | [`ADDMOD`](../Addmod.lean); MULMOD residual |
 
-[`Unop.lean`](Unop.lean) and [`Ternop.lean`](Ternop.lean) import
-[`Binop.lean`](Binop.lean) for the shared success post-relation
-[`AluPost`](Binop.lean#L40) (and [`wrap256_wf`](Binop.lean#L52) /
-[`boolPush_wf`](Binop.lean#L55)). That coupling is real, not a leftover
-path: all three close the same ALU observation boundary (live
-[`StateRel`](../../Relations/State.lean#L36), MM-4 pc re-align, memory
-pass-through).
+## Shape-file template
 
-## What a harvest supplies
+Every `Shapes/Foo.lean` (and future Env/Memory/…):
 
-Each opcode file is an application of `*_step_equiv` with:
-
-1. `rfl` that the SpecRef handler is the shape combinator at the right cost
-2. `rfl` `*Dispatch` — [`BinopDispatch`](Binop.lean#L206) /
-   [`UnopDispatch`](Unop.lean#L143) /
-   [`TernopDispatch`](Ternop.lean#L220)
-   (`opcode_stack_effect` arity + `execute_opcode` reduces to `*Shape`)
-3. a pure lemma `aluF = fSpec`
-4. a [`WordWf`](../../Relations/Word.lean#L20) bound on the result
+1. Import [`Alu.lean`](Alu.lean) (or the relevant Post) plus
+   [`EvmGas`](../../Representation/EvmGas.lean) /
+   [`SpecRefLemmas`](../../Representation/SpecRefLemmas.lean). **Not** a sibling shape.
+2. SpecRef combinator + `runR_*` for each reachable outcome.
+3. `fooShape` — extracted handler body.
+4. `FooDispatch` — `rfl` arity + `execute_opcode` reduces to `fooShape`.
+5. `runS_fooShape_*` and `runS_execute_foo_*` per outcome.
+6. `foo_step_equiv` : [`StateRel`](../../Relations/State.lean) →
+   [`StepResultRel`](../../Relations/Outcome.lean) [`AluPost`](../../Relations/Alu.lean)
+   (or that slice's Post).
 
 Do not extract a new shape file until a **second** opcode proves the
 duplication is real. Do not put EXP here (pops first, data-dependent gas).
-Future candidates (env pushers, DUP/SWAP, memory copies) belong in this
-directory only if they share a byte-identical skeleton the way ADD/SUB do.
 
 Package map: [`../../README.md`](../../README.md). Harvest ritual:
 [`opcode-slice`](../../../.claude/skills/opcode-slice/SKILL.md).
