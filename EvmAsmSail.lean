@@ -7,7 +7,9 @@ import EvmAsmSail.Relations.Stack
 import EvmAsmSail.Relations.Gas
 import EvmAsmSail.Relations.Outcome
 import EvmAsmSail.Relations.State
+import EvmAsmSail.Relations.Alu
 import EvmAsmSail.Assumptions
+import EvmAsmSail.Opcodes.Shapes.Alu
 import EvmAsmSail.Opcodes.Shapes.Binop
 import EvmAsmSail.Opcodes.Add
 import EvmAsmSail.Opcodes.Mul

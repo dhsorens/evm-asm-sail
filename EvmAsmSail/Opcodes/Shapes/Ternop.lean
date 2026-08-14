@@ -1,27 +1,22 @@
-import EvmAsmSail.Opcodes.Shapes.Binop
+import EvmAsmSail.Opcodes.Shapes.Alu
+import EvmAsmSail.Representation.EvmGas
+import EvmAsmSail.Representation.SpecRefLemmas
+import Batteries.Tactic.OpenPrivate
 
 /-!
-# The ALU ternop family
+# ALU ternop shape (3-in/1-out)
 
-The two 3-in/1-out ALU opcodes (ADDMOD, MULMOD) share one shape on both
-sides:
+Sibling of [`Binop`](Binop.lean) / [`Unop`](Unop.lean) — do not import
+those, or this file from them. Shared Post and wf lemmas:
+[`Alu`](Alu.lean).
 
-* SpecRef: `iAddmod`/`iMulmod` are literal do-blocks
-  `pop ×3 → charge → push → pc+1` (InstructionsCore.lean:162,169) — no
-  upstream combinator exists, so `ternOp` here names that shape and each
-  handler equals it by `rfl`;
-* `Evm`: `execute_addmod`/`execute_mulmod` are byte-identical modulo the
-  `alu_*` function (`charge → pop ×3 → alu → push_word`).
+SpecRef: `iAddmod`/`iMulmod` are `pop ×3 → charge → push → pc+1` (no
+upstream combinator); [`ternOp`](#ternOp) names that shape.
+`Evm`: `execute_addmod`/`execute_mulmod` modulo `alu_*`.
 
-`ternopShape` names the extraction's shape; generic run lemmas cover each
-outcome for arbitrary `(cost, aluF)` / `(cost, fSpec)`; `ternop_step_equiv`
-is the full-outcome step theorem, with `AluPost` shared from the binop
-family. Each opcode then needs only `rfl` shape equations, one pure lemma
-`aluF = fSpec`, and a wf bound.
-
-Reachable outcomes for the whole family: success, stack underflow (×3
-shapes), out-of-gas. Overflow is unreachable (3 in, 1 out: the height
-decreases), per `validate_stack`'s bound.
+[`ternop_step_equiv`](#ternop_step_equiv) is the full-outcome step theorem.
+Reachable: success, stack underflow (×3), out-of-gas. Overflow unreachable
+(height decreases).
 -/
 
 open private pcAdd from EvmAsm.Stateless.SpecRef.InstructionsCore
