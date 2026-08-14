@@ -145,6 +145,26 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   physical line; shorten with `open … (name)` (e.g.
   `open EvmAsm.Rv64.Accel (powMod)`) rather than fully-qualified names. See
   `runS_exp_body_ok` (`Opcodes/Exp.lean`).
+- **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
+  projection atoms that omega/simp can't merge.**
+  Trigger: stating a relation or lemma hypothesis over a whole sigma value
+  (`c : Code` with `c.2.2.len` in the statement) — downstream goals mix the
+  projection spelling with the destructured index, and omega treats them as
+  distinct atoms ("possible counterexample" naming both). Right move:
+  destructure in the *statement* — quantify the indices and fields separately
+  (`(off len : Nat) (cf : CodeFields off len)`, register value
+  `some ⟨off, len, cf⟩`) so no goal ever carries a projection. See
+  `JumpdestRel` (`Relations/Jumpdest.lean`). The memory tranche will face the
+  same choice with `EvmMemorySlice`.
+- **`simp [h]` misses Bool `contains`/`decide` hypotheses because it
+  normalizes the goal past them.**
+  Trigger: an `if`-condition goal like `¬((!l.contains x) = true)` with
+  `h : l.contains x = true` — plain `simp [h]` first rewrites the goal to
+  `x ∈ l` membership form, then `h` (still in Bool form) never fires and is
+  reported unused. Right move: `simpa using h` (normalizes both to the same
+  form), or `simp only` with the targeted lemmas
+  (`Bool.and_eq_true, decide_eq_true_eq`) and `exact`. See the `if` rewrites
+  in `Opcodes/Jumpi.lean`.
 - **`lake env lean <file>` checks against *stale imported oleans*.**
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you
