@@ -6,7 +6,7 @@ docs live in `docs/`. Read those for design; this file is operational doctrine.
 
 ## Project facts
 
-- Proofs live in `EvmAsmSail/`. Coverage matrices and the mismatch ledger live in
+- Proofs live in `EvmSpecsVerify/`. Coverage matrices and the mismatch ledger live in
   `docs/`. Status and milestones live in `PROGRESS.md`.
 - `EvmAsm` is a Lake git dependency; `evm` is a path dep into
   `extraction/evm-sail` (submodule). Do not edit either checkout except via
@@ -68,7 +68,7 @@ is not progress.
 | Comparison matrix | `docs/comparison-matrix.md` |
 | Opcode coverage | `docs/opcode-coverage.md` |
 | Mismatch ledger | `docs/mismatches.md` |
-| Assumptions ledger | `EvmAsmSail/Assumptions.lean` |
+| Assumptions ledger | `EvmSpecsVerify/Assumptions.lean` |
 | Coverage site source | `docs/index.html` (generated) |
 | Refresh script | `scripts/refresh-proof-coverage-canvas.py` |
 
@@ -87,16 +87,16 @@ is not reflected in the matrices.
   decompositions over long prose.
 - Label clearly: discovered facts / proposed architecture / assumptions / open
   questions.
-- In `EvmAsmSail/**/README.md` (and other design markdown), every file path and
+- In `EvmSpecsVerify/**/README.md` (and other design markdown), every file path and
   named Lean definition is a clickable markdown link. Files:
   ``[`Foo.lean`](Foo.lean)``. Definitions: ``[`thm`](Foo.lean#L12)`` pointing at
-  the `def`/`theorem` line. Exemplar: [`EvmAsmSail/Representation/README.md`](EvmAsmSail/Representation/README.md).
+  the `def`/`theorem` line. Exemplar: [`EvmSpecsVerify/Representation/README.md`](EvmSpecsVerify/Representation/README.md).
   Do not leave bare `` `Foo.lean` `` or unlinked theorem names in those docs.
   Code fences cannot hold links — lift file names out of fences into a table
   or list.
 - In `docs/opcode-coverage.md`, every named theorem in the **status** column is
   a markdown link to its `theorem` line
-  (``[`add_step_equiv`](../EvmAsmSail/Opcodes/Add.lean#L30)``). See
+  (``[`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30)``). See
   `coverage-hygiene`.
 
 ## Skills and commands

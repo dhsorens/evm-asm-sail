@@ -11,7 +11,7 @@ description: >
 
 One coherent unit of work: a single opcode (or one harvested member of an
 already-proven shape class) with full-outcome equivalence, matrix updates, and
-a green build. Template: `EvmAsmSail/Opcodes/Add.lean` (`add_step_equiv`).
+a green build. Template: `EvmSpecsVerify/Opcodes/Add.lean` (`add_step_equiv`).
 
 For relation design and observation-boundary questions, also read
 `evm-spec-comparison`. For known traps, read `evm-bridge-gotchas`.
@@ -119,7 +119,7 @@ See `coverage-hygiene` for the full artifact rules.
 When ADD (or another archetype) is `full` and the next op shares the shape:
 
 1. Extract shared structure only when the second instance proves the
-   duplication is real ([`Opcodes/Shapes/`](../../../EvmAsmSail/Opcodes/Shapes/README.md);
+   duplication is real ([`Opcodes/Shapes/`](../../../EvmSpecsVerify/Opcodes/Shapes/README.md);
    new files import `Shapes/Alu.lean`, not a sibling arity).
 2. Each harvested opcode still gets its own coverage-row update to `full`.
 3. Do not mark a whole shape class `full` from a generic lemma until every

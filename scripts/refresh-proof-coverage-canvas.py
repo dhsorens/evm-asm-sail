@@ -41,7 +41,7 @@ CANVAS = (
 )
 
 OUTCOME_REL = {
-    "relationFile": "EvmAsmSail/Relations/Outcome.lean",
+    "relationFile": "EvmSpecsVerify/Relations/Outcome.lean",
     "stepResultRelLine": 53,
     "errorRelLine": 35,
 }
@@ -129,7 +129,7 @@ def parse_proof(status: str) -> dict | None:
         md = re.match(
             r"^\[`?([A-Za-z_][\w']*)`?\]\("
             r"(?:\.\./)*"
-            r"((?:EvmAsmSail|extraction)[^)#\s]+?\.lean)"
+            r"((?:EvmSpecsVerify|extraction)[^)#\s]+?\.lean)"
             r"(?:#L\d+)?"
             r"\)",
             head,
@@ -137,7 +137,7 @@ def parse_proof(status: str) -> dict | None:
         hm = md
         if not hm:
             hm = re.match(
-                r"^([A-Za-z_][\w']*)\s*,\s*((?:EvmAsmSail|extraction)[^\s,]+\.lean)",
+                r"^([A-Za-z_][\w']*)\s*,\s*((?:EvmSpecsVerify|extraction)[^\s,]+\.lean)",
                 head,
             )
         if not hm:
@@ -180,7 +180,7 @@ def load_data() -> dict:
     opcodes: list[dict] = []
     opcode_counts: dict[str, int] = {}
     for sec, headers, rows in opc:
-        if sec == "Counts (must match `EvmAsmSail/Coverage/Registry.lean`)":
+        if sec == "Counts (must match `EvmSpecsVerify/Coverage/Registry.lean`)":
             for r in rows:
                 label = strip_md(r.get("status", "")).lower()
                 count_raw = strip_md(r.get("count", "0")).replace(",", "")

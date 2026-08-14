@@ -39,7 +39,7 @@ naming or inventing replacements — do not guess shapes or theorem names.
 
 ### Repo facts
 
-- Proofs live in `EvmAsmSail/`; living coverage docs in `docs/`.
+- Proofs live in `EvmSpecsVerify/`; living coverage docs in `docs/`.
 - `EvmAsm` is a Lake git dep; `evm` is a path dep into the `extraction/evm-sail` submodule.
 - Primary bridge in this repo: SpecRef ↔ `Evm`. RISC-V / macro representation is
   upstream of SpecRef unless you deliberately lower the comparison boundary.
@@ -77,7 +77,7 @@ statuses):
    `main` from a worker session).
 4. Keep the proof-coverage canvas open beside chat so the next slice and filters
    stay honest. Expand opcode rows to inspect theorem links (`openFile` into
-   `EvmAsmSail/…`); verify claims against the named `StepResultRel` theorem.
+   `EvmSpecsVerify/…`); verify claims against the named `StepResultRel` theorem.
 
 Do not invent progress in chat that is not reflected in the matrices. Do not edit
 the canvas or `docs/index.html` by hand — always regenerate via the refresh script.
@@ -133,7 +133,7 @@ Organize Lean under a semantic decomposition (not a mirror of either upstream
 tree), roughly:
 
 ```text
-EvmAsmSail/
+EvmSpecsVerify/
   Relations/ Representation/ SpecRef/ Evm/
   Opcodes/ Simulation/ Coverage/ TopLevel/
   Assumptions.lean   # ledger

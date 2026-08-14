@@ -2,7 +2,7 @@
 
 One row per constructor of the `Evm` extraction's instruction AST
 (`Evm.Defs.ast`, Defs.lean:2672 — 90 constructors), cross-referenced with SpecRef's
-handlers. Machine-checked counts live in `EvmAsmSail/Coverage/Registry.lean` and must
+handlers. Machine-checked counts live in `EvmSpecsVerify/Coverage/Registry.lean` and must
 match this table.
 
 Statuses: `unstated` · `stated` (theorem exists, may cite pending lemmas) ·
@@ -17,11 +17,11 @@ are total.
 
 ## Shape classes
 
-ALU step skeletons live in [`EvmAsmSail/Opcodes/Shapes/`](../EvmAsmSail/Opcodes/Shapes/README.md).
+ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/Opcodes/Shapes/README.md).
 
-- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`) — [`Shapes/Binop.lean`](../EvmAsmSail/Opcodes/Shapes/Binop.lean)
-- **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmAsmSail/Opcodes/Shapes/Unop.lean)
-- **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmAsmSail/Opcodes/Shapes/Ternop.lean)
+- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`) — [`Shapes/Binop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Binop.lean)
+- **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Unop.lean)
+- **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
 - **memory / control / env / storage / system**: as named
 
@@ -30,32 +30,32 @@ ALU step skeletons live in [`EvmAsmSail/Opcodes/Shapes/`](../EvmAsmSail/Opcodes/
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
 | STOP | 0x00 | `iStop` | `execute_stop` | system | unstated |
-| ADD | 0x01 | `iAdd` | `execute_add` | binop | **full** ([`add_step_equiv`](../EvmAsmSail/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out) |
-| MUL | 0x02 | `iMul` | `execute_mul` | binop | **full** ([`mul_step_equiv`](../EvmAsmSail/Opcodes/Mul.lean#L26) — success/underflow/OOG; overflow unreachable) |
-| SUB | 0x03 | `iSub` | `execute_sub` | binop | **full** ([`sub_step_equiv`](../EvmAsmSail/Opcodes/Sub.lean#L30) — success/underflow/OOG; overflow unreachable) |
-| DIV | 0x04 | `iDiv` | `execute_div` | binop | **full** ([`div_step_equiv`](../EvmAsmSail/Opcodes/Div.lean#L33) — success/underflow/OOG; overflow unreachable) |
-| SDIV | 0x05 | `iSdiv` | `execute_sdiv` | binop | **full** ([`sdiv_step_equiv`](../EvmAsmSail/Opcodes/Sdiv.lean#L185) — success/underflow/OOG; overflow unreachable) |
-| MOD | 0x06 | `iMod` | `execute_mod` | binop | **full** ([`mod_step_equiv`](../EvmAsmSail/Opcodes/Mod.lean#L33) — success/underflow/OOG; overflow unreachable) |
-| SMOD | 0x07 | `iSmod` | `execute_smod` | binop | **full** ([`smod_step_equiv`](../EvmAsmSail/Opcodes/Smod.lean#L95) — success/underflow/OOG; overflow unreachable) |
-| ADDMOD | 0x08 | `iAddmod` | `execute_addmod` | ternop | **full** ([`addmod_step_equiv`](../EvmAsmSail/Opcodes/Addmod.lean#L36) — success/underflow/OOG; overflow unreachable for 3-in/1-out) |
+| ADD | 0x01 | `iAdd` | `execute_add` | binop | **full** ([`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out) |
+| MUL | 0x02 | `iMul` | `execute_mul` | binop | **full** ([`mul_step_equiv`](../EvmSpecsVerify/Opcodes/Mul.lean#L26) — success/underflow/OOG; overflow unreachable) |
+| SUB | 0x03 | `iSub` | `execute_sub` | binop | **full** ([`sub_step_equiv`](../EvmSpecsVerify/Opcodes/Sub.lean#L30) — success/underflow/OOG; overflow unreachable) |
+| DIV | 0x04 | `iDiv` | `execute_div` | binop | **full** ([`div_step_equiv`](../EvmSpecsVerify/Opcodes/Div.lean#L33) — success/underflow/OOG; overflow unreachable) |
+| SDIV | 0x05 | `iSdiv` | `execute_sdiv` | binop | **full** ([`sdiv_step_equiv`](../EvmSpecsVerify/Opcodes/Sdiv.lean#L185) — success/underflow/OOG; overflow unreachable) |
+| MOD | 0x06 | `iMod` | `execute_mod` | binop | **full** ([`mod_step_equiv`](../EvmSpecsVerify/Opcodes/Mod.lean#L33) — success/underflow/OOG; overflow unreachable) |
+| SMOD | 0x07 | `iSmod` | `execute_smod` | binop | **full** ([`smod_step_equiv`](../EvmSpecsVerify/Opcodes/Smod.lean#L95) — success/underflow/OOG; overflow unreachable) |
+| ADDMOD | 0x08 | `iAddmod` | `execute_addmod` | ternop | **full** ([`addmod_step_equiv`](../EvmSpecsVerify/Opcodes/Addmod.lean#L36) — success/underflow/OOG; overflow unreachable for 3-in/1-out) |
 | MULMOD | 0x09 | `iMulmod` | `execute_mulmod` | ternop | unstated |
 | EXP | 0x0a | `iExp` | `execute_exp` | binop (dyn gas, fuelled pow) | unstated |
-| SIGNEXTEND | 0x0b | `iSignextend` | `execute_signextend` | binop | **full** ([`signextend_step_equiv`](../EvmAsmSail/Opcodes/Signextend.lean#L134) — success/underflow/OOG; overflow unreachable) |
-| LT | 0x10 | `iLt` | `execute_lt` | binop | **full** ([`lt_step_equiv`](../EvmAsmSail/Opcodes/Lt.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| GT | 0x11 | `iGt` | `execute_gt` | binop | **full** ([`gt_step_equiv`](../EvmAsmSail/Opcodes/Gt.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| SLT | 0x12 | `iSlt` | `execute_slt` | binop | **full** ([`slt_step_equiv`](../EvmAsmSail/Opcodes/Slt.lean#L100) — success/underflow/OOG; overflow unreachable) |
-| SGT | 0x13 | `iSgt` | `execute_sgt` | binop | **full** ([`sgt_step_equiv`](../EvmAsmSail/Opcodes/Sgt.lean#L33) — success/underflow/OOG; overflow unreachable) |
-| EQ | 0x14 | `iEq` | `execute_eq` | binop | **full** ([`eq_step_equiv`](../EvmAsmSail/Opcodes/Eq.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| ISZERO | 0x15 | `iIszero` | `execute_iszero` | unop | **full** ([`iszero_step_equiv`](../EvmAsmSail/Opcodes/Iszero.lean#L28) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
-| AND | 0x16 | `iAnd` | `execute_and` | binop | **full** ([`and_step_equiv`](../EvmAsmSail/Opcodes/And.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| OR | 0x17 | `iOr` | `execute_or` | binop | **full** ([`or_step_equiv`](../EvmAsmSail/Opcodes/Or.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| XOR | 0x18 | `iXor` | `execute_xor` | binop | **full** ([`xor_step_equiv`](../EvmAsmSail/Opcodes/Xor.lean#L28) — success/underflow/OOG; overflow unreachable) |
-| NOT | 0x19 | `iNot` | `execute_not` | unop | **full** ([`not_step_equiv`](../EvmAsmSail/Opcodes/Not.lean#L33) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
-| BYTE | 0x1a | `iByte` | `execute_byte` | binop | **full** ([`byte_step_equiv`](../EvmAsmSail/Opcodes/Byte.lean#L45) — success/underflow/OOG; overflow unreachable) |
-| SHL | 0x1b | `iShl` | `execute_shl` | binop | **full** ([`shl_step_equiv`](../EvmAsmSail/Opcodes/Shl.lean#L36) — success/underflow/OOG; overflow unreachable) |
-| SHR | 0x1c | `iShr` | `execute_shr` | binop | **full** ([`shr_step_equiv`](../EvmAsmSail/Opcodes/Shr.lean#L37) — success/underflow/OOG; overflow unreachable) |
-| SAR | 0x1d | `iSar` | `execute_sar` | binop | **full** ([`sar_step_equiv`](../EvmAsmSail/Opcodes/Sar.lean#L160) — success/underflow/OOG; overflow unreachable) |
-| CLZ | 0x1e | `iClz` | `execute_clz` | unop (fork-gated ≥ Osaka; gate lives in decode, upstream of `execute`) | **full** ([`clz_step_equiv`](../EvmAsmSail/Opcodes/Clz.lean#L40) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
+| SIGNEXTEND | 0x0b | `iSignextend` | `execute_signextend` | binop | **full** ([`signextend_step_equiv`](../EvmSpecsVerify/Opcodes/Signextend.lean#L134) — success/underflow/OOG; overflow unreachable) |
+| LT | 0x10 | `iLt` | `execute_lt` | binop | **full** ([`lt_step_equiv`](../EvmSpecsVerify/Opcodes/Lt.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| GT | 0x11 | `iGt` | `execute_gt` | binop | **full** ([`gt_step_equiv`](../EvmSpecsVerify/Opcodes/Gt.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| SLT | 0x12 | `iSlt` | `execute_slt` | binop | **full** ([`slt_step_equiv`](../EvmSpecsVerify/Opcodes/Slt.lean#L100) — success/underflow/OOG; overflow unreachable) |
+| SGT | 0x13 | `iSgt` | `execute_sgt` | binop | **full** ([`sgt_step_equiv`](../EvmSpecsVerify/Opcodes/Sgt.lean#L33) — success/underflow/OOG; overflow unreachable) |
+| EQ | 0x14 | `iEq` | `execute_eq` | binop | **full** ([`eq_step_equiv`](../EvmSpecsVerify/Opcodes/Eq.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| ISZERO | 0x15 | `iIszero` | `execute_iszero` | unop | **full** ([`iszero_step_equiv`](../EvmSpecsVerify/Opcodes/Iszero.lean#L28) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
+| AND | 0x16 | `iAnd` | `execute_and` | binop | **full** ([`and_step_equiv`](../EvmSpecsVerify/Opcodes/And.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| OR | 0x17 | `iOr` | `execute_or` | binop | **full** ([`or_step_equiv`](../EvmSpecsVerify/Opcodes/Or.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| XOR | 0x18 | `iXor` | `execute_xor` | binop | **full** ([`xor_step_equiv`](../EvmSpecsVerify/Opcodes/Xor.lean#L28) — success/underflow/OOG; overflow unreachable) |
+| NOT | 0x19 | `iNot` | `execute_not` | unop | **full** ([`not_step_equiv`](../EvmSpecsVerify/Opcodes/Not.lean#L33) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
+| BYTE | 0x1a | `iByte` | `execute_byte` | binop | **full** ([`byte_step_equiv`](../EvmSpecsVerify/Opcodes/Byte.lean#L45) — success/underflow/OOG; overflow unreachable) |
+| SHL | 0x1b | `iShl` | `execute_shl` | binop | **full** ([`shl_step_equiv`](../EvmSpecsVerify/Opcodes/Shl.lean#L36) — success/underflow/OOG; overflow unreachable) |
+| SHR | 0x1c | `iShr` | `execute_shr` | binop | **full** ([`shr_step_equiv`](../EvmSpecsVerify/Opcodes/Shr.lean#L37) — success/underflow/OOG; overflow unreachable) |
+| SAR | 0x1d | `iSar` | `execute_sar` | binop | **full** ([`sar_step_equiv`](../EvmSpecsVerify/Opcodes/Sar.lean#L160) — success/underflow/OOG; overflow unreachable) |
+| CLZ | 0x1e | `iClz` | `execute_clz` | unop (fork-gated ≥ Osaka; gate lives in decode, upstream of `execute`) | **full** ([`clz_step_equiv`](../EvmSpecsVerify/Opcodes/Clz.lean#L40) — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
 
 ## Hashing
 
@@ -138,7 +138,7 @@ ALU step skeletons live in [`EvmAsmSail/Opcodes/Shapes/`](../EvmAsmSail/Opcodes/
 | INVALID | 0xfe | (dispatch throws `.invalidOpcode`) | `execute_invalid` | system | unstated |
 | SELFDESTRUCT | 0xff | `iSelfdestruct` | `execute_selfdestruct` | system+world | unstated |
 
-## Counts (must match `EvmAsmSail/Coverage/Registry.lean`)
+## Counts (must match `EvmSpecsVerify/Coverage/Registry.lean`)
 
 | status | count |
 |---|---|
