@@ -16,9 +16,11 @@ are total.
 
 ## Shape classes
 
-- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`)
-- **unop**: 1-in/1-out analogue
-- **ternop**: 3-in/1-out (ADDMOD, MULMOD)
+ALU step skeletons live in [`EvmAsmSail/Opcodes/Shapes/`](../EvmAsmSail/Opcodes/Shapes/README.md).
+
+- **binop**: `charge → pop ×2 → alu → push` on both sides (SpecRef `binOp`, Evm `execute_<op>`) — [`Shapes/Binop.lean`](../EvmAsmSail/Opcodes/Shapes/Binop.lean)
+- **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmAsmSail/Opcodes/Shapes/Unop.lean)
+- **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmAsmSail/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
 - **memory / control / env / storage / system**: as named
 
@@ -34,7 +36,7 @@ are total.
 | SDIV | 0x05 | `iSdiv` | `execute_sdiv` | binop | **full** (`sdiv_step_equiv`, EvmAsmSail/Opcodes/Sdiv.lean — success/underflow/OOG; overflow unreachable) |
 | MOD | 0x06 | `iMod` | `execute_mod` | binop | **full** (`mod_step_equiv`, EvmAsmSail/Opcodes/Mod.lean — success/underflow/OOG; overflow unreachable) |
 | SMOD | 0x07 | `iSmod` | `execute_smod` | binop | **full** (`smod_step_equiv`, EvmAsmSail/Opcodes/Smod.lean — success/underflow/OOG; overflow unreachable) |
-| ADDMOD | 0x08 | `iAddmod` | `execute_addmod` | ternop | unstated |
+| ADDMOD | 0x08 | `iAddmod` | `execute_addmod` | ternop | **full** (`addmod_step_equiv`, EvmAsmSail/Opcodes/Addmod.lean — success/underflow/OOG; overflow unreachable for 3-in/1-out) |
 | MULMOD | 0x09 | `iMulmod` | `execute_mulmod` | ternop | unstated |
 | EXP | 0x0a | `iExp` | `execute_exp` | binop (dyn gas, fuelled pow) | unstated |
 | SIGNEXTEND | 0x0b | `iSignextend` | `execute_signextend` | binop | **full** (`signextend_step_equiv`, EvmAsmSail/Opcodes/Signextend.lean — success/underflow/OOG; overflow unreachable) |
@@ -47,12 +49,12 @@ are total.
 | AND | 0x16 | `iAnd` | `execute_and` | binop | **full** (`and_step_equiv`, EvmAsmSail/Opcodes/And.lean — success/underflow/OOG; overflow unreachable) |
 | OR | 0x17 | `iOr` | `execute_or` | binop | **full** (`or_step_equiv`, EvmAsmSail/Opcodes/Or.lean — success/underflow/OOG; overflow unreachable) |
 | XOR | 0x18 | `iXor` | `execute_xor` | binop | **full** (`xor_step_equiv`, EvmAsmSail/Opcodes/Xor.lean — success/underflow/OOG; overflow unreachable) |
-| NOT | 0x19 | `iNot` | `execute_not` | unop | unstated |
+| NOT | 0x19 | `iNot` | `execute_not` | unop | **full** (`not_step_equiv`, EvmAsmSail/Opcodes/Not.lean — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
 | BYTE | 0x1a | `iByte` | `execute_byte` | binop | **full** (`byte_step_equiv`, EvmAsmSail/Opcodes/Byte.lean — success/underflow/OOG; overflow unreachable) |
 | SHL | 0x1b | `iShl` | `execute_shl` | binop | **full** (`shl_step_equiv`, EvmAsmSail/Opcodes/Shl.lean — success/underflow/OOG; overflow unreachable) |
 | SHR | 0x1c | `iShr` | `execute_shr` | binop | **full** (`shr_step_equiv`, EvmAsmSail/Opcodes/Shr.lean — success/underflow/OOG; overflow unreachable) |
 | SAR | 0x1d | `iSar` | `execute_sar` | binop | **full** (`sar_step_equiv`, EvmAsmSail/Opcodes/Sar.lean — success/underflow/OOG; overflow unreachable) |
-| CLZ | 0x1e | `iClz` | `execute_clz` | unop (fork-gated ≥ Osaka) | unstated |
+| CLZ | 0x1e | `iClz` | `execute_clz` | unop (fork-gated ≥ Osaka; gate lives in decode, upstream of `execute`) | **full** (`clz_step_equiv`, EvmAsmSail/Opcodes/Clz.lean — success/underflow/OOG; overflow unreachable for 1-in/1-out) |
 
 ## Hashing
 
@@ -139,7 +141,7 @@ are total.
 
 | status | count |
 |---|---|
-| full | 21 |
-| unstated | 68 |
+| full | 24 |
+| unstated | 65 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

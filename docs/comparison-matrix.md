@@ -15,10 +15,10 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 
 | component | SpecRef repr | `Evm` repr | relation | invariants | status |
 |---|---|---|---|---|---|
-| word | `U256 := Nat` (Types.lean:26) | `word := Nat` (Defs.lean:51) | `WordRel` (eq) | `< 2^256` (wf, both) | proven-alu-ops (all 21 ALU binop/unop step theorems) |
+| word | `U256 := Nat` (Types.lean:26) | `word := Nat` (Defs.lean:51) | `WordRel` (eq) | `< 2^256` (wf, both) | proven-alu-ops (all 24 ALU binop/unop/ternop step theorems) |
 | pc | `Evm.pc : Uint` (Vm.lean:188) | `pc` register (`code_pointer := Nat`) + live `pc_in`/return arg of `execute` | `PcRel` | register authoritative at frame boundary; live value threaded (state-passing convention) | unrelated |
-| operand stack | `Evm.stack : List U256`, head = top (Vm.lean:189) | `HostState.stackFrames` head: bottom-indexed `List word` + `stack_top` register / live `top : StackTop := BitVec 64` cursor (HostAxioms.lean:1846) | `StackRel` (prefix-up-to-cursor refinement) | height = `top.toNat` ≤ 1024; SpecRef entries `< 2^256` | proven-alu-ops (preserved by `binop_step_equiv` / `unop_step_equiv`) |
-| regular gas | `Evm.gasLeft : Uint` (Vm.lean:192) | `gas_remaining` register (`gas := Nat`) / live `g : Nat` argument | `GasRel` | live value threaded during step | proven-alu-ops (charge/OOG both sides, `binop_step_equiv` / `unop_step_equiv`) |
+| operand stack | `Evm.stack : List U256`, head = top (Vm.lean:189) | `HostState.stackFrames` head: bottom-indexed `List word` + `stack_top` register / live `top : StackTop := BitVec 64` cursor (HostAxioms.lean:1846) | `StackRel` (prefix-up-to-cursor refinement) | height = `top.toNat` ≤ 1024; SpecRef entries `< 2^256` | proven-alu-ops (preserved by `binop_step_equiv` / `unop_step_equiv` / `ternop_step_equiv`) |
+| regular gas | `Evm.gasLeft : Uint` (Vm.lean:192) | `gas_remaining` register (`gas := Nat`) / live `g : Nat` argument | `GasRel` | live value threaded during step | proven-alu-ops (charge/OOG both sides, `binop_step_equiv` / `unop_step_equiv` / `ternop_step_equiv`) |
 | state gas reservoir | `Evm.stateGasLeft : Uint` (Vm.lean:193) | `state_gas_remaining` register | `GasRel.reservoir` | — | proven-alu-ops (success path; failure paths relate halt kind only — the extraction refills at `exc_halt`) |
 | state gas spilled | `Evm.stateGasSpilled : Uint` (Vm.lean:207) | `state_gas_spilled` register | `GasRel.spilled` | — | proven-alu-ops (success path; see reservoir row) |
 | regular gas used | `Evm.regularGasUsed : Uint` (Vm.lean:206) | (derived: initial − remaining) | tbd | check: is this observable or bookkeeping? | unrelated |

@@ -252,7 +252,7 @@ hrel : StateRel sRef top g hs ss
               · halted  → ErrorRel + frame_status + gas 0
 ```
 
-Generic binop harvesting ([`Opcodes/BinopFamily.lean`](../Opcodes/BinopFamily.lean))
-is parameterized over [`StateRel`](State.lean#L36) /
+Shape harvesting ([`Opcodes/Shapes/`](../Opcodes/Shapes/README.md)) is
+parameterized over [`StateRel`](State.lean#L36) /
 [`StepResultRel`](Outcome.lean#L53); do not invent a weaker local relation
 inside an opcode file.

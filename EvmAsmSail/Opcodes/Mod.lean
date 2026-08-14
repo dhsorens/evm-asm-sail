@@ -1,9 +1,9 @@
-import EvmAsmSail.Opcodes.BinopFamily
+import EvmAsmSail.Opcodes.Shapes.Binop
 
 /-!
 # MOD
 
-Derived through `binop_step_equiv` (`Opcodes/BinopFamily.lean`); per-opcode
+Derived through `binop_step_equiv` (`Opcodes/Shapes/Binop.lean`); per-opcode
 content is the pure-function lemma and the wf bound. Reachable outcomes:
 success / stack underflow / out-of-gas (overflow unreachable for 2-in/1-out).
 -/

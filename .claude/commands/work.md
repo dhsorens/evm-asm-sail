@@ -9,7 +9,7 @@ Do **not** reimplement rituals here — load and follow the skills below.
 ## Goal selection
 
 **If the user passed a goal** (text after `/work`, e.g. `/work MUL`,
-`/work BinopFamily`, `/work relation for memory`): that is the goal. Clarify
+`/work MULMOD`, `/work relation for memory`): that is the goal. Clarify
 only if it is ambiguous between two deliverables.
 
 **If no goal was given** (bare `/work` / “do what’s next”):
@@ -58,7 +58,7 @@ Before editing Lean:
 
 | Goal kind | Follow |
 | --- | --- |
-| One opcode / family member with `StepResultRel` | Skill **`opcode-slice`** (full ritual) |
+| One opcode / shape-class member with `StepResultRel` | Skill **`opcode-slice`** (full ritual) |
 | Shared lemma / relation / representation prerequisite | `evm-spec-comparison` + small scoped Lean change; then coverage rows if status changes |
 | Docs / status / site only | Skill **`coverage-hygiene`** only |
 | “Plan several next items, don’t code” | Command **`/plan-slice`** instead — stop after planning (**no PR**) |

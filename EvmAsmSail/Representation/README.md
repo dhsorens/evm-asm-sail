@@ -291,6 +291,5 @@ Typical ALU step (schematic):
 4. Close with [`StepResultRel`](../Relations/Outcome.lean#L53)
    ([`Relations/Outcome`](../Relations/Outcome.lean)).
 
-Family harvesting ([`Opcodes/BinopFamily.lean`](../Opcodes/BinopFamily.lean))
-assumes this layer is already stable — do not fork parallel run lemmas inside
-opcode files.
+Shape harvesting ([`Opcodes/Shapes/`](../Opcodes/Shapes/README.md)) assumes this
+layer is already stable — do not fork parallel run lemmas inside opcode files.
