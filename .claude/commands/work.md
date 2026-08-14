@@ -51,8 +51,8 @@ Before editing Lean:
    boundary, or a new shape class.
 3. Skill `evm-bridge-gotchas` — if proving / debugging a simulation lemma.
 4. Relevant mismatch entries in `docs/mismatches.md` and
-   `EvmAsmSail/Assumptions.lean`.
-5. The archetype file when harvesting: `EvmAsmSail/Opcodes/Add.lean`.
+   `EvmSpecsVerify/Assumptions.lean`.
+5. The archetype file when harvesting: `EvmSpecsVerify/Opcodes/Add.lean`.
 
 ## Dispatch
 

@@ -35,7 +35,7 @@ spec it asks for, and puts evm-sail's theorem-prover backend to work.
 
 | path | what |
 |---|---|
-| `EvmAsmSail/` | proofs connecting SpecRef ↔ `Evm` — see [`EvmAsmSail/README.md`](EvmAsmSail/README.md) (`Representation/` = run facts, `Relations/` = bridge predicates, `Opcodes/` = theorems) |
+| `EvmSpecsVerify/` | proofs connecting SpecRef ↔ `Evm` — see [`EvmSpecsVerify/README.md`](EvmSpecsVerify/README.md) (`Representation/` = run facts, `Relations/` = bridge predicates, `Opcodes/` = theorems) |
 | `docs/index.html` | generated site root ([live](https://derekhsorensen.com/evm-asm-sail/); sync with canvas) |
 | `docs/comparison-matrix.md` | living SpecRef ↔ `Evm` semantic coverage matrix |
 | `docs/opcode-coverage.md` | living per-opcode proof coverage matrix |

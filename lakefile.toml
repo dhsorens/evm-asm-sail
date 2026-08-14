@@ -4,12 +4,12 @@
 # - `evm` is the upstream-committed Lean extraction of evm-sail, consumed in place
 #   from the pinned submodule (run scripts/setup.sh once after cloning: it provisions
 #   the submodule and the Sail support library the extraction requires by path).
-name = "evmAsmSail"
+name = "evmSpecsVerify"
 version = "0.1.0"
-defaultTargets = ["EvmAsmSail"]
+defaultTargets = ["EvmSpecsVerify"]
 
 [[lean_lib]]
-name = "EvmAsmSail"
+name = "EvmSpecsVerify"
 
 [[require]]
 name = "EvmAsm"

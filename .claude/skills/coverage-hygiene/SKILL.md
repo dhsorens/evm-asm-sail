@@ -19,7 +19,7 @@ are projections. Chat is not a coverage document.
 | Comparison matrix (edit) | `docs/comparison-matrix.md` |
 | Opcode coverage (edit) | `docs/opcode-coverage.md` |
 | Mismatch ledger (edit) | `docs/mismatches.md` |
-| Assumptions ledger (edit) | `EvmAsmSail/Assumptions.lean` |
+| Assumptions ledger (edit) | `EvmSpecsVerify/Assumptions.lean` |
 | Site + canvas DATA (generated) | `docs/index.html` (+ canvas if present) |
 | Regenerator | `scripts/refresh-proof-coverage-canvas.py` |
 | Live site | https://derekhsorensen.com/evm-asm-sail/ (from `docs/index.html` on `main`) |
@@ -64,7 +64,7 @@ For an opcode that just landed `full`:
    name** (path lives in the href, `#L` is the `theorem` line):
 
 ```markdown
-**full** ([`add_step_equiv`](../EvmAsmSail/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out)
+**full** ([`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out)
 ```
 
    Do not leave a bare ``add_step_equiv`` in the status column.

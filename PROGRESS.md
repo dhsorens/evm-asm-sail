@@ -85,7 +85,7 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `unstated` except KECCAK256 `n/a`),
       [`docs/mismatches.md`](docs/mismatches.md) (MM-1 operation order, MM-2 gas
       vocabularies — ALU constants verified equal, MM-3 partial dispatch)
-- [x] `EvmAsmSail/Assumptions.lean` — the assumptions ledger (fork profile, representation
+- [x] `EvmSpecsVerify/Assumptions.lean` — the assumptions ledger (fork profile, representation
       invariants, scope restrictions, extraction/crypto trust)
 - [x] Representation layer: `Representation/EvmMonad.lean` (`runS` algebra incl. fused
       binds), `Representation/EvmStack.lean` (private host helpers characterized via

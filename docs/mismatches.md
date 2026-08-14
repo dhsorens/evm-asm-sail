@@ -29,7 +29,7 @@ unreachable / ambiguity / needs investigation).
 - **Likely cause**: intentional — evm-sail hoists the YP exceptional-halt predicate;
   execution-specs (and SpecRef) inline it per operation.
 - **Disposition**: *intentional abstraction* — **proven** equivalent at the halt
-  observation boundary for ADD (`add_step_equiv`, EvmAsmSail/Opcodes/Add.lean: the
+  observation boundary for ADD (`add_step_equiv`, EvmSpecsVerify/Opcodes/Add.lean: the
   underflow and OOG cases pair SpecRef throws with `Evm` `Exceptional` statuses; both
   sides check stack shape before gas, so the kinds align case by case). Remains to be
   re-established per shape class as families land.
@@ -78,4 +78,4 @@ unreachable / ambiguity / needs investigation).
   loop-level equivalence are blocked on the SpecRef side.
 - **Disposition**: *deliberate scope restriction* here + candidate upstream request to
   evm-asm (the fuel is already threaded; de-partialing looks mechanical). Recorded in
-  `EvmAsmSail/Assumptions.lean`.
+  `EvmSpecsVerify/Assumptions.lean`.

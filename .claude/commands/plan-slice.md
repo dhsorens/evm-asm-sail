@@ -10,7 +10,7 @@ asks to continue into execution.
 2. Read `docs/opcode-coverage.md` — prefer `unstated` rows in the active shape
    class (after ADD: ALU binops / unops, then `PROGRESS.md` M2 validators).
 3. Skim `docs/comparison-matrix.md` and `docs/mismatches.md` for blockers.
-4. Skim recent theorem files under `EvmAsmSail/Opcodes/` and `Relations/`.
+4. Skim recent theorem files under `EvmSpecsVerify/Opcodes/` and `Relations/`.
 
 ## Sizing rules
 
