@@ -36,6 +36,7 @@ inductive ErrorRel : EvmError → ExceptionKind → Prop
   | stackUnderflow : ErrorRel .stackUnderflow .StackUnderflow
   | stackOverflow : ErrorRel .stackOverflow .StackOverflow
   | outOfGas : ErrorRel .outOfGas .OutOfGas
+  | invalidJumpDest : ErrorRel .invalidJumpDest .InvalidJump
 
 /-- The value returned by the extraction's `execute`: the state-passing
 tuple (next pc, stack cursor, memory slice, remaining gas). -/
@@ -64,6 +65,21 @@ inductive StepResultRel
       (hstatus : ss'.regs.get? Evm.Defs.Register.frame_status =
         some (FrameStatus.Exceptional k)) :
       StepResultRel Post (.ok (.error e, sR'))
+        (.ok ((pc', top', mem', 0), hs') ss')
+  /-- Mismatch ledger MM-5: charge-first SpecRef handlers (PUSH/DUP/SWAP)
+  report `outOfGas` on states that are simultaneously out of gas and
+  stack-invalid, where the extraction's hoisted `validate_stack` reports the
+  stack fault. Both are exceptional halts with all gas consumed; the kind is
+  not observable past the frame boundary, so the divergence is documented
+  here rather than hidden behind a hypothesis. Only the double-fault states
+  of charge-first handlers may use this constructor. -/
+  | haltedChargeFirst {k : ExceptionKind} {sR' : Machine}
+      {pc' : Nat} {top' : StackTop} {mem' : EvmMemorySlice}
+      {hs' : Evm.HostState} {ss' : SeqState}
+      (hk : k = ExceptionKind.StackUnderflow ∨ k = ExceptionKind.StackOverflow)
+      (hstatus : ss'.regs.get? Evm.Defs.Register.frame_status =
+        some (FrameStatus.Exceptional k)) :
+      StepResultRel Post (.ok (.error .outOfGas, sR'))
         (.ok ((pc', top', mem', 0), hs') ss')
 
 end EvmSpecsVerify
