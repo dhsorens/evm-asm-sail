@@ -94,6 +94,10 @@ is not reflected in the matrices.
   Do not leave bare `` `Foo.lean` `` or unlinked theorem names in those docs.
   Code fences cannot hold links — lift file names out of fences into a table
   or list.
+- In `docs/opcode-coverage.md`, every named theorem in the **status** column is
+  a markdown link to its `theorem` line
+  (``[`add_step_equiv`](../EvmAsmSail/Opcodes/Add.lean#L30)``). See
+  `coverage-hygiene`.
 
 ## Skills and commands
 

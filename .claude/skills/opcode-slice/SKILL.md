@@ -81,7 +81,9 @@ assumptions) rather than `set_option linter… false`. No new `axiom`s. No
 ### 5. Coverage hygiene
 
 1. Set the opcode row status to `full` (or honest intermediate: never leave
-   success-only as the final claimed status).
+   success-only as the final claimed status). The theorem name in the status
+   column must be a markdown link to the `theorem` line — see
+   `coverage-hygiene`.
 2. Update comparison-matrix rows if this slice newly preserves a component.
 3. Add or update mismatch entries if you discovered a new disagreement.
 4. Run:

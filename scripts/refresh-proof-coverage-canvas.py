@@ -126,10 +126,20 @@ def parse_proof(status: str) -> dict | None:
         head = parts[0].strip()
         tail = parts[1].strip() if len(parts) > 1 else ""
 
-        hm = re.match(
-            r"^([A-Za-z_][\w']*)\s*,\s*((?:EvmAsmSail|extraction)[^\s,]+\.lean)",
+        md = re.match(
+            r"^\[`?([A-Za-z_][\w']*)`?\]\("
+            r"(?:\.\./)*"
+            r"((?:EvmAsmSail|extraction)[^)#\s]+?\.lean)"
+            r"(?:#L\d+)?"
+            r"\)",
             head,
         )
+        hm = md
+        if not hm:
+            hm = re.match(
+                r"^([A-Za-z_][\w']*)\s*,\s*((?:EvmAsmSail|extraction)[^\s,]+\.lean)",
+                head,
+            )
         if not hm:
             hm = re.match(r"^([A-Za-z_][\w']*)\s*,\s*([^\s,]+\.lean)", head)
         if hm:
@@ -410,10 +420,13 @@ def render_html(data: dict) -> str:
 
         if proof.get("theorem") and proof.get("file"):
             line = proof.get("line")
+            thm = ext_a(
+                repo_href(proof["file"], line),
+                "<code>" + esc(proof["theorem"]) + "</code>",
+            )
             body_parts.append(
-                "<p><strong>Step theorem:</strong> <code>"
-                + esc(proof["theorem"])
-                + "</code>"
+                "<p><strong>Step theorem:</strong> "
+                + thm
                 + (f" @ line {esc(line)}" if line else "")
                 + "</p>"
             )
