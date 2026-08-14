@@ -116,7 +116,7 @@ See `coverage-hygiene` for the full artifact rules.
 When ADD (or another archetype) is `full` and the next op shares the shape:
 
 1. Extract shared structure only when the second instance proves the
-   duplication is real (`Opcodes/Shapes/` — see that directory's README).
+   duplication is real ([`Opcodes/Shapes/`](../../../EvmAsmSail/Opcodes/Shapes/README.md)).
 2. Each harvested opcode still gets its own coverage-row update to `full`.
 3. Do not mark a whole shape class `full` from a generic lemma until every
    member is instantiated or an exhaustive registry says so.

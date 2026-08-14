@@ -87,6 +87,13 @@ is not reflected in the matrices.
   decompositions over long prose.
 - Label clearly: discovered facts / proposed architecture / assumptions / open
   questions.
+- In `EvmAsmSail/**/README.md` (and other design markdown), every file path and
+  named Lean definition is a clickable markdown link. Files:
+  ``[`Foo.lean`](Foo.lean)``. Definitions: ``[`thm`](Foo.lean#L12)`` pointing at
+  the `def`/`theorem` line. Exemplar: [`EvmAsmSail/Representation/README.md`](EvmAsmSail/Representation/README.md).
+  Do not leave bare `` `Foo.lean` `` or unlinked theorem names in those docs.
+  Code fences cannot hold links — lift file names out of fences into a table
+  or list.
 
 ## Skills and commands
 

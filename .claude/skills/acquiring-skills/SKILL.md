@@ -61,6 +61,9 @@ Bad:
 - Prefer short bullets and tables over essays.
 - Cross-link sibling skills instead of duplicating (`evm-spec-comparison` vs
   `evm-bridge-gotchas` vs `opcode-slice`).
+- Markdown file paths and Lean names are clickable links, same rule as
+  `AGENTS.md` Style. Skills already do this for coverage matrices; keep it
+  when touching READMEs.
 
 ## Helper scripts
 
