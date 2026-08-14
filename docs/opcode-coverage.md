@@ -38,8 +38,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MOD | 0x06 | `iMod` | `execute_mod` | binop | **full** ([`mod_step_equiv`](../EvmSpecsVerify/Opcodes/Mod.lean#L33) — success/underflow/OOG; overflow unreachable) |
 | SMOD | 0x07 | `iSmod` | `execute_smod` | binop | **full** ([`smod_step_equiv`](../EvmSpecsVerify/Opcodes/Smod.lean#L95) — success/underflow/OOG; overflow unreachable) |
 | ADDMOD | 0x08 | `iAddmod` | `execute_addmod` | ternop | **full** ([`addmod_step_equiv`](../EvmSpecsVerify/Opcodes/Addmod.lean#L36) — success/underflow/OOG; overflow unreachable for 3-in/1-out) |
-| MULMOD | 0x09 | `iMulmod` | `execute_mulmod` | ternop | unstated |
-| EXP | 0x0a | `iExp` | `execute_exp` | binop (dyn gas, fuelled pow) | unstated |
+| MULMOD | 0x09 | `iMulmod` | `execute_mulmod` | ternop | **full** ([`mulmod_step_equiv`](../EvmSpecsVerify/Opcodes/Mulmod.lean#L38) — success/underflow/OOG; overflow unreachable for 3-in/1-out) |
+| EXP | 0x0a | `iExp` | `execute_exp` | binop (dyn gas, fuelled pow) | **full** ([`exp_step_equiv`](../EvmSpecsVerify/Opcodes/Exp.lean#L527) — success/underflow/OOG; overflow unreachable; EIP-160 gas via `exp_gas_eq`, fuelled `alu_exp` ↔ `powMod` via `runS_alu_exp`) |
 | SIGNEXTEND | 0x0b | `iSignextend` | `execute_signextend` | binop | **full** ([`signextend_step_equiv`](../EvmSpecsVerify/Opcodes/Signextend.lean#L134) — success/underflow/OOG; overflow unreachable) |
 | LT | 0x10 | `iLt` | `execute_lt` | binop | **full** ([`lt_step_equiv`](../EvmSpecsVerify/Opcodes/Lt.lean#L28) — success/underflow/OOG; overflow unreachable) |
 | GT | 0x11 | `iGt` | `execute_gt` | binop | **full** ([`gt_step_equiv`](../EvmSpecsVerify/Opcodes/Gt.lean#L28) — success/underflow/OOG; overflow unreachable) |
@@ -100,7 +100,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
-| POP | 0x50 | `iPop` | `execute_pop` | stack | unstated |
+| POP | 0x50 | `iPop` | `execute_pop` | stack | **full** ([`pop_step_equiv`](../EvmSpecsVerify/Opcodes/Pop.lean#L176) — success/underflow/OOG; overflow unreachable: height decreases) |
 | MLOAD | 0x51 | `iMload` | `execute_mload` | memory | unstated |
 | MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | unstated |
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 24 |
-| unstated | 65 |
+| full | 27 |
+| unstated | 62 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

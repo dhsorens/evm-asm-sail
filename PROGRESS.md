@@ -116,8 +116,17 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Opcodes/Shapes/Ternop.lean` — ternop analogue (`ternOp` names SpecRef's
       literal do-block shape, `ternopShape` the extraction's; `ternop_step_equiv`
       full `StepResultRel`; overflow unreachable for 3-in/1-out);
-      **ADDMOD harvested** (`addmod_step_equiv`, `Opcodes/Addmod.lean`).
-      Residual: MULMOD ternop, EXP, POP/DUP validators
+      **ADDMOD + MULMOD harvested** (`addmod_step_equiv` / `mulmod_step_equiv`)
+- [x] `Opcodes/Exp.lean` — EXP, the first dynamic-gas opcode (`exp_step_equiv`,
+      full `StepResultRel`): EIP-160 exponent-byte charge tied to SpecRef's
+      `log2` form (`exp_gas_eq`, reusing `word_bit_length_eq`), and the
+      extraction's fuelled square-and-multiply `alu_exp` proven equal to
+      SpecRef's `powMod` accelerator (`runS_whileFuelM` pure-loop lemma +
+      `whileFuelPure_exp` invariant + `powModAux_eq`)
+- [x] `Opcodes/Pop.lean` — POP, the first stack-family opcode
+      (`pop_step_equiv`, full `StepResultRel`; both sides order pop/charge
+      differently — unobservable, halted post-stacks are out of the
+      observation boundary). Residual: DUP/SWAP/PUSH validators (M2)
 - [x] `Relations/Alu.lean` + `Opcodes/Shapes/Alu.lean` — `AluPost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
