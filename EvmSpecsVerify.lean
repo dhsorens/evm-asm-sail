@@ -39,3 +39,6 @@ import EvmSpecsVerify.Opcodes.Not
 import EvmSpecsVerify.Opcodes.Clz
 import EvmSpecsVerify.Opcodes.Shapes.Ternop
 import EvmSpecsVerify.Opcodes.Addmod
+import EvmSpecsVerify.Opcodes.Mulmod
+import EvmSpecsVerify.Opcodes.Exp
+import EvmSpecsVerify.Opcodes.Pop

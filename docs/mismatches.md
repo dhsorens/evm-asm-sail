@@ -29,10 +29,14 @@ unreachable / ambiguity / needs investigation).
 - **Likely cause**: intentional — evm-sail hoists the YP exceptional-halt predicate;
   execution-specs (and SpecRef) inline it per operation.
 - **Disposition**: *intentional abstraction* — **proven** equivalent at the halt
-  observation boundary for ADD (`add_step_equiv`, EvmSpecsVerify/Opcodes/Add.lean: the
-  underflow and OOG cases pair SpecRef throws with `Evm` `Exceptional` statuses; both
-  sides check stack shape before gas, so the kinds align case by case). Remains to be
-  re-established per shape class as families land.
+  observation boundary for every landed family (binop/unop/ternop shape theorems,
+  `exp_step_equiv`, `pop_step_equiv`: the underflow and OOG cases pair SpecRef throws
+  with `Evm` `Exceptional` statuses; both sides check stack shape before gas, so the
+  kinds align case by case). EXP is the one opcode where the orders *coincide*: the
+  extraction also pops before charging there, because `exp_gas` needs the exponent
+  (Execute.lean:283); the halted post-cursor differs from the other shapes
+  (`top - 2`, not `top`) and is equally unobservable. Re-establish per class as new
+  families land.
 
 ## MM-4: Step-boundary pc convention
 

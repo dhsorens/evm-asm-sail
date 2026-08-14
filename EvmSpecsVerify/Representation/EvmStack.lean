@@ -142,6 +142,19 @@ theorem length_writeListAt (l : List word) (p : Nat) (w : word) :
   · rw [length_replaceListAt]; omega
   · rw [length_replaceListAt]; simp; omega
 
+/-- Truncating a one-longer reversed-stack prefix drops the top element:
+the list-geometry step each `pop` takes on the prefix relation. -/
+theorem take_shrink (l S : List word) (a : word) (k : Nat)
+    (hpfx : l.take (k + 1) = (a :: S).reverse) (hS : S.length = k) :
+    l.take k = S.reverse := by
+  have hview : l.take k = (l.take (k + 1)).take k := by
+    rw [List.take_take, Nat.min_eq_left (by omega)]
+  rw [hview, hpfx]
+  have hrl : S.reverse.length = k := by simp [hS]
+  calc ((a :: S).reverse).take k = (S.reverse ++ [a]).take k := by simp
+    _ = S.reverse := by
+        rw [List.take_append_of_le_length (by omega), ← hrl, List.take_length]
+
 /-! ## Reads through the cursor -/
 
 /-- Reading slot `i` below cursor `top` returns the `i`-th element (from the

@@ -129,6 +129,22 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   with a baffling counterexample naming the projection. Right move: `show` the
   defeq-reduced statement (or `simp` projections away) before `omega`; see the
   `show top.toNat ≤ _` bullet in `unop_step_equiv` (`Opcodes/Shapes/Unop.lean`).
+- **Nested `runS_bind_ok (runS_bind_ok … ?_) ?_` with holes fails to elaborate.**
+  Trigger: chaining binds by nesting `runS_bind_ok` where the inner call still
+  has a `?_` continuation — "don't know how to synthesize implicit argument
+  `a`/`hs'`/`ss'`" because the intermediate result is a metavariable. Right
+  move: prove a named body-level lemma for the handler's inner do-block first
+  (the `runS_ternopShape_ok` pattern), then compose linearly with sequential
+  `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
+  application is fully concrete (no holes); see `runS_pop_body_ok`
+  (`Opcodes/Pop.lean`).
+- **Structure-instance field values must not break across lines.**
+  Trigger: a theorem statement with `{ hs with stackFrames := <long term> }`
+  where the term wraps to a continuation line — parse error
+  `unexpected token '('; expected '}'`. Right move: keep the field value on one
+  physical line; shorten with `open … (name)` (e.g.
+  `open EvmAsm.Rv64.Accel (powMod)`) rather than fully-qualified names. See
+  `runS_exp_body_ok` (`Opcodes/Exp.lean`).
 - **`lake env lean <file>` checks against *stale imported oleans*.**
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you
