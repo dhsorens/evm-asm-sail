@@ -29,6 +29,17 @@ EVM state can violate it, and whether it is eliminable by proving.
   registers present in the register file. Guaranteed by `sail_model_init`
   + the interpreter's write discipline.
 
+## Gas budget (memory family)
+
+* `MemGasSafe` (Relations/Memory.lean) — the frame's live gas plus the cost
+  already sunk into memory stays below `mem_cost (2^27)` ≈ `3.5 × 10^13`,
+  the point where the extraction's u32 memory space could be exhausted
+  (mismatch ledger MM-6: `memory_access` spec-aborts there, SpecRef extends).
+  Real block gas limits are ~8 orders of magnitude smaller, so every real
+  execution satisfies it. Threaded hypothesis on the memory-family step
+  theorems; eliminable only by bounding `g` globally (frame-entry invariant),
+  future work.
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
