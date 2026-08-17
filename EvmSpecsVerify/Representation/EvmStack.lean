@@ -155,6 +155,11 @@ theorem take_shrink (l S : List word) (a : word) (k : Nat)
     _ = S.reverse := by
         rw [List.take_append_of_le_length (by omega), ← hrl, List.take_length]
 
+/-- Record-update projection (whnf-safe `rfl` mini-lemma). -/
+theorem hostState_set_stackFrames_frames (h : HostState)
+    (f : List (List word)) :
+    ({ h with stackFrames := f } : HostState).stackFrames = f := rfl
+
 /-! ## Reads through the cursor -/
 
 /-- Reading slot `i` below cursor `top` returns the `i`-th element (from the

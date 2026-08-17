@@ -35,10 +35,6 @@ def mloadCost (msz x : Nat) : Nat :=
   GasCosts.OPCODE_MLOAD_BASE
     + (calculate_gas_extend_memory msz [(x, 32)]).cost
 
-theorem memory_required_size_32 (x : Nat) :
-    Evm.Functions.memory_required_size x (Evm.Functions.u256 32)
-      = x + 32 := rfl
-
 /-- A 32-byte in-range read decodes to a well-formed word. -/
 theorem loadVal_wf (M : Bytes) (pos : Nat) (h : pos + 32 ≤ M.length) :
     WordWf (bytesBEtoNat (memory_read_bytes M pos 32)) := by

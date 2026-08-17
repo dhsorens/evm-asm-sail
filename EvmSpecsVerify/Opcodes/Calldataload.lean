@@ -2,7 +2,6 @@ import EvmSpecsVerify.Opcodes.Shapes.Alu
 import EvmSpecsVerify.Relations.Calldata
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
-import EvmSpecsVerify.Opcodes.Sload
 
 /-!
 # CALLDATALOAD
@@ -259,7 +258,7 @@ theorem calldataload_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
           (by rw [hlive]; exact hg)]
       refine StepResultRel.success ⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE,
         ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩, hpc, rfl⟩
-      · exact sload_post_stack top _ l frest x rest
+      · exact pop_push_post_stack top _ l frest x rest
           (cdWord sRef.evm.message.data x)
           (hostState_set_stackFrames_frames _ _) hpfx htop hlim hlen hwfS
           (by

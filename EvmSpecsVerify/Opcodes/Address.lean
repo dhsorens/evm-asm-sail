@@ -3,7 +3,6 @@ import EvmSpecsVerify.Representation.AddressWord
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
-import EvmSpecsVerify.Opcodes.Sload
 
 /-!
 # ADDRESS

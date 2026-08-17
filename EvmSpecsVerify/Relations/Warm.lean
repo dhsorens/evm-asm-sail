@@ -166,6 +166,12 @@ theorem assocGet_put_ne {κ ν : Type} [BEq κ] [LawfulBEq κ]
           List.find?_cons_of_neg (by simpa using hk')]
         exact ihs
 
+/-- `setAdd` of a present key is the identity. -/
+theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
+    (h : s.contains x = true) : setAdd s x = s := by
+  unfold EvmAsm.Stateless.SpecRef.setAdd
+  rw [if_pos h]
+
 /-- The cold-path update preserves the relation: SpecRef `setAdd` vs the
 extraction's fresh epoch stamp. -/
 theorem warm_after_mark (keys : List (Address × Bytes32))
