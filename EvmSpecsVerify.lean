@@ -46,3 +46,8 @@ import EvmSpecsVerify.Opcodes.Dup
 import EvmSpecsVerify.Opcodes.Push
 import EvmSpecsVerify.Relations.Jumpdest
 import EvmSpecsVerify.Opcodes.Jumpi
+import EvmSpecsVerify.Representation.EvmMemory
+import EvmSpecsVerify.Relations.Memory
+import EvmSpecsVerify.Opcodes.Mload
+import EvmSpecsVerify.Opcodes.Mstore
+import EvmSpecsVerify.Opcodes.Return
