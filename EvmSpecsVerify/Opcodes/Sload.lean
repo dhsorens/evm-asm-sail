@@ -83,7 +83,7 @@ private theorem hostState_set_stackFrames_warmEpoch (h : Evm.HostState)
     ({ h with stackFrames := f } : Evm.HostState).warmEpoch = h.warmEpoch :=
   rfl
 
-private theorem hostState_set_stackFrames_frames (h : Evm.HostState)
+theorem hostState_set_stackFrames_frames (h : Evm.HostState)
     (f : List (List word)) :
     ({ h with stackFrames := f } : Evm.HostState).stackFrames = f :=
   rfl

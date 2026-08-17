@@ -185,6 +185,14 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       short-circuit against SpecRef's tx-start prewarming; warm/cold
       account gas verified `100`/`3000` at Amsterdam; balance read behind
       the ledgered `BalanceAgree`, the `SloadAgree` sibling)
+- [x] `Opcodes/Caller.lean` / `Opcodes/Callvalue.lean` /
+      `Relations/Calldata.lean` + `Opcodes/Calldataload.lean` — the message
+      readers: CALLER/CALLVALUE on the charge-first pusher skeleton
+      (register-field ties `hcaller`/`hvalue`; CALLVALUE's pushed word wf
+      is the hypothesized message invariant), CALLDATALOAD over
+      `CalldataRel` (top-frame `InputCalldata` window ↔ `message.data`,
+      byte-for-byte; `calldataRel_load_word` needs no range hypothesis —
+      both sides zero-pad past the end)
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

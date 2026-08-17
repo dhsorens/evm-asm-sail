@@ -31,7 +31,8 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | output | `Evm.output : Bytes` (Vm.lean:199) | host output buffer (`outputBytes`) + `HaltReturn` `OutputSlice` | `ReturnPost` output clause (byte-for-byte) | — | proven-return (`return_step_equiv`) |
 | logs | `Evm.logs : List Log` (Vm.lean:195) | `HostState.logs : Array LogRecordRow` + `logBytes` arena | `LogsRel` | — | unrelated |
 | refund counter | `Evm.refundCounter : Int` (Vm.lean:196) | `frame_refund` register (`gas_refund := Int`) | `RefundRel` | — | unrelated |
-| message / call frame | `Evm.message : Message` (Vm.lean:197) | `message` register (`Message`) | `MessageRel` | — | unrelated |
+| message / call frame | `Evm.message : Message` (Vm.lean:197) | `message` register (`Message`) | `MessageRel` | field ties threaded per opcode meanwhile: `haddr` (SLOAD/ADDRESS), `hcaller`/`hvalue` (CALLER/CALLVALUE); full relation lands with the CALL family | unrelated |
+| calldata | `message.data : Bytes` (SpecRef Message) | `calldata` register (`CalldataSlice`) + `HostState.inputBytes` arena (top frame) or parent memory (nested) | `CalldataRel` (Relations/Calldata.lean: top-frame `InputCalldata` window reads back the data byte-for-byte; both sides zero-pad reads) | nested-frame `MemoryCalldata` deferred to the CALL family | proven-calldataload (`calldataload_step_equiv`) |
 | call depth | `message.depth` (SpecRef Message) | `call_depth` register (`frame_depth := Nat`) | `DepthRel` | ≤ 1024 | unrelated |
 | suspended frames | (Python-style recursion in `process_message`, fuelled) | `HostState.continuationFrames : List FrameContinuation` + `stackFrames`/`memoryFrames` tails | `FramesRel` | tranche ≥ 3 | unrelated |
 | accounts to delete | `Evm.accountsToDelete : List Address` (Vm.lean:200) | journal/host equivalent (tbd) | tbd | — | unrelated |

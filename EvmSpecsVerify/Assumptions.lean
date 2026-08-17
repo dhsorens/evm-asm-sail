@@ -71,6 +71,20 @@ EVM state can violate it, and whether it is eliminable by proving.
   is mechanically provable (a ~17-way address case split); kept as a
   hypothesis to keep the BALANCE slice bounded, dischargeable any time.
 
+## Message-field ties and invariants (env family)
+
+* Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`,
+  `hcdreg`/`hcdrel`) — the extraction's `message`/`k_tx`/`calldata`
+  registers carry the same frame data as SpecRef's `Message`. These are
+  fragments of the future `MessageRel`/`TxEnvRel`, threaded per opcode
+  until the CALL family relates whole frames; established at frame entry.
+* `hwfv` (`callvalue_step_equiv`) — `message.value < 2^256`. A message
+  invariant neither side states locally; maintained by both constructions,
+  discharged at frame entry (M3).
+* `CalldataRel` (Relations/Calldata.lean) covers the stateless top frame
+  (`InputCalldata`) only; nested-frame `MemoryCalldata` is CALL-family
+  scope.
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
