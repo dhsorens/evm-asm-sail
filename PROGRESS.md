@@ -150,20 +150,23 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `ErrorRel` gains `invalidJumpDest ↔ InvalidJump`; `JumpiPost` preserves
       the jumpdest relation. JUMP itself is a near-mechanical harvest of the
       same machinery (single pop, no fall-through case)
-- [ ] MLOAD/MSTORE — needs the memory representation tranche first:
-      `MemoryRel` (SpecRef `Bytes` ↔ `memoryBytes` + `EvmMemorySlice` Sigma),
-      host memory-axiom run lemmas, expansion-gas equality
-      (`calculate_gas_extend_memory` ↔ the extraction's word-count charge),
-      and a `MemPost` (the returned `mem` slice is no longer a pass-through)
+- [x] Memory tranche — `Representation/EvmMemory.lean` (host byte-array +
+      codec + runS layer), `Relations/Memory.lean` (`MemoryRel` with the
+      ceil32 alignment tail, `MemPost`, `extend_cost_eq`, and the **MM-6**
+      `MemGasSafe` budget with `safe_required_bound`)
+- [x] `Opcodes/Mload.lean` / `Opcodes/Mstore.lean` — full `StepResultRel`
+      (`mload_step_equiv` / `mstore_step_equiv`): split-charge equivalence,
+      grow/in-window success, u32 range check discharged from MM-6
 - [ ] SLOAD — needs `WarmRel` (epoch-stamped `warmSlots` vs SpecRef's
       accessed-key set), `StorageRel` over `storageTx/storageBlock`, the
       `k_sload`/`k_slot_mark_warm` host lemmas, and resolves part of MM-2's
       open repriced-constant question (`sload_cost` vs
       `WARM_ACCESS`/`COLD_STORAGE_ACCESS`)
-- [ ] RETURN — needs the memory layer (output is read from memory) plus a
-      **normal-halt** case in `StepResultRel` (`running := false` + output vs
-      `Halted` frame status + output slice; today only success and
-      exceptional halts exist) and an `OutputRel`
+- [x] `Opcodes/Return.lean` — RETURN (`return_step_equiv`): the normal halt
+      needed **no** new `StepResultRel` case — `iReturn` is monadically a
+      success with `running := false` in state, so the RETURN-specific
+      `ReturnPost` carries the `Halted (HaltReturn …)` status, byte-for-byte
+      output correspondence, and remaining gas
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

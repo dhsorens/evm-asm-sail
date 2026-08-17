@@ -101,8 +101,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
 | POP | 0x50 | `iPop` | `execute_pop` | stack | **full** ([`pop_step_equiv`](../EvmSpecsVerify/Opcodes/Pop.lean#L176) — success/underflow/OOG; overflow unreachable: height decreases) |
-| MLOAD | 0x51 | `iMload` | `execute_mload` | memory | unstated |
-| MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | unstated |
+| MLOAD | 0x51 | `iMload` | `execute_mload` | memory | **full** ([`mload_step_equiv`](../EvmSpecsVerify/Opcodes/Mload.lean#L400) — success (grow/in-window)/underflow/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
+| MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L388) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | unstated |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
@@ -130,7 +130,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CREATE | 0xf0 | `iCreate` *(partial)* | `execute_create` | system | unstated |
 | CALL | 0xf1 | `iCall` *(partial)* | `execute_call` | system | unstated |
 | CALLCODE | 0xf2 | `iCallcode` *(partial)* | `execute_callcode` | system | unstated |
-| RETURN | 0xf3 | `iReturn` | `execute_return` | system | unstated |
+| RETURN | 0xf3 | `iReturn` | `execute_return` | system | **full** ([`return_step_equiv`](../EvmSpecsVerify/Opcodes/Return.lean#L565) — normal halt with output correspondence (`ReturnPost`), zero/grow/in-window reads, underflow ×2, expansion OOG) |
 | DELEGATECALL | 0xf4 | `iDelegatecall` *(partial)* | `execute_delegatecall` | system | unstated |
 | CREATE2 | 0xf5 | `iCreate2` *(partial)* | `execute_create2` | system | unstated |
 | STATICCALL | 0xfa | `iStaticcall` *(partial)* | `execute_staticcall` | system | unstated |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 30 |
-| unstated | 59 |
+| full | 33 |
+| unstated | 56 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
