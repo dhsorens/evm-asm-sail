@@ -2,7 +2,7 @@ import EvmSpecsVerify.Opcodes.Shapes.Alu
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
-import EvmSpecsVerify.Opcodes.Sload
+import EvmSpecsVerify.Representation.SpecRefLemmas
 
 /-!
 # BALANCE
@@ -531,7 +531,7 @@ theorem balance_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
         rw [if_pos rfl]
         refine StepResultRel.success ⟨⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE,
           ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩, hpc, rfl⟩, ?_⟩
-        · exact sload_post_stack top _ l frest x rest acct.balance
+        · exact pop_push_post_stack top _ l frest x rest acct.balance
             (hostState_frames_frames' _ _) hpfx htop hlim hlen hwfS hwfb
         · exact ⟨by rw [hlive]; rfl, hres, hsp⟩
         · intro bV
@@ -584,7 +584,7 @@ theorem balance_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
             unfold wsAfterMark; rw [if_neg (by simp [hnot.1])]]
         refine StepResultRel.success ⟨⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE,
           ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩, hpc, rfl⟩, ?_⟩
-        · exact sload_post_stack top _ l frest x rest acct.balance
+        · exact pop_push_post_stack top _ l frest x rest acct.balance
             (hostState_frames_frames' _ _) hpfx htop hlim hlen hwfS hwfb
         · exact ⟨by rw [hlive]; rfl, hres, hsp⟩
         · intro bV

@@ -66,12 +66,6 @@ def SloadAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
 
 /-! ## Small warm-set helpers -/
 
-/-- `setAdd` of a present key is the identity. -/
-theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
-    (h : s.contains x = true) : setAdd s x = s := by
-  unfold EvmAsm.Stateless.SpecRef.setAdd
-  rw [if_pos h]
-
 /-- Record-update projections (`show`-free to avoid whnf blowups). -/
 private theorem hostState_set_stackFrames_warmSlots (h : Evm.HostState)
     (f : List (List word)) :
@@ -83,21 +77,7 @@ private theorem hostState_set_stackFrames_warmEpoch (h : Evm.HostState)
     ({ h with stackFrames := f } : Evm.HostState).warmEpoch = h.warmEpoch :=
   rfl
 
-private theorem hostState_set_stackFrames_frames (h : Evm.HostState)
-    (f : List (List word)) :
-    ({ h with stackFrames := f } : Evm.HostState).stackFrames = f :=
-  rfl
-
 /-! ## SpecRef run shapes -/
-
-theorem runR_liftTx_ok (m : TxM α) (s : Machine) (a : α)
-    (ts' : TransactionState) (h : m.run s.txState = .ok (a, ts')) :
-    runR (EvmM.liftTx m) s = .ok (.ok a, { s with txState := ts' }) := by
-  have hshape : runR (EvmM.liftTx m) s = (match m.run s.txState with
-      | Except.error e => Except.error e
-      | Except.ok (a, ts) =>
-        Except.ok (Except.ok a, { s with txState := ts })) := rfl
-  rw [hshape, h]
 
 theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
     runR (isWarmStorageKey key) s =
@@ -206,14 +186,6 @@ theorem runR_iSload_cold_oog (s : Machine) (x : U256) (rest : List U256)
   exact runR_bind_err (runR_charge_gas_oog _ _ hgas)
 
 /-! ## `Evm` run shapes -/
-
-open Evm.Functions in
-theorem runS_self_addr (msg : Evm.Defs.Message) (hs : Evm.HostState)
-    (ss : SeqState)
-    (hmsg : ss.regs.get? Register.message = some msg) :
-    runS (Evm.Functions.self_addr ()) hs ss = .ok (msg.address, hs) ss := by
-  simp only [Evm.Functions.self_addr, runS_bind,
-    runS_readReg _ _ _ _ hmsg, runS_pure]
 
 open Evm.Functions in
 theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
@@ -458,44 +430,6 @@ def SloadPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
   AluPost mem sR' step hs' ss' ∧ WarmRel sR' hs'
 
-/-- The post-state stack relation shared by 1-in/1-out reads (SLOAD,
-BALANCE): one pop, one push, net cursor unchanged, value written at
-`top.toNat - 1`. -/
-theorem sload_post_stack (top : StackTop) (hs' : Evm.HostState)
-    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
-    (v : word)
-    (hframe' : hs'.stackFrames = writeListAt l (top.toNat - 1) v :: frest)
-    (hpfx : l.take top.toNat = (x :: rest).reverse)
-    (htop : top.toNat = (x :: rest).length)
-    (hlim : (x :: rest).length ≤ 1024)
-    (hlen : top.toNat ≤ l.length)
-    (hwfS : ∀ y ∈ x :: rest, WordWf y)
-    (hv : WordWf v) :
-    StackRel (v :: rest) hs' top := by
-  have hn : top.toNat = rest.length + 1 := by simpa using htop
-  refine ⟨⟨writeListAt l (top.toNat - 1) v, frest, hframe', ?_, ?_⟩, ?_, ?_, ?_⟩
-  · have hpfx' : l.take ((top.toNat - 1) + 1) = (x :: rest).reverse := by
-      rw [show top.toNat - 1 + 1 = top.toNat from by omega]
-      exact hpfx
-    have hpfx1 : l.take (top.toNat - 1) = rest.reverse :=
-      take_shrink l rest x (top.toNat - 1) hpfx' (by omega)
-    calc (writeListAt l (top.toNat - 1) v).take top.toNat
-        = (writeListAt l (top.toNat - 1) v).take ((top.toNat - 1) + 1) := by
-          rw [show (top.toNat - 1) + 1 = top.toNat from by omega]
-      _ = l.take (top.toNat - 1) ++ [v] :=
-          take_writeListAt l (top.toNat - 1) v (by omega)
-      _ = rest.reverse ++ [v] := by rw [hpfx1]
-      _ = (v :: rest).reverse := by simp
-  · rw [length_writeListAt]
-    omega
-  · simpa using htop
-  · simpa using hlim
-  · intro w hw
-    rcases List.mem_cons.mp hw with hw | hw
-    · subst hw
-      exact hv
-    · exact hwfS w (by simp [hw])
-
 open Evm.Functions in
 /-- **SLOAD, all reachable outcomes.** Warm/cold accounting and gas are
 unconditional; the value read is supplied by the ledgered [`SloadAgree`]
@@ -561,7 +495,7 @@ theorem sload_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
         rw [if_pos rfl, hcurr]
         refine StepResultRel.success ⟨⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE,
           ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩, hpc, rfl⟩, ?_⟩
-        · exact sload_post_stack top _ l frest x rest v
+        · exact pop_push_post_stack top _ l frest x rest v
             (hostState_set_stackFrames_frames _ _) hpfx htop hlim hlen hwfS
             hwfv
         · exact ⟨by rw [hlive]; rfl, hres, hsp⟩
@@ -598,7 +532,7 @@ theorem sload_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
         rw [if_neg (by simp), hcurr]
         refine StepResultRel.success ⟨⟨⟨?_, ?_, ⟨hrunR.1, hrunR.2⟩, hrunE,
           ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩, hpc, rfl⟩, ?_⟩
-        · exact sload_post_stack top _ l frest x rest v
+        · exact pop_push_post_stack top _ l frest x rest v
             (hostState_set_stackFrames_frames _ _) hpfx htop hlim hlen hwfS
             hwfv
         · exact ⟨by rw [hlive]; rfl, hres, hsp⟩
