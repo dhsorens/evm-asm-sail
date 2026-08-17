@@ -81,9 +81,11 @@ EVM state can violate it, and whether it is eliminable by proving.
 * `hwfv` (`callvalue_step_equiv`) — `message.value < 2^256`. A message
   invariant neither side states locally; maintained by both constructions,
   discharged at frame entry (M3).
-* `CalldataRel` (Relations/Calldata.lean) covers the stateless top frame
-  (`InputCalldata`) only; nested-frame `MemoryCalldata` is CALL-family
-  scope.
+* `CalldataRel` (Relations/Calldata.lean) covers both calldata windows
+  (top-frame `InputCalldata` and nested-frame `MemoryCalldata`) — the read
+  path is fully proven; what remains for the CALL family is establishing
+  the nested window at frame entry (CALL sets up a parent-memory window
+  that reads back the child's `message.data`).
 
 ## Deliberate scope restrictions (this tranche)
 

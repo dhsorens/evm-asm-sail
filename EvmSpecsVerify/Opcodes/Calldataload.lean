@@ -12,7 +12,8 @@ The first calldata reader: pop the offset, charge
 [`calldataRel_load_word`](../Relations/Calldata.lean) — both sides
 zero-pad past the end, so it holds for every popped offset with no range
 hypothesis. The `calldata` register is not part of `StateRel`, so the
-read (`hcdreg`) and the relation (`hcdrel`, top-frame `InputCalldata`)
+read (`hcdreg`) and the relation (`hcdrel` — covering both the top
+frame's input-arena window and a nested frame's parent-memory window)
 are hypotheses of the step theorem.
 
 Operation order is the classic MM-1: SpecRef pops before charging, the
@@ -217,7 +218,8 @@ theorem runS_execute_calldataload_underflow (pc_in : Nat) (top : StackTop)
 
 open Evm.Functions in
 /-- **CALLDATALOAD, all reachable outcomes.** `hcdreg`/`hcdrel` supply the
-`calldata` register read and the top-frame calldata relation. -/
+`calldata` register read and the calldata relation (either window
+constructor). -/
 theorem calldataload_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
     (pc_in : Nat) (cd : CalldataSlice)

@@ -72,7 +72,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | ORIGIN | 0x32 | `iOrigin` | `execute_origin` | env | **full** ([`origin_step_equiv`](../EvmSpecsVerify/Opcodes/Origin.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie hypothesis) |
 | CALLER | 0x33 | `iCaller` | `execute_caller` | env | **full** ([`caller_step_equiv`](../EvmSpecsVerify/Opcodes/Caller.lean#L205) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
 | CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | **full** ([`callvalue_step_equiv`](../EvmSpecsVerify/Opcodes/Callvalue.lean#L206) — success/overflow/OOG/MM-5 double fault; codec-free, message-value wf hypothesized) |
-| CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | **full** ([`calldataload_step_equiv`](../EvmSpecsVerify/Opcodes/Calldataload.lean#L222) — success/underflow/OOG; `CalldataRel` (top-frame `InputCalldata`), both sides zero-pad so no range hypothesis) |
+| CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | **full** ([`calldataload_step_equiv`](../EvmSpecsVerify/Opcodes/Calldataload.lean#L222) — success/underflow/OOG; `CalldataRel` covers both calldata windows (input arena / parent memory), both sides zero-pad so no range hypothesis) |
 | CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | unstated |
 | CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | unstated |
 | CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | unstated |
