@@ -116,6 +116,11 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   (`Assumptions.lean`). Do not regenerate Sail→Lean here to "fix" a proof.
 - Never edit `extraction/evm-sail` or the Lake `EvmAsm` checkout to make a
   bridge theorem hold.
+- **Ledgered agree-hypotheses that carry data must be `∃`-packed `def`s, not
+  `Prop` structures.** A `structure … : Prop` rejects non-proof fields
+  (witness values, post-states, `hostAfter` functions) with "field must be a
+  proof". Write `def XAgree … : Prop := ∃ v ts' …, … ∧ …` and `obtain` at the
+  use site (pattern: `SloadAgree`, Opcodes/Sload.lean).
 
 ## Tactic traps
 
@@ -151,14 +156,16 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
   application is fully concrete (no holes); see `runS_pop_body_ok`
   (`Opcodes/Pop.lean`).
-- **A structure-instance field value must not START inline and then wrap.**
-  Trigger: `{ ss with regs := ss.regs.insert R\n (v…) }` — parse error
-  `unexpected token '('; expected '}'`. A value written entirely on its own
-  continuation line after `field :=` parses fine (Ternop's `writeListAt … ::
-  frest`); one that begins on the `:=` line and continues does not. Right
-  move: put the whole value on one physical line (its own line is fine);
-  shorten with `open … (name)` or a small named `def`
-  (`returnedStatus`, `Opcodes/Return.lean`). See also `runS_exp_body_ok`.
+- **A structure-instance field value must fit on ONE physical line.**
+  Trigger: any `{ x with field := v }` where `v` spans two lines — whether
+  it starts inline after `:=` or on its own continuation line — dies with
+  `unexpected token '('; expected '}'`. (Earlier wording claimed an
+  own-continuation-line value is safe; STOP's `ss.regs.insert R\n (v…)`
+  disproved it — only a value that also ENDS on that one line parses.)
+  Right move: make the value a single token/line — shorten with
+  `open … (name)` or a small named `def` (`returnedStatus`,
+  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). See also
+  `runS_exp_body_ok`.
 - **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
   projection atoms that omega/simp can't merge.**
   Trigger: stating a relation or lemma hypothesis over a whole sigma value
@@ -190,6 +197,13 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you
   just added. Right move: `lake build <module>` the edited dependency first.
+
+- **No `show runS … = _ from …` placeholders inside `refine runS_bind_ok`
+  chains.** The `_` becomes an unassigned metavariable ("unknown metavariable
+  `?_uniq.N`"). State the RHS explicitly, or rely on the chain's defeq
+  unification: thin kernel wrappers (`k_slot_mark_warm` ≡
+  `storage_mark_warm`, pair-projection arguments like `(x, top-1).1`) unify
+  with the underlying lemma at `refine` without any `show`.
 
 ## Anti-patterns (stop and record)
 

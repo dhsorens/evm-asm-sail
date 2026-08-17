@@ -22,7 +22,7 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | state gas reservoir | `Evm.stateGasLeft : Uint` (Vm.lean:193) | `state_gas_remaining` register | `GasRel.reservoir` | — | proven-alu-ops (success path; failure paths relate halt kind only — the extraction refills at `exc_halt`) |
 | state gas spilled | `Evm.stateGasSpilled : Uint` (Vm.lean:207) | `state_gas_spilled` register | `GasRel.spilled` | — | proven-alu-ops (success path; see reservoir row) |
 | regular gas used | `Evm.regularGasUsed : Uint` (Vm.lean:206) | (derived: initial − remaining) | tbd | check: is this observable or bookkeeping? | unrelated |
-| halt / error status | `Evm.running : Bool` + `Evm.error : Option EvmError` (Vm.lean:198,202) + `EvmM` `throw` | `frame_status` register: `Running/Halted HaltKind/Exceptional ExceptionKind` | `StatusRel` / `ErrorRel` | SpecRef throws where `Evm` sets `Exceptional` + zeroes gas (`exc_halt`, Machine.lean:152) | proven-alu-ops (underflow/OOG kinds, `StepResultRel.halted`); normal halt proven for RETURN (`Halted (HaltReturn …)` via `ReturnPost`) |
+| halt / error status | `Evm.running : Bool` + `Evm.error : Option EvmError` (Vm.lean:198,202) + `EvmM` `throw` | `frame_status` register: `Running/Halted HaltKind/Exceptional ExceptionKind` | `StatusRel` / `ErrorRel` | SpecRef throws where `Evm` sets `Exceptional` + zeroes gas (`exc_halt`, Machine.lean:152) | proven-alu-ops (underflow/OOG kinds, `StepResultRel.halted`); normal halt proven for RETURN (`Halted (HaltReturn …)` via `ReturnPost`) and STOP (`Halted (HaltStop ())` via `StopPost`) |
 | memory (bytes) | `Evm.memory : Bytes` (Vm.lean:190) | `HostState.memoryBytes : Array byte` + `evm_memory` register (`EvmMemorySlice`, Sigma-packed) / live `mem` argument | `MemoryRel` (Relations/Memory.lean: established-prefix correspondence + ceil32 alignment tail) | frame-scoped via `memoryFrames`; MM-6 `MemGasSafe` budget | proven-memory-ops (`mload_step_equiv` / `mstore_step_equiv` / `return_step_equiv`, `MemPost`) |
 | memory size | `memory.length` (implicit, always ceil32-aligned) | `EvmMemorySlice` len index = exact established byte | `MemoryRel.aligned` | expansion gas agrees via `extend_cost_eq` | proven-memory-ops |
 | code | `Evm.code : Bytes` (Vm.lean:191) | `frame_code` register (`Code`) + `HostState.codeBytes`/`codeDb` | `CodeRel` | — | unrelated |
@@ -36,14 +36,14 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | suspended frames | (Python-style recursion in `process_message`, fuelled) | `HostState.continuationFrames : List FrameContinuation` + `stackFrames`/`memoryFrames` tails | `FramesRel` | tranche ≥ 3 | unrelated |
 | accounts to delete | `Evm.accountsToDelete : List Address` (Vm.lean:200) | journal/host equivalent (tbd) | tbd | — | unrelated |
 | accessed addresses (warm) | `Evm.accessedAddresses : List Address` (Vm.lean:203) | `HostState.warmAddresses : List (address × block_access_index)` (epoch-stamped) | `WarmRel` | epoch vs set semantics | unrelated |
-| accessed storage keys | `Evm.accessedStorageKeys : List (Address × Bytes32)` (Vm.lean:204) | `HostState.warmSlots : List (StorageKey × block_access_index)` | `WarmRel` | — | unrelated |
+| accessed storage keys | `Evm.accessedStorageKeys : List (Address × Bytes32)` (Vm.lean:204) | `HostState.warmSlots : List (StorageKey × block_access_index)` | `WarmRel` (Relations/Warm.lean: set membership ↔ epoch-current stamp, via the `toBeBytes32` decode roundtrip) | epoch vs set semantics; SpecRef keys are 32-byte BE encodings | proven-sload (hypothesis + preserved by `sload_step_equiv` on every path that marks) |
 
 ## World / transaction components (tranche ≥ 3)
 
 | component | SpecRef repr | `Evm` repr | relation | invariants | status |
 |---|---|---|---|---|---|
 | accounts | `BlockState`/`TransactionState` journals (StateTracker.lean:87,107) | `HostState.accountTx/accountBlock : List (address × AcctValue)` (+ `Evm.Contracts.ReferenceWorldState` spec layer, unconnected) | `WorldRel` | HostState↔Contracts connective tissue does not exist yet | unrelated |
-| persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | — | unrelated |
+| persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | SLOAD reads bridged meanwhile by the ledgered `SloadAgree` hypothesis (Opcodes/Sload.lean, Assumptions.lean) — discharged when this row is proven | unrelated |
 | transient storage | (in `TransactionState`) | `HostState.transient : List (StorageKey × word)` | `TransientRel` | — | unrelated |
 | journal / revert | journaled tracker (StateTracker.lean) | `HostState.journal : List JournalFrame` (HostAxioms.lean:1092) | `JournalRel` | snapshot vs replay semantics | unrelated |
 | tx env | `TransactionEnvironment` (Vm.lean:146) | `k_tx` register (`TxEnv`) | `TxEnvRel` | — | unrelated |
