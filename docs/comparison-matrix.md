@@ -31,11 +31,12 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | output | `Evm.output : Bytes` (Vm.lean:199) | host output buffer (`outputBytes`) + `HaltReturn` `OutputSlice` | `ReturnPost` output clause (byte-for-byte) | — | proven-return (`return_step_equiv`) |
 | logs | `Evm.logs : List Log` (Vm.lean:195) | `HostState.logs : Array LogRecordRow` + `logBytes` arena | `LogsRel` | — | unrelated |
 | refund counter | `Evm.refundCounter : Int` (Vm.lean:196) | `frame_refund` register (`gas_refund := Int`) | `RefundRel` | — | unrelated |
-| message / call frame | `Evm.message : Message` (Vm.lean:197) | `message` register (`Message`) | `MessageRel` | — | unrelated |
+| message / call frame | `Evm.message : Message` (Vm.lean:197) | `message` register (`Message`) | `MessageRel` | field ties threaded per opcode meanwhile: `haddr` (SLOAD/ADDRESS), `hcaller`/`hvalue` (CALLER/CALLVALUE); full relation lands with the CALL family | unrelated |
+| calldata | `message.data : Bytes` (SpecRef Message) | `calldata` register (`CalldataSlice`) + `HostState.inputBytes` arena (top frame) or parent memory (nested) | `CalldataRel` (Relations/Calldata.lean: the register's window — top-frame input arena or nested-frame parent memory — reads back the data byte-for-byte; both sides zero-pad reads) | establishing the nested window at frame entry is CALL-family scope; the read path covers both | proven-calldataload (`calldataload_step_equiv`) |
 | call depth | `message.depth` (SpecRef Message) | `call_depth` register (`frame_depth := Nat`) | `DepthRel` | ≤ 1024 | unrelated |
 | suspended frames | (Python-style recursion in `process_message`, fuelled) | `HostState.continuationFrames : List FrameContinuation` + `stackFrames`/`memoryFrames` tails | `FramesRel` | tranche ≥ 3 | unrelated |
 | accounts to delete | `Evm.accountsToDelete : List Address` (Vm.lean:200) | journal/host equivalent (tbd) | tbd | — | unrelated |
-| accessed addresses (warm) | `Evm.accessedAddresses : List Address` (Vm.lean:203) | `HostState.warmAddresses : List (address × block_access_index)` (epoch-stamped) | `WarmRel` | epoch vs set semantics | unrelated |
+| accessed addresses (warm) | `Evm.accessedAddresses : List Address` (Vm.lean:203) | `HostState.warmAddresses : List (address × block_access_index)` (epoch-stamped) | `WarmAddrRel` (Relations/WarmAddr.lean: set membership ↔ precompile-or-current-stamp; the extraction short-circuits active precompiles, SpecRef prewarms them at tx start) | prewarm invariant + classifier run shape are step-level hypotheses | proven-balance (`balance_step_equiv` preserves it on every path that marks) |
 | accessed storage keys | `Evm.accessedStorageKeys : List (Address × Bytes32)` (Vm.lean:204) | `HostState.warmSlots : List (StorageKey × block_access_index)` | `WarmRel` (Relations/Warm.lean: set membership ↔ epoch-current stamp, via the `toBeBytes32` decode roundtrip) | epoch vs set semantics; SpecRef keys are 32-byte BE encodings | proven-sload (hypothesis + preserved by `sload_step_equiv` on every path that marks) |
 
 ## World / transaction components (tranche ≥ 3)
@@ -46,7 +47,7 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | SLOAD reads bridged meanwhile by the ledgered `SloadAgree` hypothesis (Opcodes/Sload.lean, Assumptions.lean) — discharged when this row is proven | unrelated |
 | transient storage | (in `TransactionState`) | `HostState.transient : List (StorageKey × word)` | `TransientRel` | — | unrelated |
 | journal / revert | journaled tracker (StateTracker.lean) | `HostState.journal : List JournalFrame` (HostAxioms.lean:1092) | `JournalRel` | snapshot vs replay semantics | unrelated |
-| tx env | `TransactionEnvironment` (Vm.lean:146) | `k_tx` register (`TxEnv`) | `TxEnvRel` | — | unrelated |
+| tx env | `TransactionEnvironment` (Vm.lean:146) | `k_tx` register (`TxEnv`) | `TxEnvRel` | ORIGIN reads bridged meanwhile by the `htx`/`horigin` register-tie hypotheses (`origin_step_equiv`) | unrelated |
 | block env | `BlockEnvironment` (Vm.lean:107) | `k_header` register (`BlockHeader`) + `k_n_headers`, `ancestorHashes` | `BlockEnvRel` | — | unrelated |
 | chain id | in `BlockEnvironment` | `k_chain_id` register | `BlockEnvRel` | — | unrelated |
 | fork / profile | structurally Amsterdam (whole port) | `k_execution_profile` register (13-index Sigma `ExecutionProfile`); gates like `fork ≥b Amsterdam` | `AmsterdamProfile` hypothesis | fixed-fork comparison; hypothesis threaded, not eliminated | unrelated |

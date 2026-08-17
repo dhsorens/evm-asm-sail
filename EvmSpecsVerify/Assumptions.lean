@@ -54,6 +54,39 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
+## Account read agreement + address warmth (BALANCE)
+
+* `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
+  account reads: SpecRef's journalled `getAccount` and the kernel's
+  `k_get_balance` return the same balance, quantified over the ambient
+  address stamps. Eliminable by the world tranche's account relation.
+* `WarmAddrRel` (Relations/WarmAddr.lean) — SpecRef's `accessedAddresses`
+  vs the extraction's epoch stamps, **modulo precompiles**: the extraction
+  short-circuits active precompiles as always warm, SpecRef prewarms them
+  into the set at transaction start. The relation is the step-level form
+  of that prewarm invariant; discharged at tx level (M3).
+* `hpid` (classifier run shape, `balance_step_equiv`) — the precompile
+  classifier `precompile_id_for_address` returns a fixed value per address
+  and leaves state untouched. It reads only the profile register, so this
+  is mechanically provable (a ~17-way address case split); kept as a
+  hypothesis to keep the BALANCE slice bounded, dischargeable any time.
+
+## Message-field ties and invariants (env family)
+
+* Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`,
+  `hcdreg`/`hcdrel`) — the extraction's `message`/`k_tx`/`calldata`
+  registers carry the same frame data as SpecRef's `Message`. These are
+  fragments of the future `MessageRel`/`TxEnvRel`, threaded per opcode
+  until the CALL family relates whole frames; established at frame entry.
+* `hwfv` (`callvalue_step_equiv`) — `message.value < 2^256`. A message
+  invariant neither side states locally; maintained by both constructions,
+  discharged at frame entry (M3).
+* `CalldataRel` (Relations/Calldata.lean) covers both calldata windows
+  (top-frame `InputCalldata` and nested-frame `MemoryCalldata`) — the read
+  path is fully proven; what remains for the CALL family is establishing
+  the nested window at frame entry (CALL sets up a parent-memory window
+  that reads back the child's `message.data`).
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
