@@ -116,6 +116,11 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   (`Assumptions.lean`). Do not regenerate Sail→Lean here to "fix" a proof.
 - Never edit `extraction/evm-sail` or the Lake `EvmAsm` checkout to make a
   bridge theorem hold.
+- **Ledgered agree-hypotheses that carry data must be `∃`-packed `def`s, not
+  `Prop` structures.** A `structure … : Prop` rejects non-proof fields
+  (witness values, post-states, `hostAfter` functions) with "field must be a
+  proof". Write `def XAgree … : Prop := ∃ v ts' …, … ∧ …` and `obtain` at the
+  use site (pattern: `SloadAgree`, Opcodes/Sload.lean).
 
 ## Tactic traps
 
@@ -190,6 +195,13 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you
   just added. Right move: `lake build <module>` the edited dependency first.
+
+- **No `show runS … = _ from …` placeholders inside `refine runS_bind_ok`
+  chains.** The `_` becomes an unassigned metavariable ("unknown metavariable
+  `?_uniq.N`"). State the RHS explicitly, or rely on the chain's defeq
+  unification: thin kernel wrappers (`k_slot_mark_warm` ≡
+  `storage_mark_warm`, pair-projection arguments like `(x, top-1).1`) unify
+  with the underlying lemma at `refine` without any `show`.
 
 ## Anti-patterns (stop and record)
 
