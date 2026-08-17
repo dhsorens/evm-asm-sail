@@ -4,6 +4,7 @@
 Markdown is source of truth:
   docs/opcode-coverage.md
   docs/comparison-matrix.md
+  docs/mismatches.md
 
 Outputs (kept in sync from the same DATA snapshot):
   docs/index.html                   — site source (Pages `/docs` → live URL below)
@@ -28,6 +29,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 OPCODE_DOC = REPO / "docs" / "opcode-coverage.md"
 COMPARISON_DOC = REPO / "docs" / "comparison-matrix.md"
+MISMATCH_DOC = REPO / "docs" / "mismatches.md"
 HTML_OUT = REPO / "docs" / "index.html"
 SITE_URL = "https://derekhsorensen.com/evm-asm-sail/"
 GITHUB_BLOB = "https://github.com/dhsorens/evm-asm-sail/blob/main/"
@@ -192,6 +194,71 @@ NEXT_SLICE_PREFERRED = [
 ]
 
 
+
+MM_HEADING = re.compile(r"^## (MM-(\d+)): (.+)$")
+MM_FIELD = re.compile(r"\*\*([^*]+)\*\*:\s*")
+
+
+def parse_mismatches(text: str) -> list[dict]:
+    """Parse docs/mismatches.md into ordered, schema-free entries.
+
+    Each `## MM-N: title` section becomes one entry; every `- `-led bullet is
+    split on its `**Key**:` markers (a bullet may carry several, e.g.
+    `**Fork**: … **Reachability**: … **Severity**: …`) into an ordered
+    (key, value) list, so heterogeneous entries and future fields render
+    without code changes here.
+    """
+    entries: list[dict] = []
+    current: dict | None = None
+    bullets: list[str] = []
+
+    def flush_bullets() -> None:
+        if current is None:
+            return
+        fields: list[list[str]] = []
+        for b in bullets:
+            # parts = [pre, key1, val1, key2, val2, …]; pre is "" for
+            # well-formed bullets
+            parts = MM_FIELD.split(b)
+            for j in range(1, len(parts) - 1, 2):
+                fields.append([parts[j].strip(), parts[j + 1].strip()])
+        current["fields"] = fields
+        entries.append(current)
+
+    for raw in text.splitlines():
+        m = MM_HEADING.match(raw)
+        if m:
+            flush_bullets()
+            current = {
+                "id": m.group(1),
+                "num": int(m.group(2)),
+                "title": m.group(3).strip(),
+            }
+            bullets = []
+            continue
+        if current is None:
+            continue
+        if raw.startswith("- "):
+            bullets.append(raw[2:].strip())
+        elif raw.startswith("  ") and bullets:
+            bullets[-1] += " " + raw.strip()
+    flush_bullets()
+
+    for e in entries:
+        by_key = {k: v for k, v in e["fields"]}
+        area = strip_md(by_key.get("Area", ""))
+        e["area"] = area[:100] + ("…" if len(area) > 100 else "")
+        e["fork"] = strip_md(by_key.get("Fork", "")).rstrip(".")
+        sev = strip_md(by_key.get("Severity", "")).rstrip(".")
+        e["severity"] = sev[:60] + ("…" if len(sev) > 60 else "")
+        dispo = by_key.get("Disposition", "")
+        mkind = re.search(r"\*([^*]+)\*", dispo)
+        e["dispositionKind"] = mkind.group(1).strip() if mkind else "other"
+
+    entries.sort(key=lambda e: e["num"])
+    return entries
+
+
 def next_slice(opcodes: list[dict]) -> list[dict]:
     """Unstated follow-ups in queue order. Already-`full` names drop out."""
     by_name = {o["opcode"]: o for o in opcodes if o["statusKind"] == "unstated"}
@@ -211,6 +278,7 @@ def next_slice(opcodes: list[dict]) -> list[dict]:
 def load_data() -> dict:
     opc = parse_md_tables(OPCODE_DOC.read_text())
     cmp = parse_md_tables(COMPARISON_DOC.read_text())
+    mismatches = parse_mismatches(MISMATCH_DOC.read_text())
 
     opcodes: list[dict] = []
     opcode_counts: dict[str, int] = {}
@@ -285,6 +353,7 @@ def load_data() -> dict:
     return {
         "opcodes": opcodes,
         "components": components,
+        "mismatches": mismatches,
         "nextSlice": [o["opcode"] for o in next_slice(opcodes)],
         "opcodeCounts": opcode_counts,
         "glossary": {
@@ -301,6 +370,7 @@ def load_data() -> dict:
         "source": {
             "opcodeDoc": "docs/opcode-coverage.md",
             "comparisonDoc": "docs/comparison-matrix.md",
+            "mismatchDoc": "docs/mismatches.md",
             "asOf": date.today().isoformat(),
         },
     }
@@ -320,6 +390,15 @@ def replace_data_blob(canvas_text: str, data: dict) -> str:
 
 def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
+
+
+def md_inline(value: str) -> str:
+    """Escape, then keep inline markdown readable: backticks become <code>,
+    double-asterisks become <strong>. Everything else stays literal."""
+    out = html.escape(value, quote=True)
+    out = re.sub(r"`([^`]+)`", r"<code>\1</code>", out)
+    out = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", out)
+    return out
 
 
 def ext_a(href: str, text: str, *, title: str | None = None) -> str:
@@ -370,6 +449,46 @@ def render_html(data: dict) -> str:
     legend_href = repo_href(legend["path"], legend.get("line"))
     comparison_href = repo_href(data["source"]["comparisonDoc"])
     opcode_doc_href = repo_href(data["source"]["opcodeDoc"])
+    mismatches = data["mismatches"]
+    mismatch_href = repo_href(data["source"]["mismatchDoc"])
+
+    def dispo_class(kind: str) -> str:
+        return {
+            "intentional abstraction": "dispo-intentional",
+            "needs investigation": "dispo-investigate",
+            "deliberate scope restriction": "dispo-scope",
+        }.get(kind, "dispo-other")
+
+    investigating = sum(
+        1 for m in mismatches if m["dispositionKind"] == "needs investigation"
+    )
+    mismatch_details = []
+    for m in mismatches:
+        open_attr = (
+            " open" if m["dispositionKind"] == "needs investigation" else ""
+        )
+        badges = (
+            f"<span class='pill {dispo_class(m['dispositionKind'])}'>"
+            f"{esc(m['dispositionKind'])}</span>"
+        )
+        if m.get("fork"):
+            badges += f" <span class='pill'>fork: {esc(m['fork'])}</span>"
+        body = "".join(
+            f"<p><strong>{esc(k)}:</strong> {md_inline(v)}</p>"
+            for k, v in m["fields"]
+        )
+        body += (
+            "<p class='links'>"
+            + ext_a(mismatch_href, "Full entry in docs/mismatches.md")
+            + "</p>"
+        )
+        mismatch_details.append(
+            f"<details class='mm'{open_attr}>"
+            f"<summary><span class='sum-title'>{esc(m['id'])} — "
+            f"{md_inline(m['title'])}</span>"
+            f"<span class='sum-badges'>{badges}</span></summary>"
+            f"<div class='detail'>{body}</div></details>"
+        )
 
     family_bars = "".join(
         f'<div class="bar-row"><span class="bar-label">{esc(name)}</span>'
@@ -601,6 +720,9 @@ def render_html(data: dict) -> str:
     white-space: nowrap;
   }}
   .status-full {{ color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--stroke)); }}
+  .dispo-intentional {{ color: var(--info); border-color: color-mix(in srgb, var(--info) 40%, var(--stroke)); }}
+  .dispo-investigate {{ color: var(--warn); border-color: color-mix(in srgb, var(--warn) 50%, var(--stroke)); }}
+  .dispo-scope {{ color: var(--muted); }}
   .status-unstated {{ color: var(--warn); }}
   .status-na {{ color: var(--info); }}
   .glossary-row {{ display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; }}
@@ -646,6 +768,22 @@ def render_html(data: dict) -> str:
     padding: 10px 12px;
   }}
   details.opcode > summary::-webkit-details-marker {{ display: none; }}
+  details.mm {{
+    background: var(--card);
+    border: 1px solid var(--stroke);
+    border-radius: 10px;
+    margin: 8px 0;
+  }}
+  details.mm > summary {{
+    list-style: none;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    align-items: center;
+    padding: 10px 12px;
+  }}
+  details.mm > summary::-webkit-details-marker {{ display: none; }}
   .sum-title {{ font-weight: 600; }}
   .sum-badges {{ display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }}
   .detail {{ padding: 0 12px 12px; border-top: 1px solid var(--stroke); }}
@@ -664,7 +802,8 @@ def render_html(data: dict) -> str:
   <div class="banner">
     Source of truth:
     {ext_a(opcode_doc_href, "docs/opcode-coverage.md")} ·
-    {ext_a(comparison_href, "docs/comparison-matrix.md")}.
+    {ext_a(comparison_href, "docs/comparison-matrix.md")} ·
+    {ext_a(mismatch_href, "docs/mismatches.md")}.
     Live at {ext_a(SITE_URL, esc(SITE_URL))}.
     Refresh canvas + this page with <code>python3 scripts/refresh-proof-coverage-canvas.py</code>, then push on <code>main</code> to publish.
   </div>
@@ -674,6 +813,7 @@ def render_html(data: dict) -> str:
     <div class="stat"><div class="v">{esc(counts.get("unstated", 0))}</div><div class="l">Opcodes unstated</div></div>
     <div class="stat"><div class="v">{esc(counts.get("n/a", 0))}</div><div class="l">Opcodes n/a this tranche</div></div>
     <div class="stat"><div class="v">{esc(unrelated)}</div><div class="l">State components unrelated</div></div>
+    <div class="stat"><div class="v">{esc(len(mismatches))}</div><div class="l">Ledgered mismatches ({esc(investigating)} under investigation)</div></div>
   </div>
 
   <div class="card">
@@ -696,6 +836,17 @@ def render_html(data: dict) -> str:
       <thead><tr><th>Opcode</th><th>Byte</th><th>SpecRef</th><th>Evm</th><th>Shape</th><th>Status</th></tr></thead>
       <tbody>{slice_html}</tbody>
     </table>
+  </div>
+
+  <h2>Mismatch ledger</h2>
+  <p class="muted">
+    Every discovered SpecRef ↔ Evm disagreement, written down <em>before</em>
+    any proof is adjusted around it. Expand an entry for the full field
+    breakdown; the one still under investigation is expanded by default.
+    Source: {ext_a(mismatch_href, "docs/mismatches.md")}.
+  </p>
+  <div id="mismatches">
+    {''.join(mismatch_details)}
   </div>
 
   <h2>Opcode coverage</h2>
