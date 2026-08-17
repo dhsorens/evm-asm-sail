@@ -96,7 +96,7 @@ theorem smod_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iSmod sRef)
+    StepResultRel (BasePost mem) (runR iSmod sRef)
       (runS (Evm.Functions.execute (.SMOD ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.SMOD ()) G_low alu_smod iSmod GasCosts.OPCODE_SMOD
     (fun x y => smodSpec x y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

@@ -29,7 +29,7 @@ theorem iszero_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iIszero sRef)
+    StepResultRel (BasePost mem) (runR iIszero sRef)
       (runS (Evm.Functions.execute (.ISZERO ()) pc_in top mem g) hs ss) :=
   unop_step_equiv (.ISZERO ()) G_verylow alu_iszero iIszero
     GasCosts.OPCODE_ISZERO (fun x => boolPush (x == 0)) rfl rfl

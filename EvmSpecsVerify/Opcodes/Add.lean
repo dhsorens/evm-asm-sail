@@ -31,7 +31,7 @@ theorem add_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iAdd sRef)
+    StepResultRel (BasePost mem) (runR iAdd sRef)
       (runS (Evm.Functions.execute (.ADD ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.ADD ()) Evm.Functions.G_verylow Evm.Functions.alu_add
     iAdd GasCosts.OPCODE_ADD (fun x y => wrap256 (x + y))

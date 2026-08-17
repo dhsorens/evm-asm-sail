@@ -256,7 +256,7 @@ theorem push_step_equiv (n v : Nat) (hn32 : n ≤ 32)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + (1 + n))
     (hv : v = bytesBEtoNat (buffer_read sRef.evm.code (sRef.evm.pc + 1) n)) :
-    StepResultRel (AluPost mem) (runR (iPushN n) sRef)
+    StepResultRel (BasePost mem) (runR (iPushN n) sRef)
       (runS (Evm.Functions.execute (.PUSH (n, v)) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

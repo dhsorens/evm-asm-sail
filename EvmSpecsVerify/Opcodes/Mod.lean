@@ -34,7 +34,7 @@ theorem mod_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iMod sRef)
+    StepResultRel (BasePost mem) (runR iMod sRef)
       (runS (Evm.Functions.execute (.MOD ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.MOD ()) G_low alu_mod iMod GasCosts.OPCODE_MOD
     (fun x y => if y == 0 then 0 else x % y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

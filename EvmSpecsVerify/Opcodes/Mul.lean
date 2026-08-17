@@ -27,7 +27,7 @@ theorem mul_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iMul sRef)
+    StepResultRel (BasePost mem) (runR iMul sRef)
       (runS (Evm.Functions.execute (.MUL ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.MUL ()) G_low alu_mul iMul GasCosts.OPCODE_MUL
     (fun x y => wrap256 (x * y)) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

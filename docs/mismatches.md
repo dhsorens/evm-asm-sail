@@ -98,7 +98,7 @@ unreachable / ambiguity / needs investigation).
   return `pc_in` unchanged.
 - **Impact**: at handler entry the pcs differ by one; they re-align at step boundaries.
   Encoded in the theorems as `pc_in = sRef.evm.pc + 1` (hypothesis) and
-  `returned pc = post.evm.pc` (conclusion, inside `AluPost`).
+  `returned pc = post.evm.pc` (conclusion, inside `BasePost`).
 - **Disposition**: *intentional abstraction* (decode/fetch layering difference),
   handled by the statement shape; will need care at JUMP/JUMPI and PUSH.
 

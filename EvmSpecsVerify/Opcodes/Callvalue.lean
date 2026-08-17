@@ -212,7 +212,7 @@ theorem callvalue_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
       ss.regs.get? Register.message = some msg →
       msg.value = sRef.evm.message.value)
     (hwfv : WordWf sRef.evm.message.value) :
-    StepResultRel (AluPost mem) (runR iCallvalue sRef)
+    StepResultRel (BasePost mem) (runR iCallvalue sRef)
       (runS (Evm.Functions.execute (.CALLVALUE ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

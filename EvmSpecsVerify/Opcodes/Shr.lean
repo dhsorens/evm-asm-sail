@@ -38,7 +38,7 @@ theorem shr_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iShr sRef)
+    StepResultRel (BasePost mem) (runR iShr sRef)
       (runS (Evm.Functions.execute (.SHR ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.SHR ()) G_verylow alu_shr iShr GasCosts.OPCODE_SHR
     (fun s v => if s < 256 then v >>> s else 0) rfl rfl

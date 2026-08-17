@@ -12,7 +12,7 @@ Representation/     facts about ONE side's definitions
                     runR / runS, pop/push characterizations, word BitVec↔Nat, …
 
 Relations/          predicates BETWEEN the two sides
-                    WordRel, StackRel, GasRel, StateRel, AluPost, StepResultRel, …
+                    WordRel, StackRel, GasRel, StateRel, BasePost, StepResultRel, …
 ```
 
 Opcode theorems have the shape:
@@ -227,19 +227,19 @@ comparison).
 
 ---
 
-### [`Alu.lean`](Alu.lean) — ALU success [`AluPost`](Alu.lean#L24)
+### [`Alu.lean`](Alu.lean) — ALU success [`BasePost`](Alu.lean#L24)
 
 The `Post` argument of [`StepResultRel`](Outcome.lean#L53) for constant-gas
 ALU shapes. Lives here (not in [`Opcodes/Shapes/Binop.lean`](../Opcodes/Shapes/Binop.lean))
 because it is a relation, not a 2-in/1-out skeleton.
 
-Source: [`AluPost`](Alu.lean#L24). Used by [`binop_step_equiv`](../Opcodes/Shapes/Binop.lean#L264) /
+Source: [`BasePost`](Alu.lean#L24). Used by [`binop_step_equiv`](../Opcodes/Shapes/Binop.lean#L264) /
 [`unop_step_equiv`](../Opcodes/Shapes/Unop.lean#L226) /
 [`ternop_step_equiv`](../Opcodes/Shapes/Ternop.lean#L303). Harvest helpers
 (`wrap256_wf`, …) stay in [`Opcodes/Shapes/Alu.lean`](../Opcodes/Shapes/Alu.lean).
 
 A later memory slice should add `MemPost` as a sibling of this file, not a
-field on [`AluPost`](Alu.lean).
+field on [`BasePost`](Alu.lean).
 
 ---
 
@@ -272,7 +272,7 @@ hrel : StateRel sRef top g hs ss
 
 Shape harvesting ([`Opcodes/Shapes/`](../Opcodes/Shapes/README.md)) is
 parameterized over [`StateRel`](State.lean#L36) /
-[`StepResultRel`](Outcome.lean#L53) / [`AluPost`](Alu.lean); do not invent
+[`StepResultRel`](Outcome.lean#L53) / [`BasePost`](Alu.lean); do not invent
 a weaker local relation inside an opcode file. Shape files import
 [`Opcodes/Shapes/Alu.lean`](../Opcodes/Shapes/Alu.lean), never a sibling
 arity.

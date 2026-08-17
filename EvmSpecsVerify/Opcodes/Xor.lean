@@ -29,7 +29,7 @@ theorem xor_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iXor sRef)
+    StepResultRel (BasePost mem) (runR iXor sRef)
       (runS (Evm.Functions.execute (.XOR ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.XOR ()) G_verylow alu_xor iXor GasCosts.OPCODE_XOR
     (fun x y => x ^^^ y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

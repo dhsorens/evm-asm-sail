@@ -29,7 +29,7 @@ theorem or_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iOr sRef)
+    StepResultRel (BasePost mem) (runR iOr sRef)
       (runS (Evm.Functions.execute (.OR ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.OR ()) G_verylow alu_or iOr GasCosts.OPCODE_OR
     (fun x y => x ||| y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

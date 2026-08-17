@@ -161,7 +161,7 @@ theorem sar_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iSar sRef)
+    StepResultRel (BasePost mem) (runR iSar sRef)
       (runS (Evm.Functions.execute (.SAR ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.SAR ()) G_verylow alu_sar iSar GasCosts.OPCODE_SAR
     (fun s v => sarSpec s v) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

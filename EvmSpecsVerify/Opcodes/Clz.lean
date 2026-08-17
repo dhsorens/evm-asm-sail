@@ -41,7 +41,7 @@ theorem clz_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iClz sRef)
+    StepResultRel (BasePost mem) (runR iClz sRef)
       (runS (Evm.Functions.execute (.CLZ ()) pc_in top mem g) hs ss) :=
   unop_step_equiv (.CLZ ()) G_low alu_clz iClz GasCosts.OPCODE_CLZ
     (fun x =>

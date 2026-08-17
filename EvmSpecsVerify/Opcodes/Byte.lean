@@ -46,7 +46,7 @@ theorem byte_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iByte sRef)
+    StepResultRel (BasePost mem) (runR iByte sRef)
       (runS (Evm.Functions.execute (.BYTE ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.BYTE ()) G_verylow alu_byte iByte GasCosts.OPCODE_BYTE
     (fun i x => if i ≥ 32 then 0 else (x >>> ((31 - i) * 8)) &&& 0xFF) rfl rfl

@@ -16,7 +16,7 @@ reachable. It is not the ALU arithmetic, and it is not the Yellow-Paper
 
 ```text
 Relations/State.lean     StateRel          (pre)
-Relations/Alu.lean       AluPost           (ALU success Post)
+Relations/Base.lean       BasePost           (ALU success Post)
         │
         ▼
 Opcodes/Shapes/Alu.lean  wrap256_wf, boolPush_wf, two_pow_toNat
@@ -35,7 +35,7 @@ one arity file that imports **that** layer — never Binop/Unop/Ternop.
 
 | Layer | File | Role |
 | --- | --- | --- |
-| Post | [`Relations/Alu.lean`](../../Relations/Alu.lean) | [`AluPost`](../../Relations/Alu.lean#L24) |
+| Post | [`Relations/Base.lean`](../../Relations/Base.lean) | [`BasePost`](../../Relations/Base.lean#L24) |
 | Helpers | [`Alu.lean`](Alu.lean) | [`wrap256_wf`](Alu.lean#L26), [`boolPush_wf`](Alu.lean#L29), [`two_pow_toNat`](Alu.lean#L23) |
 | (2,1) | [`Binop.lean`](Binop.lean) | [`binopShape`](Binop.lean#L85), [`binop_step_equiv`](Binop.lean#L264) |
 | (1,1) | [`Unop.lean`](Unop.lean) | [`unopShape`](Unop.lean#L74), [`unop_step_equiv`](Unop.lean#L226) |
@@ -61,7 +61,7 @@ Every `Shapes/Foo.lean` (and future Env/Memory/…):
 4. `FooDispatch` — `rfl` arity + `execute_opcode` reduces to `fooShape`.
 5. `runS_fooShape_*` and `runS_execute_foo_*` per outcome.
 6. `foo_step_equiv` : [`StateRel`](../../Relations/State.lean) →
-   [`StepResultRel`](../../Relations/Outcome.lean) [`AluPost`](../../Relations/Alu.lean)
+   [`StepResultRel`](../../Relations/Outcome.lean) [`BasePost`](../../Relations/Base.lean)
    (or that slice's Post).
 
 Do not extract a new shape file until a **second** opcode proves the

@@ -31,7 +31,7 @@ theorem sub_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iSub sRef)
+    StepResultRel (BasePost mem) (runR iSub sRef)
       (runS (Evm.Functions.execute (.SUB ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.SUB ()) G_verylow alu_sub iSub GasCosts.OPCODE_SUB
     (fun x y => wrap256 (U256_MOD + x - y)) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

@@ -234,7 +234,7 @@ theorem unop_step_equiv (op : ast) (cost : Nat) (aluF : Nat → Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iOp sRef)
+    StepResultRel (BasePost mem) (runR iOp sRef)
       (runS (Evm.Functions.execute op pc_in top mem g) hs ss) := by
   subst hspec hcost
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel

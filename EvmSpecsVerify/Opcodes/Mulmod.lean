@@ -39,7 +39,7 @@ theorem mulmod_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iMulmod sRef)
+    StepResultRel (BasePost mem) (runR iMulmod sRef)
       (runS (Evm.Functions.execute (.MULMOD ()) pc_in top mem g) hs ss) :=
   ternop_step_equiv (.MULMOD ()) G_mid alu_mulmod iMulmod
     GasCosts.OPCODE_MULMOD (fun x y z => if z == 0 then 0 else (x * y) % z)

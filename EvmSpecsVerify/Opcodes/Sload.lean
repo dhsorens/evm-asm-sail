@@ -428,7 +428,7 @@ theorem runS_execute_sload_underflow (pc_in : Nat) (top : StackTop) (g : Nat)
 storage-key relation on the post-states. -/
 def SloadPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
-  AluPost mem sR' step hs' ss' ∧ WarmRel sR' hs'
+  BasePost mem sR' step hs' ss' ∧ WarmRel sR' hs'
 
 open Evm.Functions in
 /-- **SLOAD, all reachable outcomes.** Warm/cold accounting and gas are
