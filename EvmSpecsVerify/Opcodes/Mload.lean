@@ -55,10 +55,6 @@ theorem runR_iMload_underflow (s : Machine) (hstack : s.evm.stack = []) :
   simp only [iMload]
   exact runR_bind_err (runR_stackPop_nil s hstack)
 
-theorem runR_getEvm_map {α : Type} (f : EvmAsm.Stateless.SpecRef.Evm → α)
-    (s : Machine) :
-    runR ((f <$> EvmM.getEvm : EvmM α)) s = .ok (.ok (f s.evm), s) := rfl
-
 theorem runR_iMload_oog (s : Machine) (x : U256) (rest : List U256)
     (hstack : s.evm.stack = x :: rest)
     (hgas : s.evm.gasLeft < mloadCost s.evm.memory.length x) :
