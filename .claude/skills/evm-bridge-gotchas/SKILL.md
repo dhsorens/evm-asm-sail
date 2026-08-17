@@ -205,6 +205,27 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `storage_mark_warm`, pair-projection arguments like `(x, top-1).1`) unify
   with the underlying lemma at `refine` without any `show`.
 
+- **SpecRef helper defs that are do-blocks need their own `runR` lemmas.**
+  Trigger: simp-inlining a helper (`accessGasCost`) into its caller's chain —
+  the nested bind structure no longer matches `runR_bind_ok`'s outer-bind
+  pattern and the chain stalls with a huge un-normalized do goal. Right
+  move: one `runR_<helper>_<case>` lemma per outcome, then chain the caller
+  through those (pattern: `runR_accessGasCost_warm/cold`,
+  `Opcodes/Balance.lean`).
+- **Extraction types with derived `BEq` have no `LawfulBEq`** — `beq_iff_eq`
+  / `bne_iff_ne` / assoc-list lemmas stall with "failed to synthesize
+  LawfulBEq". Add a local instance: structures via field `beq_iff_eq`
+  (`StorageKey`, Relations/Warm.lean); enums via
+  `cases a <;> cases b <;> first | rfl | exact absurd h (by decide)`
+  (`PrecompileId`, Relations/WarmAddr.lean).
+- **Never `rfl`/whnf through a chain of `Vector.set!`s** (extraction
+  builders like `word_to_address`): 20 sets time out at any heartbeat
+  budget. Right move: the simp set `vector_set!_eq` (a local
+  `set! = setIfInBounds` rfl bridge) + `Vector.toList_setIfInBounds` +
+  `Vector.toList_replicate` + `List.replicate` reduces the whole builder's
+  `toList` to a literal list in milliseconds
+  (`Representation/AddressWord.lean`).
+
 ## Anti-patterns (stop and record)
 
 | temptation | do this instead |
