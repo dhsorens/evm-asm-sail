@@ -12,7 +12,10 @@ Distinguish:
 
 - Lean build / diagnostics / heartbeat / `open private` patterns in this repo
 - SpecRef ↔ `Evm` observation boundary, relations, MM-* mismatches
-- Coverage matrix honesty and refresh ritual
+- Coverage matrix honesty and refresh ritual — including the
+  `opcode-slice` **ledger audit**: if this session landed a slice, was the
+  audit done? Does any `MM-*` / `Assumptions.lean` entry restrict or
+  undercut what the coverage table now claims?
 - Following `AGENTS.md` and project skills
 - Tool usage and efficiency
 

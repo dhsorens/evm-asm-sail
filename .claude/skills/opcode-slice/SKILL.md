@@ -136,6 +136,22 @@ When ADD (or another archetype) is `full` and the next op shares the shape:
 - [ ] Both-side run shapes for every reachable outcome
 - [ ] Top-level `StepResultRel` theorem compiles
 - [ ] `lake build` green **without warnings** in touched modules
+- [ ] **Ledger audit** (two directions, before claiming a status):
+  - *Backward — invalidation*: for each `docs/mismatches.md` entry whose
+    **Area** covers this opcode, name the theorem artifact that discharges
+    it. Today: MM-1 → the halted-kind pairing argument (pop-first
+    handlers), MM-4 → the `pc_in = sRef.evm.pc + …` hypothesis, MM-5 →
+    a `haltedChargeFirst` case (charge-first handlers), MM-6 →
+    `MemGasSafe` (memory family), MM-2 → a constant-equality lemma,
+    MM-3 → the theorem targets the handler `def`. A covered mismatch with
+    no artifact means the status is overclaimed — fix the proof or the
+    wording, not the ledger.
+  - *Forward — maintenance*: does the slice change an entry's scope
+    (new family under MM-1/MM-5's Area, constants verified narrowing
+    MM-2, …)? Update the entry. Same question for `Assumptions.lean`:
+    if a new hypothesis restricts the theorem's **domain** (not just its
+    outcomes — e.g. a relation that only some reachable states satisfy),
+    say so in the coverage row's status note, not only in docstrings.
 - [ ] `docs/opcode-coverage.md` updated
 - [ ] Comparison matrix / mismatches updated if needed
 - [ ] Coverage refresh script run
