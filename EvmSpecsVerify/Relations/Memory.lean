@@ -68,6 +68,12 @@ def MemPost (sR' : Machine) (step : EvmStep)
 
 /-! ## Arithmetic bridges: `ceil32` / word counts / costs -/
 
+/-- The 32-byte required size, in the `u256`-literal spelling the
+word-family handlers produce (MLOAD/MSTORE). -/
+theorem memory_required_size_32 (x : Nat) :
+    Evm.Functions.memory_required_size x (Evm.Functions.u256 32)
+      = x + 32 := rfl
+
 theorem memory_word_count_eq (n : Nat) :
     Evm.Functions.memory_word_count n = (n + 31) / 32 := by
   have h : Evm.Functions.memory_word_count n
