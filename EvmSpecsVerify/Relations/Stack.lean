@@ -34,6 +34,46 @@ structure StackRel (S : List Nat) (hs : HostState) (top : StackTop) : Prop where
   by each handler; the `Evm` side maintains it by `u256` reduction). -/
   wf : ∀ x ∈ S, WordWf x
 
+open private writeListAt from Evm.HostAxioms
+
+/-- The post-state stack relation shared by 1-in/1-out readers (SLOAD,
+BALANCE, CALLDATALOAD): one pop, one push, net cursor unchanged, value
+written at `top.toNat - 1`. -/
+theorem pop_push_post_stack (top : StackTop) (hs' : Evm.HostState)
+    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
+    (v : word)
+    (hframe' : hs'.stackFrames = writeListAt l (top.toNat - 1) v :: frest)
+    (hpfx : l.take top.toNat = (x :: rest).reverse)
+    (htop : top.toNat = (x :: rest).length)
+    (hlim : (x :: rest).length ≤ 1024)
+    (hlen : top.toNat ≤ l.length)
+    (hwfS : ∀ y ∈ x :: rest, WordWf y)
+    (hv : WordWf v) :
+    StackRel (v :: rest) hs' top := by
+  have hn : top.toNat = rest.length + 1 := by simpa using htop
+  refine ⟨⟨writeListAt l (top.toNat - 1) v, frest, hframe', ?_, ?_⟩, ?_, ?_, ?_⟩
+  · have hpfx' : l.take ((top.toNat - 1) + 1) = (x :: rest).reverse := by
+      rw [show top.toNat - 1 + 1 = top.toNat from by omega]
+      exact hpfx
+    have hpfx1 : l.take (top.toNat - 1) = rest.reverse :=
+      take_shrink l rest x (top.toNat - 1) hpfx' (by omega)
+    calc (writeListAt l (top.toNat - 1) v).take top.toNat
+        = (writeListAt l (top.toNat - 1) v).take ((top.toNat - 1) + 1) := by
+          rw [show (top.toNat - 1) + 1 = top.toNat from by omega]
+      _ = l.take (top.toNat - 1) ++ [v] :=
+          take_writeListAt l (top.toNat - 1) v (by omega)
+      _ = rest.reverse ++ [v] := by rw [hpfx1]
+      _ = (v :: rest).reverse := by simp
+  · rw [length_writeListAt]
+    omega
+  · simpa using htop
+  · simpa using hlim
+  · intro w hw
+    rcases List.mem_cons.mp hw with hw | hw
+    · subst hw
+      exact hv
+    · exact hwfS w (by simp [hw])
+
 namespace StackRel
 
 theorem cursor_headroom {S : List Nat} {hs : HostState} {top : StackTop}
