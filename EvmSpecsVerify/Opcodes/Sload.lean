@@ -458,9 +458,10 @@ def SloadPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
   AluPost mem sR' step hs' ss' ∧ WarmRel sR' hs'
 
-/-- The post-state stack relation both success branches share: one pop,
-one push, net cursor unchanged, value written at `top.toNat - 1`. -/
-private theorem sload_post_stack (top : StackTop) (hs' : Evm.HostState)
+/-- The post-state stack relation shared by 1-in/1-out reads (SLOAD,
+BALANCE): one pop, one push, net cursor unchanged, value written at
+`top.toNat - 1`. -/
+theorem sload_post_stack (top : StackTop) (hs' : Evm.HostState)
     (l : List word) (frest : List (List word)) (x : word) (rest : List word)
     (v : word)
     (hframe' : hs'.stackFrames = writeListAt l (top.toNat - 1) v :: frest)

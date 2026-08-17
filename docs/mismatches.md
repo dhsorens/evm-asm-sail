@@ -40,10 +40,11 @@ unreachable / ambiguity / needs investigation).
 
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
 
-- **Area**: stack-family opcodes whose SpecRef handler charges gas **before**
-  validating the stack shape: `iPushN`, `iDupN`, `iSwapN`
-  (InstructionsCore.lean:346–372). Contrast the ALU family, which pops first —
-  MM-1's kind-alignment argument covers only pop-first handlers.
+- **Area**: opcodes whose SpecRef handler charges gas **before** validating
+  the stack shape: `iPushN`, `iDupN`, `iSwapN` (InstructionsCore.lean:346–372)
+  and the charge-first env pushers (`iAddress`, `iOrigin`, `iCaller`, …,
+  InstructionsEnv.lean). Contrast the ALU family, which pops first — MM-1's
+  kind-alignment argument covers only pop-first handlers.
 - **SpecRef**: `charge_gas` runs first; a state that is simultaneously out of
   gas **and** stack-invalid throws `.outOfGas` before the depth/overflow check
   is reached.
@@ -124,7 +125,13 @@ unreachable / ambiguity / needs investigation).
   `fork ≥ Amsterdam` path, `G_amsterdam_cold_storage_access = 3000 =
   COLD_STORAGE_ACCESS` (cold); the classic `G_cold_sload = 2100` is dead at this fork.
   Machine-checked by `runS_sload_cost` + `sload_step_equiv` (Opcodes/Sload.lean).
-  Remaining open subset: SSTORE and the account-access family.
+- **Verified 2026-08-17 (BALANCE + env pushers)**: the account-access constants agree at
+  Amsterdam — warm `100` (`WARM_ACCESS` = `G_warm_access`), cold account `3000`
+  (`COLD_ACCOUNT_ACCESS` = `G_amsterdam_cold_account_access`, the `fork ≥ Amsterdam`
+  path of `account_cost`); and `OPCODE_ADDRESS`/`OPCODE_ORIGIN` `= 2 = G_base`.
+  Machine-checked by `runS_account_cost` + `balance_step_equiv` and the
+  ADDRESS/ORIGIN step theorems. Remaining open subset: SSTORE and the
+  CALL/CREATE-family account writes.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

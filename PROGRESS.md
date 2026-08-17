@@ -175,6 +175,16 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       single reachable outcome (0-in/0-out, no charge); `StopPost` is
       `ReturnPost` minus the output clause — `iStop` never assigns `output`
       and `HaltStop` carries no slice
+- [x] Env openers — `Representation/AddressWord.lean` (the 20-byte
+      address ↔ word codec bridges: `address_to_word_eq`,
+      `word_to_address_toList`, on the `Warm.lean` digit arithmetic),
+      `Opcodes/Address.lean` / `Opcodes/Origin.lean` (charge-first pushers,
+      MM-5 double faults; ORIGIN ties the `k_tx` register by hypothesis),
+      `Relations/WarmAddr.lean` + `Opcodes/Balance.lean` (address-warmth
+      relation folding the extraction's precompiles-always-warm
+      short-circuit against SpecRef's tx-start prewarming; warm/cold
+      account gas verified `100`/`3000` at Amsterdam; balance read behind
+      the ledgered `BalanceAgree`, the `SloadAgree` sibling)
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

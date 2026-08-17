@@ -54,6 +54,23 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
+## Account read agreement + address warmth (BALANCE)
+
+* `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
+  account reads: SpecRef's journalled `getAccount` and the kernel's
+  `k_get_balance` return the same balance, quantified over the ambient
+  address stamps. Eliminable by the world tranche's account relation.
+* `WarmAddrRel` (Relations/WarmAddr.lean) — SpecRef's `accessedAddresses`
+  vs the extraction's epoch stamps, **modulo precompiles**: the extraction
+  short-circuits active precompiles as always warm, SpecRef prewarms them
+  into the set at transaction start. The relation is the step-level form
+  of that prewarm invariant; discharged at tx level (M3).
+* `hpid` (classifier run shape, `balance_step_equiv`) — the precompile
+  classifier `precompile_id_for_address` returns a fixed value per address
+  and leaves state untouched. It reads only the profile register, so this
+  is mechanically provable (a ~17-way address case split); kept as a
+  hypothesis to keep the BALANCE slice bounded, dischargeable any time.
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the

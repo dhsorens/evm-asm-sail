@@ -67,9 +67,9 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
-| ADDRESS | 0x30 | `iAddress` | `execute_address` | env | unstated |
-| BALANCE | 0x31 | `iBalance` | `execute_balance` | env+world | unstated |
-| ORIGIN | 0x32 | `iOrigin` | `execute_origin` | env | unstated |
+| ADDRESS | 0x30 | `iAddress` | `execute_address` | env | **full** ([`address_step_equiv`](../EvmSpecsVerify/Opcodes/Address.lean#L212) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
+| BALANCE | 0x31 | `iBalance` | `execute_balance` | env+world | **full** ([`balance_step_equiv`](../EvmSpecsVerify/Opcodes/Balance.lean#L472) — success (warm/cold)/underflow/OOG ×2; `WarmAddrRel` (prewarm invariant + classifier shape hypotheses), value behind ledgered `BalanceAgree` — see `Assumptions.lean`) |
+| ORIGIN | 0x32 | `iOrigin` | `execute_origin` | env | **full** ([`origin_step_equiv`](../EvmSpecsVerify/Opcodes/Origin.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie hypothesis) |
 | CALLER | 0x33 | `iCaller` | `execute_caller` | env | unstated |
 | CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | unstated |
 | CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | unstated |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 35 |
-| unstated | 54 |
+| full | 38 |
+| unstated | 51 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
