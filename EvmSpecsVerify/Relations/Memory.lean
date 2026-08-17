@@ -421,4 +421,70 @@ theorem memoryRel_store (M : Bytes) (hs : Evm.HostState)
     rw [memory_write_getD M _ pos i hwl, if_neg (by omega)]
     exact htail i hge hi
 
+
+theorem memGasSafe_mono_gas (M : Bytes) {g g' : Nat} (h : g' ≤ g)
+    (hsafe : MemGasSafe M g) : MemGasSafe M g' := by
+  unfold MemGasSafe at hsafe ⊢
+  omega
+
+open Evm.Functions in
+/-- The MM-6 budget survives a charged expansion: the gas paid covers
+exactly the cost increase of the larger memory. -/
+theorem memGasSafe_after_expand (M : Bytes) (off len req gasLeft chg : Nat)
+    (msf : EvmMemorySliceFields off len)
+    (haligned : M.length = 32 * Evm.Functions.memory_word_count len)
+    (hsafe : MemGasSafe M gasLeft)
+    (hchg : Evm.Functions.memory_expansion_cost ⟨off, len, msf⟩ req ≤ chg)
+    (hcharge : chg ≤ gasLeft) :
+    MemGasSafe
+      (M ++ List.replicate
+        (32 * Evm.Functions.memory_word_count req - M.length) 0x00)
+      (gasLeft - chg) := by
+  have hwlen : Evm.Functions.memory_word_count M.length
+      = Evm.Functions.memory_word_count len := by
+    rw [haligned, memory_word_count_eq, memory_word_count_eq]
+    omega
+  unfold MemGasSafe at hsafe ⊢
+  rw [hwlen] at hsafe
+  have hlenM : M.length ≤ 32 * Evm.Functions.memory_word_count req
+      ∨ 32 * Evm.Functions.memory_word_count req ≤ M.length := by omega
+  have hML' : (M ++ List.replicate
+      (32 * Evm.Functions.memory_word_count req - M.length) 0x00).length
+      = max M.length (32 * Evm.Functions.memory_word_count req) := by
+    simp only [List.length_append, List.length_replicate]
+    omega
+  rw [hML']
+  simp only [Evm.Functions.memory_expansion_cost, memory_high_water_eq]
+    at hchg
+  by_cases hle : Evm.Functions.memory_word_count req
+      ≤ Evm.Functions.memory_word_count len
+  · -- no cost; the new high water's words don't exceed the old count
+    have hmaxwc : Evm.Functions.memory_word_count
+        (max M.length (32 * Evm.Functions.memory_word_count req))
+        = Evm.Functions.memory_word_count len := by
+      by_cases hm : 32 * Evm.Functions.memory_word_count req ≤ M.length
+      · rw [Nat.max_eq_left hm, hwlen]
+      · have : max M.length (32 * Evm.Functions.memory_word_count req)
+            = 32 * Evm.Functions.memory_word_count req := by omega
+        rw [this, memory_word_count_eq, memory_word_count_eq] at *
+        omega
+    rw [hmaxwc]
+    omega
+  · rw [if_neg (by simpa using hle)] at hchg
+    have hgt : Evm.Functions.memory_word_count len
+        < Evm.Functions.memory_word_count req := by omega
+    have hmax : max M.length (32 * Evm.Functions.memory_word_count req)
+        = 32 * Evm.Functions.memory_word_count req := by
+      rw [haligned]
+      omega
+    rw [hmax]
+    have hwc32 : Evm.Functions.memory_word_count
+        (32 * Evm.Functions.memory_word_count req)
+        = Evm.Functions.memory_word_count req := by
+      rw [memory_word_count_eq, memory_word_count_eq]
+      omega
+    rw [hwc32]
+    have hmono := mem_cost_mono (Nat.le_of_lt hgt)
+    omega
+
 end EvmSpecsVerify
