@@ -171,6 +171,10 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       success with `running := false` in state, so the RETURN-specific
       `ReturnPost` carries the `Halted (HaltReturn …)` status, byte-for-byte
       output correspondence, and remaining gas
+- [x] `Opcodes/Stop.lean` — STOP (`stop_step_equiv`): the free normal halt,
+      single reachable outcome (0-in/0-out, no charge); `StopPost` is
+      `ReturnPost` minus the output clause — `iStop` never assigns `output`
+      and `HaltStop` carries no slice
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

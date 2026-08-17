@@ -29,7 +29,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
-| STOP | 0x00 | `iStop` | `execute_stop` | system | unstated |
+| STOP | 0x00 | `iStop` | `execute_stop` | system | **full** ([`stop_step_equiv`](../EvmSpecsVerify/Opcodes/Stop.lean#L94) — the free normal halt is the only reachable outcome: 0-in/0-out excludes stack faults, no gas charge; `StopPost` = `ReturnPost` minus output) |
 | ADD | 0x01 | `iAdd` | `execute_add` | binop | **full** ([`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out) |
 | MUL | 0x02 | `iMul` | `execute_mul` | binop | **full** ([`mul_step_equiv`](../EvmSpecsVerify/Opcodes/Mul.lean#L26) — success/underflow/OOG; overflow unreachable) |
 | SUB | 0x03 | `iSub` | `execute_sub` | binop | **full** ([`sub_step_equiv`](../EvmSpecsVerify/Opcodes/Sub.lean#L30) — success/underflow/OOG; overflow unreachable) |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 34 |
-| unstated | 55 |
+| full | 35 |
+| unstated | 54 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
