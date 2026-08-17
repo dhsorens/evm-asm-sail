@@ -86,6 +86,14 @@ theorem runS_writeReg (r : Evm.Defs.Register) (v : Evm.Defs.RegisterType r)
     runS (Evm.writeReg r v) hs ss =
       .ok (PUnit.unit, hs) { ss with regs := ss.regs.insert r v } := rfl
 
+/-- `self_addr` reads the storage owner from the message register. -/
+theorem runS_self_addr (msg : Evm.Defs.Message) (hs : HostState)
+    (ss : SeqState)
+    (hmsg : ss.regs.get? Evm.Defs.Register.message = some msg) :
+    runS (Evm.Functions.self_addr ()) hs ss = .ok (msg.address, hs) ss := by
+  simp only [Evm.Functions.self_addr, runS_bind,
+    runS_readReg _ _ _ _ hmsg, runS_pure]
+
 /-! ## Host state (`StateT` layer) -/
 
 @[simp]
