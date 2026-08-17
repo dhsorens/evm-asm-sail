@@ -24,14 +24,27 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `u256` reduction. `StackRel.wf` is an EVM invariant, not a free lunch — do not
   drop it from hypotheses without a plan to prove preservation.
 
-- **`omega` fails on goals typed at `U256`/`word` abbrevs and on `Int` powers.**
-  Trigger: an equality whose `Eq` lives at `U256` (SpecRef) or `word` (`Evm`) —
-  omega matches types syntactically and won't see the `Nat` underneath; likewise
-  `(2 : Int) ^ 256` in a hypothesis or goal is opaque to omega (Nat powers are
-  fine). Wrong move: fight the goal with `unfold`/`simp` roulette. Right move:
-  `exact (by omega : <same statement ascribed at Nat>)` for the abbrev case;
-  rewrite `Int` powers to numerals via `show (2:Int)^(256:Nat) = <numeral> from
-  by decide` first (see `Representation/SignedWord.lean`, `fromSigned_eq`).
+- **`omega` is blind to any comparison/arithmetic NODE whose type argument is
+  an abbrev (`U256`/`word`/`Uint`/`gas_constant`), and to raw `Nat.le`/`Nat.lt`
+  spellings.** The node's instance is fixed at *elaboration* of whatever
+  statement introduced it; abbrev-typed operands can drag the whole binop to
+  the abbrev even with a `Nat` operand present, and `(x : Nat)` ascriptions on
+  variables do NOT reliably rescue it. Atoms of abbrev type *inside* an
+  ℕ-node are fine. The playbook (hard-won in the memory tranche):
+  1. Prefer inline `(by omega)` at a lemma-application site — the goal's node
+     comes from the lemma's ℕ-typed signature, so it parses.
+  2. Otherwise prove a ∀-quantified all-`Nat`-variable "key" clone
+     (`have key : ∀ a c : Nat, a - 3 - c = a - (3 + c) := fun a c => by omega`)
+     and close with `exact key _ _` — `exact` bridges defeq constants
+     (`G_verylow ≡ 3`, `mloadCost ≡ 3 + cost`) that omega cannot.
+  3. When restating a polluted hypothesis, lead the relation with a genuinely
+     ℕ-typed term and ascribe abbrev projections
+     (`g < 3 + ((… ).cost : Nat)`), or flip to `≥`/`=` with the ℕ side first;
+     verify by whether the atom shows up in omega's counterexample dump.
+  4. Never `rw [hlive]`-substitute a `Uint` projection INTO a goal you will
+     still omega — convert the hypothesis instead and bridge with `exact`.
+  `Int` powers: rewrite `(2:Int)^(256:Nat)` to a numeral via `decide` first
+  (see `Representation/SignedWord.lean`, `fromSigned_eq`).
 
 ## Stack geometry
 
@@ -138,13 +151,14 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
   application is fully concrete (no holes); see `runS_pop_body_ok`
   (`Opcodes/Pop.lean`).
-- **Structure-instance field values must not break across lines.**
-  Trigger: a theorem statement with `{ hs with stackFrames := <long term> }`
-  where the term wraps to a continuation line — parse error
-  `unexpected token '('; expected '}'`. Right move: keep the field value on one
-  physical line; shorten with `open … (name)` (e.g.
-  `open EvmAsm.Rv64.Accel (powMod)`) rather than fully-qualified names. See
-  `runS_exp_body_ok` (`Opcodes/Exp.lean`).
+- **A structure-instance field value must not START inline and then wrap.**
+  Trigger: `{ ss with regs := ss.regs.insert R\n (v…) }` — parse error
+  `unexpected token '('; expected '}'`. A value written entirely on its own
+  continuation line after `field :=` parses fine (Ternop's `writeListAt … ::
+  frest`); one that begins on the `:=` line and continues does not. Right
+  move: put the whole value on one physical line (its own line is fine);
+  shorten with `open … (name)` or a small named `def`
+  (`returnedStatus`, `Opcodes/Return.lean`). See also `runS_exp_body_ok`.
 - **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
   projection atoms that omega/simp can't merge.**
   Trigger: stating a relation or lemma hypothesis over a whole sigma value
@@ -165,6 +179,13 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   form), or `simp only` with the targeted lemmas
   (`Bool.and_eq_true, decide_eq_true_eq`) and `exact`. See the `if` rewrites
   in `Opcodes/Jumpi.lean`.
+- **`show` on a record-update projection can whnf-timeout; a `rfl` mini-lemma
+  cannot.** Trigger: `show ({hs with memoryBytes := X} : HostState).memoryBytes
+  .getD … = _` (or the equivalent goal restatement) hits a deterministic
+  `whnf` heartbeat timeout on the 31-field `HostState`. Right move: prove the
+  projection once as a top-level `rfl` lemma
+  (`private theorem hostState_set_memoryBytes … := rfl`) and `rw` with it —
+  instant. See `Relations/Memory.lean` / `Opcodes/Mload.lean`.
 - **`lake env lean <file>` checks against *stale imported oleans*.**
   Trigger: editing a `Representation/` file and immediately checking a
   dependent opcode file — phantom "unknown identifier" errors for lemmas you
