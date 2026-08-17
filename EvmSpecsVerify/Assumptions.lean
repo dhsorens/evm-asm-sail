@@ -40,6 +40,20 @@ EVM state can violate it, and whether it is eliminable by proving.
   theorems; eliminable only by bounding `g` globally (frame-entry invariant),
   future work.
 
+## Storage read agreement (SLOAD)
+
+* `SloadAgree` (Opcodes/Sload.lean) — the two sides' storage reads return
+  the same word for the owning account and popped slot: SpecRef's
+  `getStorage` walks the journalled tracker, the extraction's `k_sload`
+  misses through its tx/block caches into a keccak-hashed witness-trie
+  walk. Threaded hypothesis on `sload_step_equiv` only for the *value*;
+  warm/cold accounting and gas are proven outright (`WarmRel`,
+  Relations/Warm.lean). Quantified over the ambient warm stamps because
+  the extraction marks warm before reading. Violations would be a real
+  divergence between the state-tracker and the witness backend — none
+  known; eliminable by the world-state tranche's `StorageRel` (the
+  comparison-matrix "persistent storage" row).
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
