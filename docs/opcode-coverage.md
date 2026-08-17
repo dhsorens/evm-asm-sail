@@ -107,7 +107,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | unstated |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |
-| JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | unstated |
+| JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L499) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
 | PC | 0x58 | `iPc` | `execute_pc` | env | unstated |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
 | GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
@@ -115,8 +115,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
 | TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated |
 | MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
-| PUSH (n, w) | 0x5f–0x7f | `iPushN` | `execute_push` | stack (immediate via fetch) | unstated |
-| DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | unstated |
+| PUSH (n, w) | 0x5f–0x7f | `iPushN` | `execute_push` | stack (immediate via fetch) | **full** ([`push_step_equiv`](../EvmSpecsVerify/Opcodes/Push.lean#L253) — success/overflow/OOG, underflow unreachable; decode-fidelity hypothesis for the fetched immediate (MM-3 scope); MM-5 on double faults) |
+| DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | **full** ([`dup_step_equiv`](../EvmSpecsVerify/Opcodes/Dup.lean#L240) — success/underflow/overflow/OOG; MM-5 on double faults) |
 | SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | unstated |
 | LOG n | 0xa0–0xa4 | `iLogN` | `execute_log` | memory+logs | unstated |
 | DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | unstated |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 27 |
-| unstated | 62 |
+| full | 30 |
+| unstated | 59 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

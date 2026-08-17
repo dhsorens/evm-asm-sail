@@ -38,6 +38,33 @@ unreachable / ambiguity / needs investigation).
   (`top - 2`, not `top`) and is equally unobservable. Re-establish per class as new
   families land.
 
+## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
+
+- **Area**: stack-family opcodes whose SpecRef handler charges gas **before**
+  validating the stack shape: `iPushN`, `iDupN`, `iSwapN`
+  (InstructionsCore.lean:346–372). Contrast the ALU family, which pops first —
+  MM-1's kind-alignment argument covers only pop-first handlers.
+- **SpecRef**: `charge_gas` runs first; a state that is simultaneously out of
+  gas **and** stack-invalid throws `.outOfGas` before the depth/overflow check
+  is reached.
+- **`Evm`**: `validate_stack` runs before every handler; the same state halts
+  `StackUnderflow` / `StackOverflow` and the charge is never attempted.
+- **Trigger**: e.g. `DUP1` on an empty stack with `gasLeft < 3`; `PUSH1` with a
+  1024-deep stack and `gasLeft < 3`.
+- **Expected EVM behavior**: the Yellow Paper's exceptional halts are uniform —
+  consume all gas, discard the frame. The halt *kind* is diagnostic only, not
+  chain-observable.
+- **Fork**: all. **Reachability**: trivially reachable. **Severity**: none at
+  the chain observation boundary; visible only to our (stronger) kind-matching
+  relation.
+- **Likely cause**: intentional — the same YP-predicate hoisting as MM-1;
+  execution-specs (and SpecRef) inline the charge per the Python statement
+  order, which for PUSH/DUP/SWAP precedes the stack access.
+- **Disposition**: *intentional abstraction* — encoded as an explicit, documented
+  `StepResultRel.haltedChargeFirst` constructor (Relations/Outcome.lean) pairing
+  SpecRef `.outOfGas` with the extraction's stack-fault kind on exactly these
+  double-fault states. Single-fault states still align kind-for-kind.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.

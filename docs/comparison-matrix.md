@@ -15,9 +15,9 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 
 | component | SpecRef repr | `Evm` repr | relation | invariants | status |
 |---|---|---|---|---|---|
-| word | `U256 := Nat` (Types.lean:26) | `word := Nat` (Defs.lean:51) | `WordRel` (eq) | `< 2^256` (wf, both) | proven-alu-ops (all 26 ALU binop/unop/ternop/EXP step theorems + POP) |
-| pc | `Evm.pc : Uint` (Vm.lean:188) | `pc` register (`code_pointer := Nat`) + live `pc_in`/return arg of `execute` | `PcRel` | register authoritative at frame boundary; live value threaded (state-passing convention) | unrelated |
-| operand stack | `Evm.stack : List U256`, head = top (Vm.lean:189) | `HostState.stackFrames` head: bottom-indexed `List word` + `stack_top` register / live `top : StackTop := BitVec 64` cursor (HostAxioms.lean:1846) | `StackRel` (prefix-up-to-cursor refinement) | height = `top.toNat` ≤ 1024; SpecRef entries `< 2^256` | proven-alu-ops (preserved by `binop_step_equiv` / `unop_step_equiv` / `ternop_step_equiv` / `exp_step_equiv` / `pop_step_equiv`) |
+| word | `U256 := Nat` (Types.lean:26) | `word := Nat` (Defs.lean:51) | `WordRel` (eq) | `< 2^256` (wf, both) | proven-alu-ops (all 26 ALU binop/unop/ternop/EXP step theorems + POP/PUSH/DUP/JUMPI) |
+| pc | `Evm.pc : Uint` (Vm.lean:188) | `pc` register (`code_pointer := Nat`) + live `pc_in`/return arg of `execute` | `PcRel` | register authoritative at frame boundary; live value threaded (state-passing convention) | proven-step-boundary (every landed step theorem ties the returned pc to SpecRef's post-pc via `AluPost`, incl. PUSH immediates (`pc+1+n`) and taken jumps (`jumpi_step_equiv`); MM-4) |
+| operand stack | `Evm.stack : List U256`, head = top (Vm.lean:189) | `HostState.stackFrames` head: bottom-indexed `List word` + `stack_top` register / live `top : StackTop := BitVec 64` cursor (HostAxioms.lean:1846) | `StackRel` (prefix-up-to-cursor refinement) | height = `top.toNat` ≤ 1024; SpecRef entries `< 2^256` | proven-alu-ops (preserved by the binop/unop/ternop shape theorems and `exp_step_equiv` / `pop_step_equiv` / `push_step_equiv` / `dup_step_equiv` / `jumpi_step_equiv`) |
 | regular gas | `Evm.gasLeft : Uint` (Vm.lean:192) | `gas_remaining` register (`gas := Nat`) / live `g : Nat` argument | `GasRel` | live value threaded during step | proven-alu-ops (charge/OOG both sides, constant costs via the shape theorems; exponent-dependent EIP-160 cost via `exp_gas_eq` in `exp_step_equiv`) |
 | state gas reservoir | `Evm.stateGasLeft : Uint` (Vm.lean:193) | `state_gas_remaining` register | `GasRel.reservoir` | — | proven-alu-ops (success path; failure paths relate halt kind only — the extraction refills at `exc_halt`) |
 | state gas spilled | `Evm.stateGasSpilled : Uint` (Vm.lean:207) | `state_gas_spilled` register | `GasRel.spilled` | — | proven-alu-ops (success path; see reservoir row) |
@@ -26,7 +26,7 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | memory (bytes) | `Evm.memory : Bytes` (Vm.lean:190) | `HostState.memoryBytes : Array byte` + `evm_memory` register (`EvmMemorySlice`, Sigma-packed) / live `mem` argument | `MemoryRel` | frame-scoped via `memoryFrames` | unrelated |
 | memory size | `memory.length` (implicit) | `EvmMemorySlice` len index | `MemoryRel` | expansion in words | unrelated |
 | code | `Evm.code : Bytes` (Vm.lean:191) | `frame_code` register (`Code`) + `HostState.codeBytes`/`codeDb` | `CodeRel` | — | unrelated |
-| valid jumpdests | `Evm.validJumpDestinations : List Uint` (Vm.lean:194) | `HostState.jumpdestTables : List (jump_table_index × List code_pointer)` | `JumpdestRel` | — | unrelated |
+| valid jumpdests | `Evm.validJumpDestinations : List Uint` (Vm.lean:194) | `HostState.jumpdestTables : List (jump_table_index × List code_pointer)` + `frame_code` register's `jumpdests` index | `JumpdestRel` (Relations/Jumpdest.lean: set-membership ↔ range-guarded table lookup) | — | proven-jumpi (hypothesis + preserved in `JumpiPost`, `jumpi_step_equiv`) |
 | return data | `Evm.returnData : Bytes` (Vm.lean:201) | `returndata` register (`OutputSlice`) + `HostState.outputBytes` | `ReturnDataRel` | — | unrelated |
 | output | `Evm.output : Bytes` (Vm.lean:199) | frame output via `frame_output` / `OutputSlice` | `OutputRel` | — | unrelated |
 | logs | `Evm.logs : List Log` (Vm.lean:195) | `HostState.logs : Array LogRecordRow` + `logBytes` arena | `LogsRel` | — | unrelated |
@@ -65,7 +65,8 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 
 | SpecRef `EvmError` (Vm.lean:60) | `Evm` `ExceptionKind` | notes |
 |---|---|---|
-| `.stackUnderflow` | `StackUnderflow` | Evm checks in `validate_stack` *before* handler; SpecRef throws mid-handler at `stackPop` |
-| `.stackOverflow` | `StackOverflow` | Evm pre-validates height−inputs+outputs > 1024; SpecRef throws at `stackPush` |
+| `.stackUnderflow` | `StackUnderflow` | Evm checks in `validate_stack` *before* handler; SpecRef throws mid-handler at `stackPop`. Charge-first handlers (PUSH/DUP/SWAP) diverge on double-fault states — MM-5, `StepResultRel.haltedChargeFirst` |
+| `.stackOverflow` | `StackOverflow` | Evm pre-validates height−inputs+outputs > 1024; SpecRef throws at `stackPush`. MM-5 applies to charge-first handlers |
 | `.outOfGas` | `OutOfGas` | SpecRef pops before charging; Evm charges before popping (see mismatches.md #2) |
-| (others: revert, invalid jump/opcode, write protection, …) | (`InvalidJump`, `InvalidOpcode`, `StaticViolation`, …) | mapped as their opcodes enter scope |
+| `.invalidJumpDest` | `InvalidJump` | mapped by `jumpi_step_equiv` (`do_jump` range + table check vs `validJumpDestinations`) |
+| (others: revert, invalid opcode, write protection, …) | (`InvalidOpcode`, `StaticViolation`, …) | mapped as their opcodes enter scope |
