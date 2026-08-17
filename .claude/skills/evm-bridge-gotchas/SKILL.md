@@ -211,7 +211,10 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   pattern and the chain stalls with a huge un-normalized do goal. Right
   move: one `runR_<helper>_<case>` lemma per outcome, then chain the caller
   through those (pattern: `runR_accessGasCost_warm/cold`,
-  `Opcodes/Balance.lean`).
+  `Opcodes/Balance.lean`). Conversely, INLINE `(← readReg r).field`
+  expressions are flattened by the do elaborator — chain
+  `runS_readReg`/`runS_pure` directly; a compound `show`-lemma over-groups
+  the binds and fails to unify (`execute_caller`, `Opcodes/Caller.lean`).
 - **Extraction types with derived `BEq` have no `LawfulBEq`** — `beq_iff_eq`
   / `bne_iff_ne` / assoc-list lemmas stall with "failed to synthesize
   LawfulBEq". Add a local instance: structures via field `beq_iff_eq`
