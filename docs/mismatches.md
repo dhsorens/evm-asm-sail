@@ -119,8 +119,14 @@ unreachable / ambiguity / needs investigation).
 - **Open**: whether SpecRef's repriced storage/account constants equal the `Evm` side's
   `G_cold_sload`-classic + `G_amsterdam_*` state-gas split once both dimensions are
   summed per operation. To be resolved when the storage tranche starts.
+- **Verified 2026-08-17 (SLOAD)**: the SLOAD access constants agree at Amsterdam —
+  `sload_cost` returns `G_warm_access = 100 = WARM_ACCESS` (warm) and, on the
+  `fork ≥ Amsterdam` path, `G_amsterdam_cold_storage_access = 3000 =
+  COLD_STORAGE_ACCESS` (cold); the classic `G_cold_sload = 2100` is dead at this fork.
+  Machine-checked by `runS_sload_cost` + `sload_step_equiv` (Opcodes/Sload.lean).
+  Remaining open subset: SSTORE and the account-access family.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
-- **Disposition**: *needs investigation* (storage/account subset only).
+- **Disposition**: *needs investigation* (SSTORE/account subset only).
 
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 

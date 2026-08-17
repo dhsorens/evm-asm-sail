@@ -157,11 +157,15 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Opcodes/Mload.lean` / `Opcodes/Mstore.lean` — full `StepResultRel`
       (`mload_step_equiv` / `mstore_step_equiv`): split-charge equivalence,
       grow/in-window success, u32 range check discharged from MM-6
-- [ ] SLOAD — needs `WarmRel` (epoch-stamped `warmSlots` vs SpecRef's
-      accessed-key set), `StorageRel` over `storageTx/storageBlock`, the
-      `k_sload`/`k_slot_mark_warm` host lemmas, and resolves part of MM-2's
-      open repriced-constant question (`sload_cost` vs
-      `WARM_ACCESS`/`COLD_STORAGE_ACCESS`)
+- [x] `Relations/Warm.lean` + `Opcodes/Sload.lean` — SLOAD
+      (`sload_step_equiv`, full `StepResultRel`): `WarmRel` relates the
+      accessed-key set to the epoch-stamped `warmSlots` (via the
+      `natToBytesBE` decode roundtrip → `toBeBytes32` injectivity), warm/cold
+      accounting and gas proven outright — resolving MM-2's SLOAD constants
+      (`100`/`3000` agree at Amsterdam); the value read sits behind the
+      ledgered `SloadAgree` hypothesis (spec `getStorage` = kernel `k_sload`,
+      quantified over ambient warm stamps), to be discharged by the
+      world-state tranche's `StorageRel`
 - [x] `Opcodes/Return.lean` — RETURN (`return_step_equiv`): the normal halt
       needed **no** new `StepResultRel` case — `iReturn` is monadically a
       success with `running := false` in state, so the RETURN-specific

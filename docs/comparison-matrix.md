@@ -36,14 +36,14 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 | suspended frames | (Python-style recursion in `process_message`, fuelled) | `HostState.continuationFrames : List FrameContinuation` + `stackFrames`/`memoryFrames` tails | `FramesRel` | tranche ≥ 3 | unrelated |
 | accounts to delete | `Evm.accountsToDelete : List Address` (Vm.lean:200) | journal/host equivalent (tbd) | tbd | — | unrelated |
 | accessed addresses (warm) | `Evm.accessedAddresses : List Address` (Vm.lean:203) | `HostState.warmAddresses : List (address × block_access_index)` (epoch-stamped) | `WarmRel` | epoch vs set semantics | unrelated |
-| accessed storage keys | `Evm.accessedStorageKeys : List (Address × Bytes32)` (Vm.lean:204) | `HostState.warmSlots : List (StorageKey × block_access_index)` | `WarmRel` | — | unrelated |
+| accessed storage keys | `Evm.accessedStorageKeys : List (Address × Bytes32)` (Vm.lean:204) | `HostState.warmSlots : List (StorageKey × block_access_index)` | `WarmRel` (Relations/Warm.lean: set membership ↔ epoch-current stamp, via the `toBeBytes32` decode roundtrip) | epoch vs set semantics; SpecRef keys are 32-byte BE encodings | proven-sload (hypothesis + preserved by `sload_step_equiv` on every path that marks) |
 
 ## World / transaction components (tranche ≥ 3)
 
 | component | SpecRef repr | `Evm` repr | relation | invariants | status |
 |---|---|---|---|---|---|
 | accounts | `BlockState`/`TransactionState` journals (StateTracker.lean:87,107) | `HostState.accountTx/accountBlock : List (address × AcctValue)` (+ `Evm.Contracts.ReferenceWorldState` spec layer, unconnected) | `WorldRel` | HostState↔Contracts connective tissue does not exist yet | unrelated |
-| persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | — | unrelated |
+| persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | SLOAD reads bridged meanwhile by the ledgered `SloadAgree` hypothesis (Opcodes/Sload.lean, Assumptions.lean) — discharged when this row is proven | unrelated |
 | transient storage | (in `TransactionState`) | `HostState.transient : List (StorageKey × word)` | `TransientRel` | — | unrelated |
 | journal / revert | journaled tracker (StateTracker.lean) | `HostState.journal : List JournalFrame` (HostAxioms.lean:1092) | `JournalRel` | snapshot vs replay semantics | unrelated |
 | tx env | `TransactionEnvironment` (Vm.lean:146) | `k_tx` register (`TxEnv`) | `TxEnvRel` | — | unrelated |

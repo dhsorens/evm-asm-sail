@@ -104,7 +104,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MLOAD | 0x51 | `iMload` | `execute_mload` | memory | **full** ([`mload_step_equiv`](../EvmSpecsVerify/Opcodes/Mload.lean#L400) — success (grow/in-window)/underflow/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L388) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
-| SLOAD | 0x54 | `iSload` | `execute_sload` | storage | unstated |
+| SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L503) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis — see `Assumptions.lean`) |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L499) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 33 |
-| unstated | 56 |
+| full | 34 |
+| unstated | 55 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

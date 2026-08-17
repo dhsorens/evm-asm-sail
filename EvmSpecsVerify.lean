@@ -51,3 +51,5 @@ import EvmSpecsVerify.Relations.Memory
 import EvmSpecsVerify.Opcodes.Mload
 import EvmSpecsVerify.Opcodes.Mstore
 import EvmSpecsVerify.Opcodes.Return
+import EvmSpecsVerify.Relations.Warm
+import EvmSpecsVerify.Opcodes.Sload
