@@ -65,6 +65,12 @@ theorem runR_bind_err {m : EvmM α} {k : α → EvmM β} {s s' : Machine}
 theorem runR_getEvm (s : Machine) :
     runR EvmM.getEvm s = .ok (.ok s.evm, s) := rfl
 
+/-- The functor-map reading shape (`f <$> getEvm`) that `chargeWithMemory`
+and similar helpers compile to. -/
+theorem runR_getEvm_map {α : Type} (f : EvmAsm.Stateless.SpecRef.Evm → α)
+    (s : Machine) :
+    runR ((f <$> EvmM.getEvm : EvmM α)) s = .ok (.ok (f s.evm), s) := rfl
+
 @[simp]
 theorem runR_modifyEvm (f : Evm → Evm) (s : Machine) :
     runR (EvmM.modifyEvm f) s = .ok (.ok (), { s with evm := f s.evm }) := rfl
