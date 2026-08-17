@@ -13,11 +13,11 @@ then either falls through (`pc+1`), jumps (`pc := dest` after checking
 `execute_jumpi` charges first, pops, and validates through `do_jump`
 (`frame_jumpdest_valid`: range check + per-code jump-table lookup). The two
 validation representations are tied by [`JumpdestRel`](../Relations/Jumpdest.lean);
-the success `Post` (`JumpiPost`) preserves it alongside `AluPost` — the fall
+the success `Post` (`JumpiPost`) preserves it alongside `BasePost` — the fall
 and jump cases both leave code, tables, and the valid set untouched.
 
 MM-4 note: on fall-through the returned pc is `pc_in = pc + 1` as for ALU;
-on a taken jump both sides land on `dest` exactly, so the same `AluPost`
+on a taken jump both sides land on `dest` exactly, so the same `BasePost`
 pc equation covers both. Pops precede the SpecRef charge, so — unlike
 PUSH/DUP (MM-5) — all halt kinds align: success ×2 / underflow ×2 / OOG /
 invalid jump.
@@ -33,10 +33,10 @@ namespace EvmSpecsVerify
 open EvmAsm.Stateless.SpecRef
 open Evm.Defs
 
-/-- Success post for control flow: `AluPost` plus jumpdest preservation. -/
+/-- Success post for control flow: `BasePost` plus jumpdest preservation. -/
 def JumpiPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
-  AluPost mem sR' step hs' ss' ∧ JumpdestRel sR' hs' ss'
+  BasePost mem sR' step hs' ss' ∧ JumpdestRel sR' hs' ss'
 
 theorem word_is_zero_eq (w : Nat) :
     Evm.Functions.word_is_zero w = (w == 0) := by

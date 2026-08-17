@@ -462,7 +462,7 @@ warm address relation on the post-states. -/
 def BalancePost (pid : Evm.Defs.address → PrecompileId)
     (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
-  AluPost mem sR' step hs' ss' ∧ WarmAddrRel pid sR' hs'
+  BasePost mem sR' step hs' ss' ∧ WarmAddrRel pid sR' hs'
 
 open Evm.Functions in
 /-- **BALANCE, all reachable outcomes.** Warm/cold accounting and gas are

@@ -8,7 +8,7 @@ import EvmSpecsVerify.Representation.SpecRefLemmas
 First stack-manipulation opcode: `iPop` is `pop → charge → pc+1` (discarding
 the popped word); `execute_pop` is `charge → pop`, cursor retreat only — no
 write, so the host state passes through untouched. The success Post is
-[`AluPost`](../Relations/Alu.lean) (same observation footprint: stack, gas,
+[`BasePost`](../Relations/Base.lean) (same observation footprint: stack, gas,
 pc, memory pass-through). Reachable outcomes: success / stack underflow /
 out-of-gas (overflow unreachable: the height decreases).
 
@@ -177,7 +177,7 @@ theorem pop_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iPop sRef)
+    StepResultRel (BasePost mem) (runR iPop sRef)
       (runS (Evm.Functions.execute (.POP ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

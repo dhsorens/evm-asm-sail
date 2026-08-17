@@ -29,7 +29,7 @@ theorem gt_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iGt sRef)
+    StepResultRel (BasePost mem) (runR iGt sRef)
       (runS (Evm.Functions.execute (.GT ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.GT ()) G_verylow alu_gt iGt GasCosts.OPCODE_GT
     (fun x y => boolPush (x > y)) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩

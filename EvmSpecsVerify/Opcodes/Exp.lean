@@ -528,7 +528,7 @@ theorem exp_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iExp sRef)
+    StepResultRel (BasePost mem) (runR iExp sRef)
       (runS (Evm.Functions.execute (.EXP ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

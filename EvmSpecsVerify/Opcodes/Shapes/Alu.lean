@@ -1,11 +1,11 @@
-import EvmSpecsVerify.Relations.Alu
+import EvmSpecsVerify.Relations.Base
 import Batteries.Tactic.OpenPrivate
 
 /-!
 # Shared ALU harvest facts
 
 Well-formedness lemmas every ALU opcode file uses when instantiating a
-shape. The success Post is [`AluPost`](../../Relations/Alu.lean) (re-exported
+shape. The success Post is [`BasePost`](../../Relations/Base.lean) (re-exported
 by this import).
 
 Shape files ([`Binop`](Binop.lean) / [`Unop`](Unop.lean) /

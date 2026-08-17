@@ -8,7 +8,7 @@ Lean proofs that SpecRef (from **evm-asm**) and the Lean extraction of
 | Directory | Role |
 | --- | --- |
 | [`Representation/`](Representation/README.md) | **How each side runs** — [`runR`](Representation/SpecRefLemmas.lean#L24) / [`runS`](Representation/EvmMonad.lean#L32), stack/gas/word characterizations |
-| [`Relations/`](Relations/README.md) | **When the sides correspond** — [`StateRel`](Relations/State.lean#L36), [`StepResultRel`](Relations/Outcome.lean#L53), [`AluPost`](Relations/Alu.lean#L24), … |
+| [`Relations/`](Relations/README.md) | **When the sides correspond** — [`StateRel`](Relations/State.lean#L36), [`StepResultRel`](Relations/Outcome.lean#L53), [`BasePost`](Relations/Base.lean#L24), … |
 | [`Opcodes/`](Opcodes/) | Per-opcode simulation theorems — start from [`Add.lean`](Opcodes/Add.lean) |
 | [`Opcodes/Shapes/`](Opcodes/Shapes/README.md) | Shared step-skeleton proofs ([`binop_step_equiv`](Opcodes/Shapes/Binop.lean#L264), …) |
 | [`Assumptions.lean`](Assumptions.lean) | Explicit trust base / deferred hypotheses |
@@ -19,7 +19,7 @@ Lean proofs that SpecRef (from **evm-asm**) and the Lean extraction of
      └──────── Representation/ ─────────┘
                     │
                     ▼
-              Relations/          ←  StateRel, AluPost, StepResultRel, …
+              Relations/          ←  StateRel, BasePost, StepResultRel, …
                     │
                     ▼
                Opcodes/           ←  per-opcode StepResultRel

@@ -7,7 +7,7 @@ import EvmSpecsVerify.Relations.Stack
 import EvmSpecsVerify.Relations.Gas
 import EvmSpecsVerify.Relations.Outcome
 import EvmSpecsVerify.Relations.State
-import EvmSpecsVerify.Relations.Alu
+import EvmSpecsVerify.Relations.Base
 import EvmSpecsVerify.Assumptions
 import EvmSpecsVerify.Opcodes.Shapes.Alu
 import EvmSpecsVerify.Opcodes.Shapes.Binop

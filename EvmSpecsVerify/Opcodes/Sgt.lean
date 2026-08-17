@@ -34,7 +34,7 @@ theorem sgt_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iSgt sRef)
+    StepResultRel (BasePost mem) (runR iSgt sRef)
       (runS (Evm.Functions.execute (.SGT ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.SGT ()) G_verylow alu_sgt iSgt GasCosts.OPCODE_SGT
     (fun x y => boolPush (toSigned x > toSigned y)) rfl rfl

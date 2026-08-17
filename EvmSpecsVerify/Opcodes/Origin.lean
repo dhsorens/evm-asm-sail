@@ -220,7 +220,7 @@ theorem origin_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hpc : pc_in = sRef.evm.pc + 1)
     (htx : ss.regs.get? Register.k_tx = some txp)
     (horigin : txp.2.origin.toList = sRef.evm.message.txEnv.origin) :
-    StepResultRel (AluPost mem) (runR iOrigin sRef)
+    StepResultRel (BasePost mem) (runR iOrigin sRef)
       (runS (Evm.Functions.execute (.ORIGIN ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

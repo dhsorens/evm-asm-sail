@@ -127,7 +127,7 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       (`pop_step_equiv`, full `StepResultRel`; both sides order pop/charge
       differently — unobservable, halted post-stacks are out of the
       observation boundary). Residual: DUP/SWAP/PUSH validators (M2)
-- [x] `Relations/Alu.lean` + `Opcodes/Shapes/Alu.lean` — `AluPost` and wf lemmas
+- [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
 - [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables

@@ -1,5 +1,5 @@
 import EvmSpecsVerify.Relations.State
-import EvmSpecsVerify.Relations.Alu
+import EvmSpecsVerify.Relations.Base
 import EvmSpecsVerify.Representation.EvmMemory
 
 /-!

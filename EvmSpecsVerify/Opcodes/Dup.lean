@@ -242,7 +242,7 @@ theorem dup_step_equiv (n : Nat) (hn1 : 1 ≤ n)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR (iDupN (n - 1)) sRef)
+    StepResultRel (BasePost mem) (runR (iDupN (n - 1)) sRef)
       (runS (Evm.Functions.execute (.DUP n) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

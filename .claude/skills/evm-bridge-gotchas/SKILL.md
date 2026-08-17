@@ -78,7 +78,7 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 - `Evm` `fetch` advances past the opcode before `execute`; ALU handlers return
   `pc_in` unchanged.
 - Statement shape for ALU: hypothesis `pc_in = sRef.evm.pc + 1`, conclusion
-  ties returned pc to SpecRef post-pc (`AluPost`-style). JUMP / JUMPI / PUSH will
+  ties returned pc to SpecRef post-pc (`BasePost`-style). JUMP / JUMPI / PUSH will
   need extra care — do not copy the ALU pc hypothesis blindly.
 
 ## Monads and run shapes
@@ -141,7 +141,7 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   to the simp set first; see `word_bit_length_eq`
   (`Representation/BitwiseWord.lean`).
 - **`omega` won't reduce tuple projections in `StepResultRel` post-state goals.**
-  Trigger: after `refine StepResultRel.success ?_`, `AluPost`/`StateRel` goals
+  Trigger: after `refine StepResultRel.success ?_`, `BasePost`/`StateRel` goals
   mention the step tuple's projections (`(pc_in, top', mem, g').2.1.toNat`),
   which omega treats as atoms distinct from `top'.toNat` — "could not prove"
   with a baffling counterexample naming the projection. Right move: `show` the

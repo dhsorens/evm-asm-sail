@@ -34,7 +34,7 @@ theorem not_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iNot sRef)
+    StepResultRel (BasePost mem) (runR iNot sRef)
       (runS (Evm.Functions.execute (.NOT ()) pc_in top mem g) hs ss) :=
   unop_step_equiv (.NOT ()) G_verylow alu_not iNot
     GasCosts.OPCODE_NOT (fun x => U256_MAX - x) rfl rfl

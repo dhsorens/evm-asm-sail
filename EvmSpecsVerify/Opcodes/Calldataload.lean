@@ -227,7 +227,7 @@ theorem calldataload_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hpc : pc_in = sRef.evm.pc + 1)
     (hcdreg : ss.regs.get? Register.calldata = some cd)
     (hcdrel : CalldataRel sRef.evm.message.data hs cd) :
-    StepResultRel (AluPost mem) (runR iCalldataload sRef)
+    StepResultRel (BasePost mem) (runR iCalldataload sRef)
       (runS (Evm.Functions.execute (.CALLDATALOAD ()) pc_in top mem g)
         hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel

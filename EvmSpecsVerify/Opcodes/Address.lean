@@ -216,7 +216,7 @@ theorem address_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (haddr : ∀ msg : Evm.Defs.Message,
       ss.regs.get? Register.message = some msg →
       msg.address.toList = sRef.evm.message.currentTarget) :
-    StepResultRel (AluPost mem) (runR iAddress sRef)
+    StepResultRel (BasePost mem) (runR iAddress sRef)
       (runS (Evm.Functions.execute (.ADDRESS ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

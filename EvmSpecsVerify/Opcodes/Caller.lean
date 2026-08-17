@@ -210,7 +210,7 @@ theorem caller_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hcaller : ∀ msg : Evm.Defs.Message,
       ss.regs.get? Register.message = some msg →
       msg.caller.toList = sRef.evm.message.caller) :
-    StepResultRel (AluPost mem) (runR iCaller sRef)
+    StepResultRel (BasePost mem) (runR iCaller sRef)
       (runS (Evm.Functions.execute (.CALLER ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

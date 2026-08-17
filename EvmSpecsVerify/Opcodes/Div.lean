@@ -34,7 +34,7 @@ theorem div_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (AluPost mem) (runR iDiv sRef)
+    StepResultRel (BasePost mem) (runR iDiv sRef)
       (runS (Evm.Functions.execute (.DIV ()) pc_in top mem g) hs ss) :=
   binop_step_equiv (.DIV ()) G_low alu_div iDiv GasCosts.OPCODE_DIV
     (fun x y => if y == 0 then 0 else x / y) rfl rfl ⟨rfl, fun _ _ _ _ => rfl⟩
