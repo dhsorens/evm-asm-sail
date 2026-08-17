@@ -61,6 +61,12 @@ theorem <op>_step_equiv
 
 Requirements:
 
+- **Name any structure-update field value that won't fit on one physical
+  line as a `def` BEFORE writing the statement** (`returnedStatus`,
+  `stoppedStatus`, `wsAfterMark`, `cdWord`). Multi-line values inside
+  `{ x with field := … }` do not parse (see evm-bridge-gotchas), and this
+  keeps getting rediscovered one parse error at a time — pre-empt it at
+  drafting time.
 - Full inductive `StepResultRel` — not success-only.
 - Thread `AmsterdamProfile` / register hypotheses as in existing `StateRel` /
   `StepRel` usage.

@@ -40,10 +40,11 @@ unreachable / ambiguity / needs investigation).
 
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
 
-- **Area**: stack-family opcodes whose SpecRef handler charges gas **before**
-  validating the stack shape: `iPushN`, `iDupN`, `iSwapN`
-  (InstructionsCore.lean:346–372). Contrast the ALU family, which pops first —
-  MM-1's kind-alignment argument covers only pop-first handlers.
+- **Area**: opcodes whose SpecRef handler charges gas **before** validating
+  the stack shape: `iPushN`, `iDupN`, `iSwapN` (InstructionsCore.lean:346–372)
+  and the charge-first env pushers (`iAddress`, `iOrigin`, `iCaller`, …,
+  InstructionsEnv.lean). Contrast the ALU family, which pops first — MM-1's
+  kind-alignment argument covers only pop-first handlers.
 - **SpecRef**: `charge_gas` runs first; a state that is simultaneously out of
   gas **and** stack-invalid throws `.outOfGas` before the depth/overflow check
   is reached.
@@ -64,6 +65,30 @@ unreachable / ambiguity / needs investigation).
   `StepResultRel.haltedChargeFirst` constructor (Relations/Outcome.lean) pairing
   SpecRef `.outOfGas` with the extraction's stack-fault kind on exactly these
   double-fault states. Single-fault states still align kind-for-kind.
+
+## MM-6: u32 memory space — `memory_access` fatal-errors where SpecRef extends
+
+- **Area**: memory-family opcodes (MLOAD/MSTORE/MSTORE8/RETURN/REVERT/copies).
+- **SpecRef**: memory is an unbounded `Bytes`; any offset is reachable if the
+  quadratic expansion charge is affordable.
+- **`Evm`**: memory offsets/lengths live in a u32 space; after the expansion
+  charge succeeds, `memory_access` (Gas.lean:684) **fatal-errors**
+  (`ExecutionInvalid`, a spec abort — not an EVM halt) when
+  `start + size > 2^32 - 1`.
+- **Trigger**: a frame whose live gas can afford `mem_cost (2^27)` words
+  (≈ `3.5 × 10^13` gas) reaching for the last u32 page. The boundary cases
+  cost identical gas (`required = 2^32 - 31` vs `2^32`), so no charge-side
+  reasoning separates them — only a gas *budget* does.
+- **Expected EVM behavior**: real block gas limits (~3.6 × 10^7) sit about
+  eight orders of magnitude below the bound, so the fatal path is
+  unreachable in any valid chain execution.
+- **Fork**: all. **Reachability**: only with unbounded gas (our `g : Nat` is
+  unbounded). **Severity**: none under real budgets; a genuine model-boundary
+  divergence at unbounded gas.
+- **Disposition**: *intentional abstraction* (zkVM guest memory bound) —
+  threaded as the `MemGasSafe` hypothesis (Relations/Memory.lean): the frame's
+  gas cannot pay for word count `2^27`. Ledgered in `Assumptions.lean`;
+  `safe_required_bound` discharges the range check from it.
 
 ## MM-4: Step-boundary pc convention
 
@@ -95,8 +120,20 @@ unreachable / ambiguity / needs investigation).
 - **Open**: whether SpecRef's repriced storage/account constants equal the `Evm` side's
   `G_cold_sload`-classic + `G_amsterdam_*` state-gas split once both dimensions are
   summed per operation. To be resolved when the storage tranche starts.
+- **Verified 2026-08-17 (SLOAD)**: the SLOAD access constants agree at Amsterdam —
+  `sload_cost` returns `G_warm_access = 100 = WARM_ACCESS` (warm) and, on the
+  `fork ≥ Amsterdam` path, `G_amsterdam_cold_storage_access = 3000 =
+  COLD_STORAGE_ACCESS` (cold); the classic `G_cold_sload = 2100` is dead at this fork.
+  Machine-checked by `runS_sload_cost` + `sload_step_equiv` (Opcodes/Sload.lean).
+- **Verified 2026-08-17 (BALANCE + env pushers)**: the account-access constants agree at
+  Amsterdam — warm `100` (`WARM_ACCESS` = `G_warm_access`), cold account `3000`
+  (`COLD_ACCOUNT_ACCESS` = `G_amsterdam_cold_account_access`, the `fork ≥ Amsterdam`
+  path of `account_cost`); and `OPCODE_ADDRESS`/`OPCODE_ORIGIN` `= 2 = G_base`.
+  Machine-checked by `runS_account_cost` + `balance_step_equiv` and the
+  ADDRESS/ORIGIN step theorems. Remaining open subset: SSTORE and the
+  CALL/CREATE-family account writes.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
-- **Disposition**: *needs investigation* (storage/account subset only).
+- **Disposition**: *needs investigation* (SSTORE/account subset only).
 
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 

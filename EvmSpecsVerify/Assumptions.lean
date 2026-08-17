@@ -29,6 +29,64 @@ EVM state can violate it, and whether it is eliminable by proving.
   registers present in the register file. Guaranteed by `sail_model_init`
   + the interpreter's write discipline.
 
+## Gas budget (memory family)
+
+* `MemGasSafe` (Relations/Memory.lean) — the frame's live gas plus the cost
+  already sunk into memory stays below `mem_cost (2^27)` ≈ `3.5 × 10^13`,
+  the point where the extraction's u32 memory space could be exhausted
+  (mismatch ledger MM-6: `memory_access` spec-aborts there, SpecRef extends).
+  Real block gas limits are ~8 orders of magnitude smaller, so every real
+  execution satisfies it. Threaded hypothesis on the memory-family step
+  theorems; eliminable only by bounding `g` globally (frame-entry invariant),
+  future work.
+
+## Storage read agreement (SLOAD)
+
+* `SloadAgree` (Opcodes/Sload.lean) — the two sides' storage reads return
+  the same word for the owning account and popped slot: SpecRef's
+  `getStorage` walks the journalled tracker, the extraction's `k_sload`
+  misses through its tx/block caches into a keccak-hashed witness-trie
+  walk. Threaded hypothesis on `sload_step_equiv` only for the *value*;
+  warm/cold accounting and gas are proven outright (`WarmRel`,
+  Relations/Warm.lean). Quantified over the ambient warm stamps because
+  the extraction marks warm before reading. Violations would be a real
+  divergence between the state-tracker and the witness backend — none
+  known; eliminable by the world-state tranche's `StorageRel` (the
+  comparison-matrix "persistent storage" row).
+
+## Account read agreement + address warmth (BALANCE)
+
+* `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
+  account reads: SpecRef's journalled `getAccount` and the kernel's
+  `k_get_balance` return the same balance, quantified over the ambient
+  address stamps. Eliminable by the world tranche's account relation.
+* `WarmAddrRel` (Relations/WarmAddr.lean) — SpecRef's `accessedAddresses`
+  vs the extraction's epoch stamps, **modulo precompiles**: the extraction
+  short-circuits active precompiles as always warm, SpecRef prewarms them
+  into the set at transaction start. The relation is the step-level form
+  of that prewarm invariant; discharged at tx level (M3).
+* `hpid` (classifier run shape, `balance_step_equiv`) — the precompile
+  classifier `precompile_id_for_address` returns a fixed value per address
+  and leaves state untouched. It reads only the profile register, so this
+  is mechanically provable (a ~17-way address case split); kept as a
+  hypothesis to keep the BALANCE slice bounded, dischargeable any time.
+
+## Message-field ties and invariants (env family)
+
+* Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`,
+  `hcdreg`/`hcdrel`) — the extraction's `message`/`k_tx`/`calldata`
+  registers carry the same frame data as SpecRef's `Message`. These are
+  fragments of the future `MessageRel`/`TxEnvRel`, threaded per opcode
+  until the CALL family relates whole frames; established at frame entry.
+* `hwfv` (`callvalue_step_equiv`) — `message.value < 2^256`. A message
+  invariant neither side states locally; maintained by both constructions,
+  discharged at frame entry (M3).
+* `CalldataRel` (Relations/Calldata.lean) covers both calldata windows
+  (top-frame `InputCalldata` and nested-frame `MemoryCalldata`) — the read
+  path is fully proven; what remains for the CALL family is establishing
+  the nested window at frame entry (CALL sets up a parent-memory window
+  that reads back the child's `message.data`).
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the

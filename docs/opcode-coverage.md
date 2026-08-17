@@ -29,7 +29,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
-| STOP | 0x00 | `iStop` | `execute_stop` | system | unstated |
+| STOP | 0x00 | `iStop` | `execute_stop` | system | **full** ([`stop_step_equiv`](../EvmSpecsVerify/Opcodes/Stop.lean#L94) — the free normal halt is the only reachable outcome: 0-in/0-out excludes stack faults, no gas charge; `StopPost` = `ReturnPost` minus output) |
 | ADD | 0x01 | `iAdd` | `execute_add` | binop | **full** ([`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out) |
 | MUL | 0x02 | `iMul` | `execute_mul` | binop | **full** ([`mul_step_equiv`](../EvmSpecsVerify/Opcodes/Mul.lean#L26) — success/underflow/OOG; overflow unreachable) |
 | SUB | 0x03 | `iSub` | `execute_sub` | binop | **full** ([`sub_step_equiv`](../EvmSpecsVerify/Opcodes/Sub.lean#L30) — success/underflow/OOG; overflow unreachable) |
@@ -67,12 +67,12 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
-| ADDRESS | 0x30 | `iAddress` | `execute_address` | env | unstated |
-| BALANCE | 0x31 | `iBalance` | `execute_balance` | env+world | unstated |
-| ORIGIN | 0x32 | `iOrigin` | `execute_origin` | env | unstated |
-| CALLER | 0x33 | `iCaller` | `execute_caller` | env | unstated |
-| CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | unstated |
-| CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | unstated |
+| ADDRESS | 0x30 | `iAddress` | `execute_address` | env | **full** ([`address_step_equiv`](../EvmSpecsVerify/Opcodes/Address.lean#L212) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
+| BALANCE | 0x31 | `iBalance` | `execute_balance` | env+world | **full** ([`balance_step_equiv`](../EvmSpecsVerify/Opcodes/Balance.lean#L472) — success (warm/cold)/underflow/OOG ×2; `WarmAddrRel` (prewarm invariant + classifier shape hypotheses), value behind ledgered `BalanceAgree` — see `Assumptions.lean`) |
+| ORIGIN | 0x32 | `iOrigin` | `execute_origin` | env | **full** ([`origin_step_equiv`](../EvmSpecsVerify/Opcodes/Origin.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie hypothesis) |
+| CALLER | 0x33 | `iCaller` | `execute_caller` | env | **full** ([`caller_step_equiv`](../EvmSpecsVerify/Opcodes/Caller.lean#L205) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
+| CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | **full** ([`callvalue_step_equiv`](../EvmSpecsVerify/Opcodes/Callvalue.lean#L206) — success/overflow/OOG/MM-5 double fault; codec-free, message-value wf hypothesized) |
+| CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | **full** ([`calldataload_step_equiv`](../EvmSpecsVerify/Opcodes/Calldataload.lean#L222) — success/underflow/OOG; `CalldataRel` covers both calldata windows (input arena / parent memory), both sides zero-pad so no range hypothesis) |
 | CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | unstated |
 | CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | unstated |
 | CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | unstated |
@@ -101,10 +101,10 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | opcode | byte | SpecRef | `Evm` | shape | status |
 |---|---|---|---|---|---|
 | POP | 0x50 | `iPop` | `execute_pop` | stack | **full** ([`pop_step_equiv`](../EvmSpecsVerify/Opcodes/Pop.lean#L176) — success/underflow/OOG; overflow unreachable: height decreases) |
-| MLOAD | 0x51 | `iMload` | `execute_mload` | memory | unstated |
-| MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | unstated |
+| MLOAD | 0x51 | `iMload` | `execute_mload` | memory | **full** ([`mload_step_equiv`](../EvmSpecsVerify/Opcodes/Mload.lean#L400) — success (grow/in-window)/underflow/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
+| MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L388) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
-| SLOAD | 0x54 | `iSload` | `execute_sload` | storage | unstated |
+| SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L503) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis — see `Assumptions.lean`) |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L499) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
@@ -130,7 +130,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CREATE | 0xf0 | `iCreate` *(partial)* | `execute_create` | system | unstated |
 | CALL | 0xf1 | `iCall` *(partial)* | `execute_call` | system | unstated |
 | CALLCODE | 0xf2 | `iCallcode` *(partial)* | `execute_callcode` | system | unstated |
-| RETURN | 0xf3 | `iReturn` | `execute_return` | system | unstated |
+| RETURN | 0xf3 | `iReturn` | `execute_return` | system | **full** ([`return_step_equiv`](../EvmSpecsVerify/Opcodes/Return.lean#L565) — normal halt with output correspondence (`ReturnPost`), zero/grow/in-window reads, underflow ×2, expansion OOG) |
 | DELEGATECALL | 0xf4 | `iDelegatecall` *(partial)* | `execute_delegatecall` | system | unstated |
 | CREATE2 | 0xf5 | `iCreate2` *(partial)* | `execute_create2` | system | unstated |
 | STATICCALL | 0xfa | `iStaticcall` *(partial)* | `execute_staticcall` | system | unstated |
@@ -142,7 +142,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 30 |
-| unstated | 59 |
+| full | 41 |
+| unstated | 48 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
