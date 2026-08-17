@@ -156,14 +156,16 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
   application is fully concrete (no holes); see `runS_pop_body_ok`
   (`Opcodes/Pop.lean`).
-- **A structure-instance field value must not START inline and then wrap.**
-  Trigger: `{ ss with regs := ss.regs.insert R\n (v…) }` — parse error
-  `unexpected token '('; expected '}'`. A value written entirely on its own
-  continuation line after `field :=` parses fine (Ternop's `writeListAt … ::
-  frest`); one that begins on the `:=` line and continues does not. Right
-  move: put the whole value on one physical line (its own line is fine);
-  shorten with `open … (name)` or a small named `def`
-  (`returnedStatus`, `Opcodes/Return.lean`). See also `runS_exp_body_ok`.
+- **A structure-instance field value must fit on ONE physical line.**
+  Trigger: any `{ x with field := v }` where `v` spans two lines — whether
+  it starts inline after `:=` or on its own continuation line — dies with
+  `unexpected token '('; expected '}'`. (Earlier wording claimed an
+  own-continuation-line value is safe; STOP's `ss.regs.insert R\n (v…)`
+  disproved it — only a value that also ENDS on that one line parses.)
+  Right move: make the value a single token/line — shorten with
+  `open … (name)` or a small named `def` (`returnedStatus`,
+  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). See also
+  `runS_exp_body_ok`.
 - **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
   projection atoms that omega/simp can't merge.**
   Trigger: stating a relation or lemma hypothesis over a whole sigma value
