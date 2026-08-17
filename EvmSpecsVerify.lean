@@ -53,3 +53,4 @@ import EvmSpecsVerify.Opcodes.Mstore
 import EvmSpecsVerify.Opcodes.Return
 import EvmSpecsVerify.Relations.Warm
 import EvmSpecsVerify.Opcodes.Sload
+import EvmSpecsVerify.Opcodes.Stop
