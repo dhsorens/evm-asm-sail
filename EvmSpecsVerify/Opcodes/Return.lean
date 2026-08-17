@@ -1,4 +1,7 @@
-import EvmSpecsVerify.Opcodes.Mload
+import EvmSpecsVerify.Relations.Memory
+import EvmSpecsVerify.Representation.EvmGas
+import EvmSpecsVerify.Representation.EvmStack
+import EvmSpecsVerify.Representation.SpecRefLemmas
 
 /-!
 # RETURN
