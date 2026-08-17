@@ -66,12 +66,6 @@ def SloadAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
 
 /-! ## Small warm-set helpers -/
 
-/-- `setAdd` of a present key is the identity. -/
-theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
-    (h : s.contains x = true) : setAdd s x = s := by
-  unfold EvmAsm.Stateless.SpecRef.setAdd
-  rw [if_pos h]
-
 /-- Record-update projections (`show`-free to avoid whnf blowups). -/
 private theorem hostState_set_stackFrames_warmSlots (h : Evm.HostState)
     (f : List (List word)) :
