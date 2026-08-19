@@ -83,9 +83,23 @@ EVM state can violate it, and whether it is eliminable by proving.
   discharged at frame entry (M3).
 * `CalldataRel` (Relations/Calldata.lean) covers both calldata windows
   (top-frame `InputCalldata` and nested-frame `MemoryCalldata`) — the read
-  path is fully proven; what remains for the CALL family is establishing
-  the nested window at frame entry (CALL sets up a parent-memory window
-  that reads back the child's `message.data`).
+  and copy paths are fully proven; what remains for the CALL family is
+  establishing the nested window at frame entry (CALL sets up a
+  parent-memory window that reads back the child's `message.data`).
+* `CalldataBelow` (Relations/Calldata.lean, `calldatacopy_step_equiv`) —
+  a nested frame's parent-memory calldata window lies entirely below the
+  current frame's base, so the current frame's memory writes (expansion
+  zero-fill, copy splice) cannot touch it. Trivially true for the
+  top-frame input-arena window. A frame-allocation invariant (child
+  frames are established above their parents); to be established at
+  frame entry with the rest of `CalldataRel` (M3).
+* `hcode`/`hclen` (`codesize_step_equiv`) — the `frame_code` register
+  holds a slice whose length index equals SpecRef's `code.length` (the
+  same register `JumpdestRel` reads for JUMPI); the full byte-content
+  `CodeRel` is future work. Slice-length wf (`< 2^256`, also for
+  `message.data.length` in `calldatasize_step_equiv`) is the extraction's
+  `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
+  `word_of_source_byte_count`'s assert is unreachable under it.
 
 ## Deliberate scope restrictions (this tranche)
 

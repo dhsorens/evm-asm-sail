@@ -104,6 +104,114 @@ theorem runS_charge_oog (g amount : Nat) (hs : HostState) (ss : SeqState)
   simp only [runS_bind,
     runS_exc_halt g .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork, runS_pure]
 
+/-! ## Word-count embeddings and the copy charge -/
+
+/-- The extraction's byte-count embedding is the identity below `2^256`
+(`word_of_nat_byte_count`'s assert is unreachable for well-formed
+lengths). -/
+theorem runS_word_of_source_byte_count (v : Nat) (hs : HostState)
+    (ss : SeqState) (h : v < 2 ^ 256) :
+    runS (Evm.Functions.word_of_source_byte_count v) hs ss =
+      .ok (v, hs) ss := by
+  simp only [Evm.Functions.word_of_source_byte_count,
+    Evm.Functions.word_of_nat_byte_count]
+  rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+  exact runS_pure _ _ _
+
+/-- `memory_word_count_word` (no 257-bit intermediate) computes
+`memory_word_count` on the word domain. -/
+theorem memory_word_count_word_eq (n : Nat) (h : n < 2 ^ 256) :
+    Evm.Functions.memory_word_count_word n
+      = Evm.Functions.memory_word_count n := by
+  have hq : n / 32 + 1 < 2 ^ 256 := by omega
+  simp only [Evm.Functions.memory_word_count_word,
+    Evm.Functions.memory_word_count, Evm.Functions.word_div_word,
+    Evm.Functions.word_mod_word, Evm.Functions.word_add_word,
+    Evm.Functions.u256, Evm.Functions.WORD_ZERO, Evm.Functions.WORD_ONE,
+    Evm.Functions.word_from_bits,
+    show (((32 : Nat) == 0) : Bool) = false from rfl, Bool.false_eq_true,
+    if_false]
+  rw [show (Sail.BitVec.toNatInt (0#256 : BitVec 256)).toNat = 0 from by
+      decide,
+    show (Sail.BitVec.toNatInt (1#256 : BitVec 256)).toNat = 1 from by
+      decide,
+    show (((2 : Int) ^ (256 : Int)).toNat) = 2 ^ 256 from by decide]
+  by_cases h0 : (Nat.mod n 32 == 0) = true
+  · rw [if_pos h0, if_pos h0]
+  · rw [if_neg h0, if_neg h0]
+    show (n / 32 + 1) % 2 ^ 256 = n / 32 + 1
+    omega
+
+/-- `Int` multiplication of embedded `Nat`s, back in `Nat` (the shape the
+extraction's `*i` cost products take). -/
+theorem intMul_toNat (a b : Nat) : ((a : Int) * (b : Int)).toNat = a * b := by
+  rw [← Int.natCast_mul, Int.toNat_natCast]
+
+/-- `charge_copy_gas`, success: the per-word charge
+(`G_copy_word * memory_word_count size`) is affordable; zero words charge
+nothing. -/
+theorem runS_charge_copy_ok (g size : Nat) (hs : HostState) (ss : SeqState)
+    (hsz : size < 2 ^ 256)
+    (hgas : G_copy_word * Evm.Functions.memory_word_count size ≤ g) :
+    runS (Evm.Functions.charge_copy_gas g size) hs ss =
+      .ok ((true, g - G_copy_word * Evm.Functions.memory_word_count size),
+        hs) ss := by
+  simp only [Evm.Functions.G_copy_word] at hgas ⊢
+  have hgas : (3 : Nat) * Evm.Functions.memory_word_count size ≤ g := hgas
+  simp only [Evm.Functions.charge_copy_gas,
+    Evm.Functions.charge_memory_word_gas, Evm.Functions.G_copy_word,
+    Evm.Functions.GAS_CONSTANT_ZERO]
+  refine runS_bind_ok (runS_charge_ok g 0 hs ss (Nat.zero_le g)) ?_
+  rw [if_pos rfl]
+  simp only [Nat.sub_zero, memory_word_count_word_eq size hsz,
+    Evm.Functions.charge_word_scaled_gas, intMul_toNat]
+  by_cases hwc : Evm.Functions.memory_word_count size = 0
+  · rw [if_pos (by simp [hwc]), hwc, Nat.mul_zero, Nat.sub_zero]
+    exact runS_pure _ _ _
+  · rw [if_neg (by simp [hwc])]
+    rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    exact runS_charge_ok g _ hs ss hgas
+
+/-- `charge_copy_gas`, out of gas (either the word count itself or the
+exact per-word cost exceeds the remaining gas — both halt identically). -/
+theorem runS_charge_copy_oog (g size : Nat) (hs : HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hsz : size < 2 ^ 256)
+    (hgas : g < G_copy_word * Evm.Functions.memory_word_count size) :
+    runS (Evm.Functions.charge_copy_gas g size) hs ss =
+      .ok ((false, GAS_ZERO), hs)
+        { ss with regs := haltRegs ss msg (.OutOfGas) } := by
+  simp only [Evm.Functions.G_copy_word] at hgas
+  have hgas : g < (3 : Nat) * Evm.Functions.memory_word_count size := hgas
+  have hwc : Evm.Functions.memory_word_count size ≠ 0 := by
+    intro hc
+    rw [hc] at hgas
+    omega
+  simp only [Evm.Functions.charge_copy_gas,
+    Evm.Functions.charge_memory_word_gas, Evm.Functions.G_copy_word,
+    Evm.Functions.GAS_CONSTANT_ZERO]
+  refine runS_bind_ok (runS_charge_ok g 0 hs ss (Nat.zero_le g)) ?_
+  rw [if_pos rfl]
+  simp only [Nat.sub_zero, memory_word_count_word_eq size hsz,
+    Evm.Functions.charge_word_scaled_gas, intMul_toNat]
+  rw [if_neg (by simp [hwc])]
+  by_cases hunits : Evm.Functions.memory_word_count size ≤ g
+  · rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    rw [if_neg (by simp only [decide_eq_true_eq]; omega)]
+    refine runS_bind_ok
+      (runS_exc_halt g .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork) ?_
+    exact runS_pure _ _ _
+  · rw [if_neg (by simp only [decide_eq_true_eq]; omega)]
+    refine runS_bind_ok
+      (runS_exc_halt g .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork) ?_
+    exact runS_pure _ _ _
+
+
 /-! ## The stack guard -/
 
 /-- `validate_stack`, success: enough operands, no overflow, gas untouched. -/

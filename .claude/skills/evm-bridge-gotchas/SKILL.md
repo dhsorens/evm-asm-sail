@@ -25,8 +25,10 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   drop it from hypotheses without a plan to prove preservation.
 
 - **`omega` is blind to any comparison/arithmetic NODE whose type argument is
-  an abbrev (`U256`/`word`/`Uint`/`gas_constant`), and to raw `Nat.le`/`Nat.lt`
-  spellings.** The node's instance is fixed at *elaboration* of whatever
+  an abbrev (`U256`/`word`/`Uint`/`gas_constant`), and to raw
+  `Nat.le`/`Nat.lt`/`Nat.div`/`Nat.mod` spellings (the extraction emits the
+  latter; `rw` patterns written with `/`/`%` also fail to match them — bridge
+  with a defeq `show` in `/`/`%` spelling first).** The node's instance is fixed at *elaboration* of whatever
   statement introduced it; abbrev-typed operands can drag the whole binop to
   the abbrev even with a `Nat` operand present, and `(x : Nat)` ascriptions on
   variables do NOT reliably rescue it. Atoms of abbrev type *inside* an

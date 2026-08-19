@@ -25,7 +25,8 @@ end, so no range hypothesis is needed.
 -/
 
 open private readArrayBytes bytesToWord spanWord inputBytesOf
-  memoryBytesOf from Evm.HostAxioms
+  memoryBytesOf writeArrayBytes copySpanIntoMemory copyIntoMemory
+  establishMemory zeroMemoryRange from Evm.HostAxioms
 
 namespace EvmSpecsVerify
 
@@ -45,6 +46,15 @@ def CalldataRel (D : Bytes) (hs : Evm.HostState) (cd : CalldataSlice) :
     cd = .MemoryCalldata ⟨off, len, f⟩ ∧
     len = D.length ∧
     ∀ i, i < len → hs.memoryBytes.getD (off + i) 0 = D.getD i 0)
+
+/-- The extraction's slice length is SpecRef's calldata length
+(CALLDATASIZE's value agreement), for either window constructor. -/
+theorem calldataRel_length (D : Bytes) (hs : Evm.HostState)
+    (cd : CalldataSlice) (hrel : CalldataRel D hs cd) :
+    Evm.Functions.calldata_slice_length cd = D.length := by
+  rcases hrel with ⟨off, len, f, hcd, hlen, _⟩ | ⟨off, len, f, hcd, hlen, _⟩ <;>
+    subst hcd <;>
+    simpa [Evm.Functions.calldata_slice_length] using hlen
 
 /-! ## `buffer_read`, elementwise -/
 
@@ -176,5 +186,176 @@ theorem calldataRel_load_word (D : Bytes) (hs : Evm.HostState)
       simp only [runS_pure]
       rw [buffer_read_past_end D x 32 (by omega),
         show Evm.Functions.ZERO_WORD = 0 from rfl]
+
+/-! ## Copy support (CALLDATACOPY) -/
+
+/-- A zero-size `buffer_read` is empty. -/
+theorem buffer_read_nil (D : Bytes) (p : Nat) : buffer_read D p 0 = [] := by
+  simp [buffer_read]
+
+/-- A `MemoryCalldata` window lies entirely below `bound` (the current
+frame's base): the frame-entry separation invariant that keeps the
+current frame's memory writes away from a nested frame's parent-memory
+calldata window. Trivial for the input-arena window. -/
+def CalldataBelow (cd : CalldataSlice) (bound : Nat) : Prop :=
+  match cd with
+  | .InputCalldata _ => True
+  | .MemoryCalldata s => s.1 + s.2.1 ≤ bound
+
+/-- `CalldataBelow` is upward-closed in the bound. -/
+theorem calldataBelow_mono {cd : CalldataSlice} {b b' : Nat}
+    (h : CalldataBelow cd b) (hbb : b ≤ b') : CalldataBelow cd b' := by
+  cases cd with
+  | InputCalldata s => trivial
+  | MemoryCalldata s => exact le_trans h hbb
+
+/-- The calldata relation survives a zero-fill at or above the window's
+end (the current frame's memory expansion, under `CalldataBelow`). -/
+theorem calldataRel_zeroRange (D : Bytes) (hs hs' : Evm.HostState)
+    (cd : CalldataSlice) (start count : Nat)
+    (hrel : CalldataRel D hs cd)
+    (hbelow : CalldataBelow cd start)
+    (hin : hs'.inputBytes = hs.inputBytes)
+    (hmem : hs'.memoryBytes = zeroMemoryRange hs.memoryBytes start count) :
+    CalldataRel D hs' cd := by
+  rcases hrel with ⟨off, len, f, hcd, hlen, hbytes⟩ |
+    ⟨off, len, f, hcd, hlen, hbytes⟩
+  · exact Or.inl ⟨off, len, f, hcd, hlen, fun i hi => by
+      rw [hin]; exact hbytes i hi⟩
+  · subst hcd
+    have hb : off + len ≤ start := hbelow
+    refine Or.inr ⟨off, len, f, rfl, hlen, fun i hi => ?_⟩
+    rw [hmem, zeroMemoryRange_getD, if_neg (by omega)]
+    exact hbytes i hi
+
+/-- The shared elementwise core for copies: the zero-padded window read
+the host copy materializes is `buffer_read`, as a list. -/
+private theorem window_pad_eq (arr : Array Evm.Defs.byte) (off len : Nat)
+    (D : Bytes) (src size : Nat) (hlen : len = D.length)
+    (hbytes : ∀ i, i < len → arr.getD (off + i) 0 = D.getD i 0) :
+    ((List.range size).map fun i =>
+        (readArrayBytes arr off len).getD (src + i) 0)
+      = buffer_read D src size := by
+  apply List.ext_getElem
+  · rw [buffer_read_length]
+    simp
+  · intro i h1 h2
+    simp only [List.length_map, List.length_range] at h1
+    simp only [List.getElem_map, List.getElem_range]
+    have hb : (buffer_read D src size).getD i 0 = D.getD (src + i) 0 :=
+      buffer_read_getD D src size i h1
+    simp only [List.getD, List.getElem?_eq_getElem h2, Option.getD_some] at hb
+    rw [hb]
+    show (readArrayBytes arr off len).getD (src + i) 0 = D.getD (src + i) 0
+    unfold readArrayBytes
+    by_cases hxi : src + i < len
+    · have : ((List.range len).map fun index =>
+          arr.getD (off + index) 0).getD (src + i) 0
+          = arr.getD (off + (src + i)) 0 := by
+        simp only [List.getD, List.getElem?_map,
+          List.getElem?_range hxi, Option.map_some, Option.getD_some]
+      rw [this, hbytes (src + i) hxi]
+    · have hnone : ((List.range len).map fun index =>
+          arr.getD (off + index) 0)[src + i]? = none := by
+        rw [List.getElem?_eq_none]
+        simpa using hxi
+      have hout : D.length ≤ src + i := hlen ▸ Nat.le_of_not_lt hxi
+      simp only [List.getD, hnone, Option.getD_none]
+      symm
+      rw [List.getElem?_eq_none hout]
+      rfl
+
+/-- A fully out-of-window copy source zero-fills — exactly `buffer_read`
+past the end. -/
+private theorem window_empty_eq (arr : Array Evm.Defs.byte)
+    (D : Bytes) (src size : Nat) (hsrc : D.length ≤ src) :
+    ((List.range size).map fun i =>
+        (readArrayBytes arr 0 0).getD (0 + i) 0)
+      = buffer_read D src size := by
+  have hdrop : D.drop src = [] := List.drop_eq_nil_of_le hsrc
+  simp only [buffer_read, hdrop, List.take_nil, List.nil_append,
+    List.length_nil, Nat.sub_zero]
+  apply List.ext_getElem
+  · simp
+  · intro i h1 h2
+    simp only [List.length_map, List.length_range] at h1
+    simp only [List.getElem_map, List.getElem_range,
+      List.getElem_replicate]
+    unfold readArrayBytes
+    simp [List.getD]
+
+open Evm.Functions in
+/-- The extraction's calldata copy is `writeArrayBytes` of SpecRef's
+zero-padded `buffer_read`, for every source offset word and either window
+constructor, provided the destination range is inside the established
+window (guaranteed post-expansion). -/
+theorem calldataRel_copy (D : Bytes) (hs : Evm.HostState) (ss : SeqState)
+    (cd : CalldataSlice) (dst src size : Nat)
+    (fr : Evm.MemoryFrame) (mfrest : List Evm.MemoryFrame)
+    (hframe : hs.memoryFrames = fr :: mfrest)
+    (hest : dst + size ≤ fr.established)
+    (hrel : CalldataRel D hs cd) :
+    runS (Evm.Functions.calldata_slice_copy_word_offset cd dst src size)
+        hs ss =
+      .ok ((),
+        { hs with
+          memoryBytes := writeArrayBytes hs.memoryBytes (fr.base + dst)
+            (buffer_read D src size) }) ss := by
+  rcases hrel with ⟨off, len, f, hcd, hlen, hbytes⟩ |
+    ⟨off, len, f, hcd, hlen, hbytes⟩ <;> subst hcd
+  · simp only [Evm.Functions.calldata_slice_copy_word_offset,
+      Evm.Functions.stateless_input_slice_copy_word_offset,
+      Evm.Functions.stateless_input_slice_copy,
+      StatelessInputSliceFields.len]
+    by_cases hx : src < len
+    · rw [if_pos (by simpa using hx)]
+      unfold Evm.Functions.stateless_input_copy_to_memory
+      refine runS_bind_ok (runS_get hs ss) ?_
+      unfold copySpanIntoMemory copyIntoMemory
+      simp only [inputBytesOf, StatelessInputSliceFields.bytes,
+        StatelessInputSliceFields.len]
+      rw [window_pad_eq hs.inputBytes off len D src size hlen hbytes]
+      refine runS_bind_ok
+        (runS_establishMemory_le _ hs ss fr mfrest hframe
+          (by rw [buffer_read_length]; exact hest)) ?_
+      exact runS_modify _ _ _
+    · rw [if_neg (by simpa using hx)]
+      unfold Evm.Functions.stateless_input_copy_to_memory
+      refine runS_bind_ok (runS_get hs ss) ?_
+      unfold copySpanIntoMemory copyIntoMemory
+      simp only [inputBytesOf, StatelessInputSliceFields.bytes,
+        StatelessInputSliceFields.len]
+      rw [window_empty_eq hs.inputBytes D src size (by omega)]
+      refine runS_bind_ok
+        (runS_establishMemory_le _ hs ss fr mfrest hframe
+          (by rw [buffer_read_length]; exact hest)) ?_
+      exact runS_modify _ _ _
+  · simp only [Evm.Functions.calldata_slice_copy_word_offset,
+      Evm.Functions.memory_slice_copy_word_offset,
+      Evm.Functions.memory_slice_copy,
+      EvmMemorySliceFields.len]
+    by_cases hx : src < len
+    · rw [if_pos (by simpa using hx)]
+      unfold Evm.Functions.memory_slice_copy_to_memory
+      refine runS_bind_ok (runS_get hs ss) ?_
+      unfold copySpanIntoMemory copyIntoMemory
+      simp only [memoryBytesOf, EvmMemorySliceFields.bytes,
+        EvmMemorySliceFields.len]
+      rw [window_pad_eq hs.memoryBytes off len D src size hlen hbytes]
+      refine runS_bind_ok
+        (runS_establishMemory_le _ hs ss fr mfrest hframe
+          (by rw [buffer_read_length]; exact hest)) ?_
+      exact runS_modify _ _ _
+    · rw [if_neg (by simpa using hx)]
+      unfold Evm.Functions.stateless_input_copy_to_memory
+      refine runS_bind_ok (runS_get hs ss) ?_
+      unfold copySpanIntoMemory copyIntoMemory
+      simp only [inputBytesOf, StatelessInputSliceFields.bytes,
+        StatelessInputSliceFields.len]
+      rw [window_empty_eq hs.inputBytes D src size (by omega)]
+      refine runS_bind_ok
+        (runS_establishMemory_le _ hs ss fr mfrest hframe
+          (by rw [buffer_read_length]; exact hest)) ?_
+      exact runS_modify _ _ _
 
 end EvmSpecsVerify

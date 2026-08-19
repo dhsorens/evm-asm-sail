@@ -193,6 +193,16 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `CalldataRel` (top-frame `InputCalldata` window ↔ `message.data`,
       byte-for-byte; `calldataRel_load_word` needs no range hypothesis —
       both sides zero-pad past the end)
+- [x] `Opcodes/Calldatasize.lean` / `Opcodes/Codesize.lean` /
+      `Opcodes/Calldatacopy.lean` — the size pushers and the first copy
+      opcode: CALLDATASIZE/CODESIZE on the charge-first pusher skeleton
+      (`calldataRel_length` and the `frame_code` length tie;
+      `word_of_source_byte_count` identity under the slice bound);
+      CALLDATACOPY composes the MSTORE expansion machinery with the new
+      `calldataRel_copy` (host copy = `writeArrayBytes` of SpecRef's
+      zero-padded `buffer_read`, either window), a generic
+      `memoryRel_write`, the three-way charge split
+      (`runS_charge_copy_ok/_oog`), and `CalldataBelow` window separation
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

@@ -428,6 +428,44 @@ theorem memoryRel_store (M : Bytes) (hs : Evm.HostState)
     exact htail i hge hi
 
 
+/-- A zero-length splice is a no-op at every position. -/
+theorem memory_write_nil (M : Bytes) (pos : Nat) :
+    memory_write M pos [] = M := by
+  simp [memory_write]
+
+open Evm.Functions in
+/-- An in-established bulk write preserves the relation: the **same** byte
+list spliced by SpecRef's `memory_write` and by the host's
+`writeArrayBytes`. (`memoryRel_store` is the 32-byte word instance.) -/
+theorem memoryRel_write (M : Bytes) (hs : Evm.HostState)
+    (off len pos : Nat) (val : Bytes)
+    (hrel : MemoryRel M hs off len)
+    (hin : pos + val.length ≤ len) :
+    MemoryRel (memory_write M pos val)
+      { hs with memoryBytes :=
+          writeArrayBytes hs.memoryBytes (off + pos) val }
+      off len := by
+  obtain ⟨⟨frest, hframe⟩, haligned, hbytes, htail⟩ := hrel
+  have hlenM : len ≤ M.length := by
+    have := le_32_wc len
+    omega
+  have hwl : pos + val.length ≤ M.length := by omega
+  refine ⟨⟨frest, hframe⟩, ?_, ?_, ?_⟩
+  · rw [memory_write_length M _ pos hwl]
+    exact haligned
+  · intro i hi
+    rw [hostState_set_memoryBytes (hs := hs), writeArrayBytes_getD,
+      memory_write_getD M _ pos i hwl]
+    by_cases hband : pos ≤ i ∧ i < pos + val.length
+    · rw [if_pos (by omega), if_pos (by omega),
+        show off + i - (off + pos) = i - pos from by omega]
+    · rw [if_neg (by omega), if_neg (by omega)]
+      exact hbytes i hi
+  · intro i hge hi
+    rw [memory_write_length M _ pos hwl] at hi
+    rw [memory_write_getD M _ pos i hwl, if_neg (by omega)]
+    exact htail i hge hi
+
 theorem memGasSafe_mono_gas (M : Bytes) {g g' : Nat} (h : g' ≤ g)
     (hsafe : MemGasSafe M g) : MemGasSafe M g' := by
   unfold MemGasSafe at hsafe ⊢

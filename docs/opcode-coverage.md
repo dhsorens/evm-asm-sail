@@ -73,9 +73,9 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CALLER | 0x33 | `iCaller` | `execute_caller` | env | **full** ([`caller_step_equiv`](../EvmSpecsVerify/Opcodes/Caller.lean#L205) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
 | CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | **full** ([`callvalue_step_equiv`](../EvmSpecsVerify/Opcodes/Callvalue.lean#L206) — success/overflow/OOG/MM-5 double fault; codec-free, message-value wf hypothesized) |
 | CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | **full** ([`calldataload_step_equiv`](../EvmSpecsVerify/Opcodes/Calldataload.lean#L222) — success/underflow/OOG; `CalldataRel` covers both calldata windows (input arena / parent memory), both sides zero-pad so no range hypothesis) |
-| CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | unstated |
-| CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | unstated |
-| CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | unstated |
+| CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | **full** ([`calldatasize_step_equiv`](../EvmSpecsVerify/Opcodes/Calldatasize.lean#L216) — success/overflow/OOG/MM-5 double fault; `CalldataRel` supplies the length tie, slice-length wf hypothesized like CALLVALUE's `hwfv`) |
+| CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | **full** ([`calldatacopy_step_equiv`](../EvmSpecsVerify/Opcodes/Calldatacopy.lean#L653) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3 (base/per-word/expansion, three-way charge split vs SpecRef's single charge); `MemoryRel` + MM-6 `MemGasSafe` + `CalldataRel` + `CalldataBelow` nested-window separation hypotheses) |
+| CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | **full** ([`codesize_step_equiv`](../EvmSpecsVerify/Opcodes/Codesize.lean#L215) — success/overflow/OOG/MM-5 double fault; `frame_code` register length tie hypothesized (the JUMPI-style register read), code-length wf hypothesized) |
 | CODECOPY | 0x39 | `iCodecopy` | `execute_codecopy` | memory | unstated |
 | GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | unstated |
 | EXTCODESIZE | 0x3b | `iExtcodesize` | `execute_extcodesize` | env+world | unstated |
