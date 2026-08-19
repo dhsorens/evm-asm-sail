@@ -47,6 +47,9 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
      still omega — convert the hypothesis instead and bridge with `exact`.
   `Int` powers: rewrite `(2:Int)^(256:Nat)` to a numeral via `decide` first
   (see `Representation/SignedWord.lean`, `fromSigned_eq`).
+- Instantiating a generic shape theorem (Binop/EnvPusher style) leaves goals
+  with un-reduced beta-redexes (`WordWf ((fun e => …) sRef.evm)`), which `rw`
+  cannot see into — `show` the beta-reduced statement first, then rewrite.
 
 ## Stack geometry
 
