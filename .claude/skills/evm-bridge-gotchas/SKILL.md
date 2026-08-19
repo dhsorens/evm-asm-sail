@@ -50,6 +50,15 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 - Instantiating a generic shape theorem (Binop/EnvPusher style) leaves goals
   with un-reduced beta-redexes (`WordWf ((fun e => …) sRef.evm)`), which `rw`
   cannot see into — `show` the beta-reduced statement first, then rewrite.
+- `omega` also ignores **disjunction hypotheses** and can't split a `¬(A ∨ B)`
+  goal — `rcases h with h | h <;> omega` for the former, `simp only [not_or]`
+  + per-conjunct `omega` for the latter. And when operands are match-bound
+  abbrev variables (`x : U256` from a stack match) or struct projections,
+  skip the ascription attempt entirely — go straight to the ∀-Nat key-clone
+  remedy; `(e : Nat)` ascriptions do not change the elaborated instance.
+- A multi-line `by` block inside `rw [… (by tac₁\n tac₂) …]` fails to parse
+  mid-bracket — keep in-`rw` proofs single-line (`by tac₁; tac₂`) or hoist a
+  `have` above the `rw`.
 
 ## Stack geometry
 

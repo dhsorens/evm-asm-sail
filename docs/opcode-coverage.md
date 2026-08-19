@@ -84,7 +84,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | RETURNDATASIZE | 0x3d | `iReturndatasize` | `execute_returndatasize` | env | unstated |
 | RETURNDATACOPY | 0x3e | `iReturndatacopy` | `execute_returndatacopy` | memory | unstated |
 | EXTCODEHASH | 0x3f | `iExtcodehash` | `execute_extcodehash` | env+world+crypto | unstated |
-| BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | unstated |
+| BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | **full** ([`blockhash_step_equiv`](../EvmSpecsVerify/Opcodes/Blockhash.lean#L351) — success ×2 (in-window hash/out-of-window zero)/underflow/OOG; `AncestorRel` ties the reversed-index witness windows, codec `hash_to_word_eq`; **domain restricted** by the `hwit` chain-validity bound — witness-deficient states spec-abort identically on both sides, outside the `StepResultRel` boundary; see `Assumptions.lean`) |
 | COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | **full** ([`coinbase_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L127) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header fee-recipient tie, wf via `address_to_word`) |
 | TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | **full** ([`timestamp_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L152) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header timestamp tie, u64 wf hypothesized) |
 | NUMBER | 0x43 | `iNumber` | `execute_number` | env | **full** ([`number_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L173) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header number tie, u64 wf hypothesized) |

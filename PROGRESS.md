@@ -218,6 +218,12 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       GASLIMIT, CHAINID, BASEFEE, SLOTNUM) through one generic
       `envPush_step_equiv` (SpecRef `pushConstOf` ↔ Evm `envPushShape`
       over `k_env`); per opcode only the field read and the header tie
+- [x] `Opcodes/Blockhash.lean` — BLOCKHASH over `AncestorRel` (the
+      parent-first ancestor store ↔ oldest-first `blockHashes`, reversed
+      indexing + `k_n_headers` count) and the 32-byte `hash_to_word_eq`
+      codec; the tracker mark carried verbatim (`ancestorMark`); the
+      aligned witness-deficient spec aborts excluded by the ledgered
+      `hwit` chain-validity bound
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

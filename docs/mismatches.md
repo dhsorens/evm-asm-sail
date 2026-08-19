@@ -146,6 +146,9 @@ unreachable / ambiguity / needs investigation).
   `memory_word_count_word_eq`). Also `OPCODE_MSTORE8_BASE = 3 = G_verylow`
   (`mstore8_step_equiv`) and `OPCODE_GASPRICE = 2 = G_base`
   (`gasprice_step_equiv`).
+- **Verified 2026-08-19 (BLOCKHASH)**: `OPCODE_BLOCKHASH = 20` on both sides
+  (SpecRef constant, extraction literal), machine-checked by
+  `blockhash_step_equiv`.
 - **Verified 2026-08-19 (block-env pushers)**: `OPCODE_COINBASE` /
   `OPCODE_TIMESTAMP` / `OPCODE_NUMBER` / `OPCODE_PREVRANDAO` /
   `OPCODE_GASLIMIT` / `OPCODE_CHAINID` / `OPCODE_BASEFEE` /
