@@ -23,6 +23,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 - **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Unop.lean)
 - **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
+- **env pusher**: base-cost `k_env` block-environment pushers (SpecRef `pushConstOf`, Evm `envPushShape`) — [`Shapes/EnvPusher.lean`](../EvmSpecsVerify/Opcodes/Shapes/EnvPusher.lean)
 - **memory / control / env / storage / system**: as named
 
 ## ALU family
@@ -84,17 +85,17 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | RETURNDATACOPY | 0x3e | `iReturndatacopy` | `execute_returndatacopy` | memory | unstated |
 | EXTCODEHASH | 0x3f | `iExtcodehash` | `execute_extcodehash` | env+world+crypto | unstated |
 | BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | unstated |
-| COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | unstated |
-| TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | unstated |
-| NUMBER | 0x43 | `iNumber` | `execute_number` | env | unstated |
-| PREVRANDAO | 0x44 | `iPrevrandao` | `execute_prevrandao` | env | unstated |
-| GASLIMIT | 0x45 | `iGaslimit` | `execute_gaslimit` | env | unstated |
-| CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | unstated |
+| COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | **full** ([`coinbase_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L127) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header fee-recipient tie, wf via `address_to_word`) |
+| TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | **full** ([`timestamp_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L152) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header timestamp tie, u64 wf hypothesized) |
+| NUMBER | 0x43 | `iNumber` | `execute_number` | env | **full** ([`number_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L173) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header number tie, u64 wf hypothesized) |
+| PREVRANDAO | 0x44 | `iPrevrandao` | `execute_prevrandao` | env | **full** ([`prevrandao_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L194) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; randao word ↔ 32-byte decode tie, wf hypothesized) |
+| GASLIMIT | 0x45 | `iGaslimit` | `execute_gaslimit` | env | **full** ([`gaslimit_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L217) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header gas-limit tie, wf hypothesized) |
+| CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | **full** ([`chainid_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L238) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; `k_chain_id` register tie, u64 wf hypothesized) |
 | SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | unstated |
-| BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | unstated |
+| BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | **full** ([`basefee_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L258) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header base-fee tie, wf hypothesized) |
 | BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | unstated |
 | BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated |
-| SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | unstated |
+| SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | **full** ([`slotnum_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L278) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header slot-number tie, u64 wf hypothesized) |
 
 ## Stack / memory / storage / control
 
