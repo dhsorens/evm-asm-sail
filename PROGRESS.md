@@ -203,6 +203,11 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       zero-padded `buffer_read`, either window), a generic
       `memoryRel_write`, the three-way charge split
       (`runS_charge_copy_ok/_oog`), and `CalldataBelow` window separation
+- [x] `Relations/Code.lean` + `Opcodes/Codecopy.lean` — `CodeRel` (the
+      `frame_code` window reads back `evm.code`; `codeRel_copy` reuses the
+      calldata window lemmas) and CODECOPY as the CALLDATACOPY harvest
+      through SpecRef's shared `copyFromBuffer`; `codesize_step_equiv`
+      tightened to take `CodeRel` instead of a bare length tie
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

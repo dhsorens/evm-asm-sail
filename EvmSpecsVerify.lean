@@ -66,3 +66,5 @@ import EvmSpecsVerify.Opcodes.Calldataload
 import EvmSpecsVerify.Opcodes.Calldatasize
 import EvmSpecsVerify.Opcodes.Codesize
 import EvmSpecsVerify.Opcodes.Calldatacopy
+import EvmSpecsVerify.Relations.Code
+import EvmSpecsVerify.Opcodes.Codecopy

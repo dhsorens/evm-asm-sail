@@ -229,8 +229,9 @@ theorem calldataRel_zeroRange (D : Bytes) (hs hs' : Evm.HostState)
     exact hbytes i hi
 
 /-- The shared elementwise core for copies: the zero-padded window read
-the host copy materializes is `buffer_read`, as a list. -/
-private theorem window_pad_eq (arr : Array Evm.Defs.byte) (off len : Nat)
+the host copy materializes is `buffer_read`, as a list. Shared with the
+code window (CODECOPY). -/
+theorem window_pad_eq (arr : Array Evm.Defs.byte) (off len : Nat)
     (D : Bytes) (src size : Nat) (hlen : len = D.length)
     (hbytes : ∀ i, i < len → arr.getD (off + i) 0 = D.getD i 0) :
     ((List.range size).map fun i =>
@@ -266,8 +267,8 @@ private theorem window_pad_eq (arr : Array Evm.Defs.byte) (off len : Nat)
       rfl
 
 /-- A fully out-of-window copy source zero-fills — exactly `buffer_read`
-past the end. -/
-private theorem window_empty_eq (arr : Array Evm.Defs.byte)
+past the end. Shared with the code window (CODECOPY). -/
+theorem window_empty_eq (arr : Array Evm.Defs.byte)
     (D : Bytes) (src size : Nat) (hsrc : D.length ≤ src) :
     ((List.range size).map fun i =>
         (readArrayBytes arr 0 0).getD (0 + i) 0)

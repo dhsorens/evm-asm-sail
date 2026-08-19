@@ -36,9 +36,9 @@ unreachable / ambiguity / needs investigation).
   extraction also pops before charging there, because `exp_gas` needs the exponent
   (Execute.lean:283); the halted post-cursor differs from the other shapes
   (`top - 2`, not `top`) and is equally unobservable. The copy family
-  (CALLDATACOPY) is pop-first with a **three-stage** extraction charge
+  (CALLDATACOPY/CODECOPY, SpecRef's shared `copyFromBuffer`) is pop-first with a **three-stage** extraction charge
   (base / per-word / expansion) against SpecRef's single charge; the OOG states
-  still pair kind-for-kind (`calldatacopy_step_equiv`). Re-establish per class
+  still pair kind-for-kind (`calldatacopy_step_equiv`, `codecopy_step_equiv`). Re-establish per class
   as new families land.
 
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
@@ -136,12 +136,14 @@ unreachable / ambiguity / needs investigation).
   ADDRESS/ORIGIN step theorems. Remaining open subset: SSTORE and the
   CALL/CREATE-family account writes.
 - **Verified 2026-08-19 (copy family + size pushers)**: `OPCODE_CALLDATASIZE` /
-  `OPCODE_CODESIZE` `= 2 = G_base`; `OPCODE_CALLDATACOPY_BASE = 3 = G_verylow` and
+  `OPCODE_CODESIZE` `= 2 = G_base`; `OPCODE_CALLDATACOPY_BASE` /
+  `OPCODE_CODECOPY_BASE` `= 3 = G_verylow` and
   `OPCODE_COPY_PER_WORD = 3 = G_copy_word` with the same per-word count
   (`ceil32 size / 32` = `memory_word_count size`, incl. the extraction's
   257-bit-avoiding `memory_word_count_word`). Machine-checked by
-  `calldatasize_step_equiv` / `codesize_step_equiv` / `calldatacopy_step_equiv`
-  (+ `runS_charge_copy_ok`/`_oog`, `memory_word_count_word_eq`).
+  `calldatasize_step_equiv` / `codesize_step_equiv` / `calldatacopy_step_equiv` /
+  `codecopy_step_equiv` (+ `runS_charge_copy_ok`/`_oog`,
+  `memory_word_count_word_eq`).
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

@@ -93,10 +93,11 @@ EVM state can violate it, and whether it is eliminable by proving.
   top-frame input-arena window. A frame-allocation invariant (child
   frames are established above their parents); to be established at
   frame entry with the rest of `CalldataRel` (M3).
-* `hcode`/`hclen` (`codesize_step_equiv`) — the `frame_code` register
-  holds a slice whose length index equals SpecRef's `code.length` (the
-  same register `JumpdestRel` reads for JUMPI); the full byte-content
-  `CodeRel` is future work. Slice-length wf (`< 2^256`, also for
+* `CodeRel` (Relations/Code.lean, `codesize_step_equiv` /
+  `codecopy_step_equiv`) — the `frame_code` register holds a slice whose
+  window reads back SpecRef's `evm.code` byte-for-byte (the same register
+  `JumpdestRel` reads for JUMPI). Established at frame entry (M3);
+  threaded per opcode meanwhile. Slice-length wf (`< 2^256`, also for
   `message.data.length` in `calldatasize_step_equiv`) is the extraction's
   `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
   `word_of_source_byte_count`'s assert is unreachable under it.
