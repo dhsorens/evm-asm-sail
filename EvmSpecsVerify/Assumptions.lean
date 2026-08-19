@@ -103,6 +103,23 @@ EVM state can violate it, and whether it is eliminable by proving.
   `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
   `word_of_source_byte_count`'s assert is unreachable under it.
 
+## Witness sufficiency (BLOCKHASH)
+
+* `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
+  `ancestorHashes` store + `k_n_headers` count represent SpecRef's
+  oldest-first `blockEnv.blockHashes` with reversed indexing. A
+  `BlockEnvRel` fragment, established at frame entry (M3).
+* `hwit` (`blockhash_step_equiv`) — the witness holds the last
+  `min 256 number` ancestor headers. A **domain restriction**: on
+  witness-deficient states both sides abort at the spec level — SpecRef
+  `executionRejected`, the extraction `fatal_error WitnessDeficient` —
+  which is *aligned* behavior, but the aborts live outside the
+  `StepResultRel` observation boundary (outer errors), so the step
+  theorem excludes those states rather than relating them. Every block
+  accepted by the stateless validator satisfies `hwit` (deficient
+  witnesses are rejected up front); eliminable only by widening the
+  outcome relation to pair spec aborts.
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the

@@ -72,3 +72,4 @@ import EvmSpecsVerify.Opcodes.Mstore8
 import EvmSpecsVerify.Opcodes.Gasprice
 import EvmSpecsVerify.Opcodes.Shapes.EnvPusher
 import EvmSpecsVerify.Opcodes.BlockEnv
+import EvmSpecsVerify.Opcodes.Blockhash
