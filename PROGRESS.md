@@ -208,6 +208,11 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       calldata window lemmas) and CODECOPY as the CALLDATACOPY harvest
       through SpecRef's shared `copyFromBuffer`; `codesize_step_equiv`
       tightened to take `CodeRel` instead of a bare length tie
+- [x] `Opcodes/Mstore8.lean` / `Opcodes/Gasprice.lean` — MSTORE8 as the
+      single-byte MSTORE harvest (byte codec `word_low_byte_masked`,
+      `runS_mem_store_byte`, the generic `memoryRel_write` with a
+      singleton) and GASPRICE on the ORIGIN `k_env` pusher skeleton
+      (codec-free `hgp` register tie)
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

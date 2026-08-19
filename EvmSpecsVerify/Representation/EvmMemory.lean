@@ -348,4 +348,41 @@ theorem runS_memory_access_zero (start : Nat) (hs : Evm.HostState)
   rw [dif_pos (by decide)]
   exact runS_pure _ _ _
 
+theorem writeArrayBytes_singleton (a : Array byte) (p : Nat) (b : byte) :
+    writeArrayBytes a p [b] = writeArrayByte a p b := by
+  simp [writeArrayBytes, List.zipIdx]
+
+open Evm.Functions in
+/-- The extraction's low-byte truncation is SpecRef's masked byte
+(`MSTORE8`'s value codec). -/
+theorem word_low_byte_masked (v : Nat) :
+    Evm.Functions.word_low_byte v = BitVec.ofNat 8 (v &&& 0xFF) := by
+  have hmask : v &&& 0xFF = v % 256 := by
+    have h := Nat.and_two_pow_sub_one_eq_mod v 8
+    simpa using h
+  apply BitVec.eq_of_toNat_eq
+  simp only [Evm.Functions.word_low_byte, Sail.get_slice_int,
+    BitVec.extractLsb'_toNat, BitVec.toNat_ofNat, hmask]
+  rw [show BitVec.ofInt (0 + 8 + 1) (v : Int) = BitVec.ofNat 9 v from by
+    rw [BitVec.ofInt_natCast]]
+  simp only [BitVec.toNat_ofNat, Nat.shiftRight_zero]
+  show v % 2 ^ 9 % 2 ^ 8 = v % 256 % 2 ^ 8
+  rw [Nat.mod_mod_of_dvd v (by norm_num : (2 ^ 8 : Nat) ∣ 2 ^ 9)]
+  norm_num
+
+theorem runS_mem_store_byte (pos v : Nat) (hs : Evm.HostState)
+    (ss : SeqState) (fr : Evm.MemoryFrame) (frest : List Evm.MemoryFrame)
+    (hframe : hs.memoryFrames = fr :: frest)
+    (hle : pos + 1 ≤ fr.established) :
+    runS (Evm.Functions.mem_store_byte pos v) hs ss =
+      .ok ((), { hs with
+        memoryBytes :=
+          writeArrayByte hs.memoryBytes (fr.base + pos)
+            (Evm.Functions.word_low_byte v) }) ss := by
+  simp only [Evm.Functions.mem_store_byte, Evm.Functions.mem_set_byte,
+    Evm.Functions.mem_write_byte]
+  refine runS_bind_ok
+    (runS_establishMemory_le (pos + 1) hs ss fr frest hframe hle) ?_
+  exact runS_modify _ _ _
+
 end EvmSpecsVerify
