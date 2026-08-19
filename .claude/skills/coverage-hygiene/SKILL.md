@@ -71,7 +71,9 @@ For an opcode that just landed `full`:
 **full** ([`add_step_equiv`](../EvmSpecsVerify/Opcodes/Add.lean#L30) — success/underflow/OOG; overflow unreachable for 2-in/1-out)
 ```
 
-   Do not leave a bare ``add_step_equiv`` in the status column.
+   Do not leave a bare ``add_step_equiv`` in the status column. Take the
+   `#L` number from `grep -n "theorem <name>"` **after** the final build —
+   never from memory; nothing validates a stale anchor.
 2. Run the refresh script.
 3. If the theorem newly ties a machine-frame component, bump that row in
    `docs/comparison-matrix.md` to `proven-<scope>` with the theorem name.
