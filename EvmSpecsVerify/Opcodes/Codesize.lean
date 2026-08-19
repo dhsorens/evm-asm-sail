@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Code
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
@@ -10,9 +11,10 @@ An env pusher in the CALLVALUE mold: charge `G_base`/`OPCODE_CODESIZE`
 (= 2, both sides), push the running code's byte length. SpecRef reads
 `evm.code`; the extraction reads the `frame_code` register's slice length
 (`frame_code_len`). The `frame_code` register is not part of `StateRel`,
-so the register read (`hcode`) and the length tie (`hclen`) are hypotheses
-of the step theorem — the same shape `JumpdestRel` uses for JUMPI, to be
-established at frame entry in M3. The pushed length's word bound `hwf` is
+so the step theorem takes [`CodeRel`](../Relations/Code.lean) (register
+read + length tie + byte agreement — the byte clause is unused here but
+keeps one hypothesis shape across CODESIZE/CODECOPY), to be established
+at frame entry in M3. The pushed length's word bound `hwf` is
 the code-slice invariant (slice lengths are capped at `2^32 - 1`, where
 `word_of_source_byte_count`'s assert is unreachable). MM-5 applies to the
 double-fault states. Reachable outcomes: success / stack overflow / OOG /
@@ -209,20 +211,20 @@ theorem runS_execute_codesize_oog (pc_in : Nat) (top : StackTop)
 
 open Evm.Functions in
 /-- **CODESIZE, all reachable outcomes.** Double-fault states (full stack ∧
-OOG) use the MM-5 constructor; `hcode`/`hclen` tie the `frame_code`
-register's slice length to SpecRef's `evm.code.length`, `hwf` supplies the
-slice-length word bound. -/
+OOG) use the MM-5 constructor; `hcrel` (the `frame_code` window relation
+shared with CODECOPY) ties the register's slice length to SpecRef's
+`evm.code.length`, `hwf` supplies the slice-length word bound. -/
 theorem codesize_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
-    (pc_in : Nat) (coff clen : Nat) (cf : CodeFields coff clen)
+    (pc_in : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hpc : pc_in = sRef.evm.pc + 1)
-    (hcode : ss.regs.get? Register.frame_code = some ⟨coff, clen, cf⟩)
-    (hclen : clen = sRef.evm.code.length)
+    (hcrel : CodeRel sRef.evm.code hs ss)
     (hwf : WordWf sRef.evm.code.length) :
     StepResultRel (BasePost mem) (runR iCodesize sRef)
       (runS (Evm.Functions.execute (.CODESIZE ()) pc_in top mem g)
         hs ss) := by
+  obtain ⟨coff, clen, cf, hcode, hclen, _⟩ := hcrel
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR
   obtain ⟨hlive, hres, hsp⟩ := hgasR
