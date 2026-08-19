@@ -143,7 +143,9 @@ unreachable / ambiguity / needs investigation).
   257-bit-avoiding `memory_word_count_word`). Machine-checked by
   `calldatasize_step_equiv` / `codesize_step_equiv` / `calldatacopy_step_equiv` /
   `codecopy_step_equiv` (+ `runS_charge_copy_ok`/`_oog`,
-  `memory_word_count_word_eq`).
+  `memory_word_count_word_eq`). Also `OPCODE_MSTORE8_BASE = 3 = G_verylow`
+  (`mstore8_step_equiv`) and `OPCODE_GASPRICE = 2 = G_base`
+  (`gasprice_step_equiv`).
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

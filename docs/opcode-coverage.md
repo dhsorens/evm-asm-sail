@@ -77,7 +77,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | **full** ([`calldatacopy_step_equiv`](../EvmSpecsVerify/Opcodes/Calldatacopy.lean#L653) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3 (base/per-word/expansion, three-way charge split vs SpecRef's single charge); `MemoryRel` + MM-6 `MemGasSafe` + `CalldataRel` + `CalldataBelow` nested-window separation hypotheses) |
 | CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | **full** ([`codesize_step_equiv`](../EvmSpecsVerify/Opcodes/Codesize.lean#L217) — success/overflow/OOG/MM-5 double fault; `CodeRel` supplies the `frame_code` register read + length tie (shared with CODECOPY), code-length wf hypothesized) |
 | CODECOPY | 0x39 | `iCodecopy` | `execute_codecopy` | memory | **full** ([`codecopy_step_equiv`](../EvmSpecsVerify/Opcodes/Codecopy.lean#L642) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3, the CALLDATACOPY harvest through SpecRef's shared `copyFromBuffer`; `MemoryRel` + MM-6 `MemGasSafe` + `CodeRel` hypotheses — code regions are immutable, so no `CalldataBelow` analogue) |
-| GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | unstated |
+| GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | **full** ([`gasprice_step_equiv`](../EvmSpecsVerify/Opcodes/Gasprice.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie `hgp` (codec-free), envelope wf hypothesized) |
 | EXTCODESIZE | 0x3b | `iExtcodesize` | `execute_extcodesize` | env+world | unstated |
 | EXTCODECOPY | 0x3c | `iExtcodecopy` | `execute_extcodecopy` | memory+world | unstated |
 | RETURNDATASIZE | 0x3d | `iReturndatasize` | `execute_returndatasize` | env | unstated |
@@ -103,7 +103,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | POP | 0x50 | `iPop` | `execute_pop` | stack | **full** ([`pop_step_equiv`](../EvmSpecsVerify/Opcodes/Pop.lean#L176) — success/underflow/OOG; overflow unreachable: height decreases) |
 | MLOAD | 0x51 | `iMload` | `execute_mload` | memory | **full** ([`mload_step_equiv`](../EvmSpecsVerify/Opcodes/Mload.lean#L400) — success (grow/in-window)/underflow/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L388) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
-| MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
+| MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | **full** ([`mstore8_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore8.lean#L396) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses, byte codec `word_low_byte_masked`) |
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L503) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis — see `Assumptions.lean`) |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |
