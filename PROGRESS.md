@@ -213,6 +213,11 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `runS_mem_store_byte`, the generic `memoryRel_write` with a
       singleton) and GASPRICE on the ORIGIN `k_env` pusher skeleton
       (codec-free `hgp` register tie)
+- [x] `Opcodes/Shapes/EnvPusher.lean` + `Opcodes/BlockEnv.lean` — the
+      block-env pusher family (COINBASE, TIMESTAMP, NUMBER, PREVRANDAO,
+      GASLIMIT, CHAINID, BASEFEE, SLOTNUM) through one generic
+      `envPush_step_equiv` (SpecRef `pushConstOf` ↔ Evm `envPushShape`
+      over `k_env`); per opcode only the field read and the header tie
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

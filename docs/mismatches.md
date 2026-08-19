@@ -146,6 +146,11 @@ unreachable / ambiguity / needs investigation).
   `memory_word_count_word_eq`). Also `OPCODE_MSTORE8_BASE = 3 = G_verylow`
   (`mstore8_step_equiv`) and `OPCODE_GASPRICE = 2 = G_base`
   (`gasprice_step_equiv`).
+- **Verified 2026-08-19 (block-env pushers)**: `OPCODE_COINBASE` /
+  `OPCODE_TIMESTAMP` / `OPCODE_NUMBER` / `OPCODE_PREVRANDAO` /
+  `OPCODE_GASLIMIT` / `OPCODE_CHAINID` / `OPCODE_BASEFEE` /
+  `OPCODE_SLOTNUM` `= 2 = G_base`, machine-checked by the
+  `envPush_step_equiv` family (Opcodes/BlockEnv.lean).
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

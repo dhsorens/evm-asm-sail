@@ -74,7 +74,8 @@ EVM state can violate it, and whether it is eliminable by proving.
 ## Message-field ties and invariants (env family)
 
 * Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`/`hgp`,
-  `hcdreg`/`hcdrel`) — the extraction's `message`/`k_tx`/`calldata`
+  `hcdreg`/`hcdrel`, and the block-env family `hhdr`/`hcid` + per-field
+  ties in Opcodes/BlockEnv.lean — fragments of the future `BlockEnvRel`) — the extraction's `message`/`k_tx`/`calldata`
   registers carry the same frame data as SpecRef's `Message`. These are
   fragments of the future `MessageRel`/`TxEnvRel`, threaded per opcode
   until the CALL family relates whole frames; established at frame entry.
