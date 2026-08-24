@@ -229,6 +229,10 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       warm-access charge (`200` warm / `3100` cold), and relates the external
       code length through the ledgered `ExtcodesizeAgree` world/code-store
       hypothesis
+- [x] `Opcodes/Extcodehash.lean` — EXTCODEHASH reuses the BALANCE warm/cold
+      account-access proof, including missing-account zero, and bridges the
+      kernel's 32-byte code hash through `hash_to_word` under the ledgered
+      `ExtcodehashAgree` world/account-store hypothesis
 - [x] `Relations/ReturnData.lean` + `Opcodes/Returndatasize.lean` +
       `Opcodes/Returndatacopy.lean` — `ReturnDataRel` ties the extraction's
       output-slice window to SpecRef's inline returndata; full size and copy

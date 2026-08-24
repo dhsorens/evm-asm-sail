@@ -60,7 +60,7 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
-## Account/code read agreement + address warmth (BALANCE / EXTCODESIZE)
+## Account/code read agreement + address warmth
 
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
   account reads: SpecRef's journalled `getAccount` and the kernel's
@@ -71,6 +71,10 @@ EVM state can violate it, and whether it is eliminable by proving.
   `k_get_code_size` return the same code length, quantified over ambient
   address stamps. The hypothesis also carries the code-length word bound.
   Eliminable by the world tranche's account/code-store relation.
+* `ExtcodehashAgree` (Opcodes/Extcodehash.lean) — relates SpecRef's
+  missing-account-zero / account-code-hash result to the extraction's
+  `k_get_codehash` plus `hash_to_word`, quantified over ambient address
+  stamps. Eliminable by the world tranche's account/code-store relation.
 * `WarmAddrRel` (Relations/WarmAddr.lean) — SpecRef's `accessedAddresses`
   vs the extraction's epoch stamps, **modulo precompiles**: the extraction
   short-circuits active precompiles as always warm, SpecRef prewarms them
