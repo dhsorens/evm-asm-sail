@@ -61,6 +61,8 @@ import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Opcodes.Balance
 import EvmSpecsVerify.Opcodes.Extcodesize
 import EvmSpecsVerify.Opcodes.Extcodehash
+import EvmSpecsVerify.Relations.ExternalCode
+import EvmSpecsVerify.Opcodes.Extcodecopy
 import EvmSpecsVerify.Opcodes.Caller
 import EvmSpecsVerify.Opcodes.Callvalue
 import EvmSpecsVerify.Relations.Calldata

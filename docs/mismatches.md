@@ -39,7 +39,9 @@ unreachable / ambiguity / needs investigation).
   (CALLDATACOPY/CODECOPY/RETURNDATACOPY) is pop-first with a **three-stage** extraction charge
   (base / per-word / expansion) against SpecRef's single charge; the OOG states
   still pair kind-for-kind (`calldatacopy_step_equiv`, `codecopy_step_equiv`,
-  `returndatacopy_step_equiv`). Re-establish per class
+  `returndatacopy_step_equiv`). EXTCODECOPY is also pop-first and splits
+  SpecRef's single charge into access/read, copy, and expansion stages; its
+  staged failures are paired by `extcodecopy_step_equiv`. Re-establish per class
   as new families land.
 
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
@@ -181,6 +183,10 @@ unreachable / ambiguity / needs investigation).
   extraction's `account_cost + external_code_read_cost`: warm `200`, cold
   `3100`, machine-checked by `runS_account_cost`,
   `runS_external_code_read_cost`, and `extcodesize_step_equiv`.
+- **Verified 2026-08-24 (EXTCODECOPY)**: the same Amsterdam account + code-read
+  charge is followed by `3 * memory_word_count size` and the identical memory
+  expansion cost. `extcodecopy_step_equiv` proves the three-stage extraction
+  charge equivalent to SpecRef's single total charge for warm and cold targets.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

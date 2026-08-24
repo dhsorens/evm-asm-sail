@@ -75,6 +75,13 @@ EVM state can violate it, and whether it is eliminable by proving.
   missing-account-zero / account-code-hash result to the extraction's
   `k_get_codehash` plus `hash_to_word`, quantified over ambient address
   stamps. Eliminable by the world tranche's account/code-store relation.
+* `ExternalCodeRel` (Relations/ExternalCode.lean) — the byte-level external
+  code sibling used by `extcodecopy_step_equiv`: SpecRef's journalled
+  `getAccount`/`getCode` result is the exact zero-padded byte source written by
+  the extraction's `k_code_copy`. It quantifies over the warm-stamp and memory
+  variants established before lookup and explicitly preserves stack frames,
+  memory frames, warmth, and epoch while allowing lookup-cache updates.
+  Eliminable by the world tranche's account/code-store relation.
 * `WarmAddrRel` (Relations/WarmAddr.lean) — SpecRef's `accessedAddresses`
   vs the extraction's epoch stamps, **modulo precompiles**: the extraction
   short-circuits active precompiles as always warm, SpecRef prewarms them
