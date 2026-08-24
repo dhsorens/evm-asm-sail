@@ -154,6 +154,11 @@ unreachable / ambiguity / needs investigation).
   `OPCODE_GASLIMIT` / `OPCODE_CHAINID` / `OPCODE_BASEFEE` /
   `OPCODE_SLOTNUM` `= 2 = G_base`, machine-checked by the
   `envPush_step_equiv` family (Opcodes/BlockEnv.lean).
+- **Verified 2026-08-24 (EXTCODESIZE)**: at Amsterdam, SpecRef's account
+  access plus EIP-8038 `WARM_ACCESS` code-read surcharge agrees with the
+  extraction's `account_cost + external_code_read_cost`: warm `200`, cold
+  `3100`, machine-checked by `runS_account_cost`,
+  `runS_external_code_read_cost`, and `extcodesize_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

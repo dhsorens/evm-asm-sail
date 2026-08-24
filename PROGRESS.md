@@ -224,6 +224,11 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       codec; the tracker mark carried verbatim (`ancestorMark`); the
       aligned witness-deficient spec abort excluded by the ledgered,
       lookup-specific `BlockhashReady` premise
+- [x] `Opcodes/Extcodesize.lean` — EXTCODESIZE reuses `WarmAddrRel` and the
+      BALANCE account-access run shapes, proves Amsterdam's EIP-8038 second
+      warm-access charge (`200` warm / `3100` cold), and relates the external
+      code length through the ledgered `ExtcodesizeAgree` world/code-store
+      hypothesis
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

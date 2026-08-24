@@ -59,6 +59,7 @@ import EvmSpecsVerify.Opcodes.Address
 import EvmSpecsVerify.Opcodes.Origin
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Opcodes.Balance
+import EvmSpecsVerify.Opcodes.Extcodesize
 import EvmSpecsVerify.Opcodes.Caller
 import EvmSpecsVerify.Opcodes.Callvalue
 import EvmSpecsVerify.Relations.Calldata

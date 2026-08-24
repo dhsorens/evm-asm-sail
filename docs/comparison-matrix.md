@@ -43,7 +43,7 @@ Statuses: `unrelated` (no relation defined yet) · `related` (relation defined) 
 
 | component | SpecRef repr | `Evm` repr | relation | invariants | status |
 |---|---|---|---|---|---|
-| accounts | `BlockState`/`TransactionState` journals (StateTracker.lean:87,107) | `HostState.accountTx/accountBlock : List (address × AcctValue)` (+ `Evm.Contracts.ReferenceWorldState` spec layer, unconnected) | `WorldRel` | HostState↔Contracts connective tissue does not exist yet | unrelated |
+| accounts | `BlockState`/`TransactionState` journals (StateTracker.lean:87,107) | `HostState.accountTx/accountBlock : List (address × AcctValue)` (+ `Evm.Contracts.ReferenceWorldState` spec layer, unconnected) | `WorldRel` | HostState↔Contracts connective tissue does not exist yet; BALANCE and EXTCODESIZE reads are bridged meanwhile by ledgered `BalanceAgree` / `ExtcodesizeAgree` hypotheses | unrelated |
 | persistent storage | `TransactionState` journals | `HostState.storageTx/storageBlock : List (StorageKey × StorageValue)` | `StorageRel` | SLOAD reads bridged meanwhile by the ledgered `SloadAgree` hypothesis (Opcodes/Sload.lean, Assumptions.lean) — discharged when this row is proven | unrelated |
 | transient storage | (in `TransactionState`) | `HostState.transient : List (StorageKey × word)` | `TransientRel` | — | unrelated |
 | journal / revert | journaled tracker (StateTracker.lean) | `HostState.journal : List JournalFrame` (HostAxioms.lean:1092) | `JournalRel` | snapshot vs replay semantics | unrelated |
