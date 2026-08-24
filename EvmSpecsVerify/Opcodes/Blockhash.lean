@@ -17,12 +17,13 @@ extraction holds `ancestorHashes` parent-first and reads
 codec is [`hash_to_word_eq`](../Representation/AddressWord.lean) (wf for
 free, 32 bytes = the word width).
 
-**Witness-deficient states abort on both sides** — SpecRef raises the
+**A witness-deficient lookup aborts on both sides** — SpecRef raises the
 spec-level `executionRejected` (an outer `.error`, not an EVM halt), the
 extraction `fatal_error WitnessDeficient` — so the aligned rejection lies
 outside the `StepResultRel` observation boundary. The theorem excludes it
-with the chain-validity hypothesis `hwit` (the witness holds the last
-`min 256 number` ancestor headers), ledgered in `Assumptions.lean`.
+with the lookup-specific hypothesis `hwit`: only an invocation that reaches
+an in-window lookup must have that depth in the witness. This admits short
+but sufficient witnesses and is ledgered in `Assumptions.lean`.
 SpecRef also records the touched depth in the tracker
 (`trackAncestorAccess`); the post-`txState` is outside `StateRel`, so the
 success lemma carries it verbatim (`ancestorMark`). Operation order is
@@ -67,6 +68,17 @@ def AncestorRel (hashes : List Hash32) (hs : Evm.HostState)
     ∀ d : Nat, 1 ≤ d → d ≤ hashes.length →
       (hs.ancestorHashes.getD (d - 1) default).toList
         = hashes.getD (hashes.length - d) (List.replicate 32 0x00)
+
+/-- The current BLOCKHASH invocation cannot reach the witness-deficient
+outer-abort path. Underflow, OOG, and out-of-window queries need no witness
+coverage; an in-window query needs only its actual ancestor depth. -/
+def BlockhashReady (s : Machine) : Prop :=
+  ∀ x rest, s.evm.stack = x :: rest →
+    GasCosts.OPCODE_BLOCKHASH ≤ s.evm.gasLeft →
+    x < (s.evm.message.blockEnv.number : Nat) →
+    (s.evm.message.blockEnv.number : Nat) ≤ x + 256 →
+    (s.evm.message.blockEnv.number : Nat) - x
+      ≤ s.evm.message.blockEnv.blockHashes.length
 
 /-! ## SpecRef run shapes -/
 
@@ -345,9 +357,9 @@ theorem runS_execute_blockhash_underflow (pc_in : Nat) (top : StackTop)
 open Evm.Functions in
 /-- **BLOCKHASH, all reachable outcomes** (success splits on the 256-deep
 window). `hhdr`/`hnum` tie the header number, `hanc` the ancestor-hash
-witness (reversed indexing + count), and `hwit` is the chain-validity
-bound that renders the (both-sides, aligned) witness-deficient spec abort
-unreachable — see `Assumptions.lean`. -/
+witness (reversed indexing + count), and `hwit` excludes only an actual
+witness-deficient lookup, whose aligned outer abort is beyond
+`StepResultRel` — see `Assumptions.lean`. -/
 theorem blockhash_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
     (pc_in : Nat) (hdr : BlockHeader)
@@ -356,8 +368,7 @@ theorem blockhash_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hhdr : ss.regs.get? Register.k_header = some hdr)
     (hnum : (hdr.number : Nat) = sRef.evm.message.blockEnv.number)
     (hanc : AncestorRel sRef.evm.message.blockEnv.blockHashes hs ss)
-    (hwit : min 256 (sRef.evm.message.blockEnv.number : Nat)
-      ≤ sRef.evm.message.blockEnv.blockHashes.length) :
+    (hwit : BlockhashReady sRef) :
     StepResultRel (BasePost mem) (runR iBlockhash sRef)
       (runS (Evm.Functions.execute (.BLOCKHASH ()) pc_in top mem g)
         hs ss) := by
@@ -404,11 +415,12 @@ theorem blockhash_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
         · exact ⟨by rw [hlive], hres, hsp⟩
       · push Not at hout
         obtain ⟨hin, hdist⟩ := hout
+        have hcov := hwit x rest hS hg hin hdist
         have keyPair : ∀ cur bnn len : Nat, bnn < cur → cur ≤ bnn + 256 →
-            min 256 cur ≤ len →
+            cur - bnn ≤ len →
             1 ≤ cur - bnn ∧ cur - bnn ≤ len ∧ cur - bnn ≤ 256 :=
           fun _ _ _ h1 h2 h3 => by omega
-        have hpair := keyPair _ _ _ hin hdist hwit
+        have hpair := keyPair _ _ _ hin hdist hcov
         have hvaleq : (hs.ancestorHashes.getD
               ((hdr.number : Nat) - x - 1) default).toList
             = sRef.evm.message.blockEnv.blockHashes.getD

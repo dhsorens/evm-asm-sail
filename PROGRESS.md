@@ -222,8 +222,8 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       parent-first ancestor store ↔ oldest-first `blockHashes`, reversed
       indexing + `k_n_headers` count) and the 32-byte `hash_to_word_eq`
       codec; the tracker mark carried verbatim (`ancestorMark`); the
-      aligned witness-deficient spec aborts excluded by the ledgered
-      `hwit` chain-validity bound
+      aligned witness-deficient spec abort excluded by the ledgered,
+      lookup-specific `BlockhashReady` premise
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

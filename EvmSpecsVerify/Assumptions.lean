@@ -109,15 +109,14 @@ EVM state can violate it, and whether it is eliminable by proving.
   `ancestorHashes` store + `k_n_headers` count represent SpecRef's
   oldest-first `blockEnv.blockHashes` with reversed indexing. A
   `BlockEnvRel` fragment, established at frame entry (M3).
-* `hwit` (`blockhash_step_equiv`) — the witness holds the last
-  `min 256 number` ancestor headers. A **domain restriction**: on
-  witness-deficient states both sides abort at the spec level — SpecRef
-  `executionRejected`, the extraction `fatal_error WitnessDeficient` —
-  which is *aligned* behavior, but the aborts live outside the
-  `StepResultRel` observation boundary (outer errors), so the step
-  theorem excludes those states rather than relating them. Every block
-  accepted by the stateless validator satisfies `hwit` (deficient
-  witnesses are rejected up front); eliminable only by widening the
+* `hwit : BlockhashReady sRef` (`blockhash_step_equiv`) — a
+  **lookup-specific domain restriction**: when this invocation has an
+  operand, enough gas, and an in-window depth, that one depth must be present
+  in the witness. Underflow, OOG, out-of-window queries, and short but
+  sufficient witnesses remain in scope. A missing in-window depth makes both
+  sides abort at the spec level — SpecRef `executionRejected`, the extraction
+  `fatal_error WitnessDeficient` — but those aligned outer errors are outside
+  the `StepResultRel` observation boundary. Eliminable only by widening the
   outcome relation to pair spec aborts.
 
 ## Deliberate scope restrictions (this tranche)
