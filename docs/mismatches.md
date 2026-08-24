@@ -36,9 +36,10 @@ unreachable / ambiguity / needs investigation).
   extraction also pops before charging there, because `exp_gas` needs the exponent
   (Execute.lean:283); the halted post-cursor differs from the other shapes
   (`top - 2`, not `top`) and is equally unobservable. The copy family
-  (CALLDATACOPY/CODECOPY, SpecRef's shared `copyFromBuffer`) is pop-first with a **three-stage** extraction charge
+  (CALLDATACOPY/CODECOPY/RETURNDATACOPY) is pop-first with a **three-stage** extraction charge
   (base / per-word / expansion) against SpecRef's single charge; the OOG states
-  still pair kind-for-kind (`calldatacopy_step_equiv`, `codecopy_step_equiv`). Re-establish per class
+  still pair kind-for-kind (`calldatacopy_step_equiv`, `codecopy_step_equiv`,
+  `returndatacopy_step_equiv`). Re-establish per class
   as new families land.
 
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
@@ -92,6 +93,27 @@ unreachable / ambiguity / needs investigation).
   threaded as the `MemGasSafe` hypothesis (Relations/Memory.lean): the frame's
   gas cannot pay for word count `2^27`. Ledgered in `Assumptions.lean`;
   `safe_required_bound` discharges the range check from it.
+
+## MM-7: RETURNDATACOPY out-of-bounds diagnostic kind
+
+- **Area**: RETURNDATACOPY source-range validation.
+- **SpecRef**: after charging gas, throws `.outOfBoundsRead` when
+  `source + size > returnData.length`.
+- **`Evm`**: after the same charges and memory expansion,
+  `validated_returndata_copy` calls `exc_halt ... InvalidOpcode` for either
+  failed bounds check.
+- **Trigger**: any sufficiently funded RETURNDATACOPY whose source range is
+  outside the previous call's returndata, including `size = 0` with
+  `source > returnData.length`.
+- **Expected EVM behavior**: exceptional halt consuming the frame's remaining
+  gas. The internal diagnostic label is not chain-observable.
+- **Fork**: all. **Reachability**: trivially reachable. **Severity**: none at
+  the chain observation boundary; visible to diagnostic-kind comparison.
+- **Likely cause**: the Sail model uses its existing `ExceptionKind` vocabulary
+  for the exceptional halt and has no dedicated returndata-bounds kind.
+- **Disposition**: *intentional abstraction* — represented explicitly by
+  `ErrorRel.outOfBoundsRead`; `returndatacopy_step_equiv` proves the complete
+  in-bounds and out-of-bounds paths without weakening `StepResultRel`.
 
 ## MM-4: Step-boundary pc convention
 

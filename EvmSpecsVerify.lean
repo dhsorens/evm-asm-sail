@@ -69,6 +69,9 @@ import EvmSpecsVerify.Opcodes.Codesize
 import EvmSpecsVerify.Opcodes.Calldatacopy
 import EvmSpecsVerify.Relations.Code
 import EvmSpecsVerify.Opcodes.Codecopy
+import EvmSpecsVerify.Relations.ReturnData
+import EvmSpecsVerify.Opcodes.Returndatasize
+import EvmSpecsVerify.Opcodes.Returndatacopy
 import EvmSpecsVerify.Opcodes.Mstore8
 import EvmSpecsVerify.Opcodes.Gasprice
 import EvmSpecsVerify.Opcodes.Shapes.EnvPusher

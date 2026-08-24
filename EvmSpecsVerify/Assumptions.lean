@@ -28,6 +28,12 @@ EVM state can violate it, and whether it is eliminable by proving.
 * `StepRel` register hypotheses (`profile`, `message`, gas registers) —
   registers present in the register file. Guaranteed by `sail_model_init`
   + the interpreter's write discipline.
+* `ReturnDataRel` (Relations/ReturnData.lean) — SpecRef's inline returndata
+  equals the extraction's `returndata` output-slice window. Established when
+  CALL-family frames return and consumed by RETURNDATASIZE/RETURNDATACOPY;
+  violations are representation-invalid rather than reachable EVM states.
+  Eliminable from individual opcode statements once a frame-transition
+  simulation carries the relation globally.
 
 ## Gas budget (memory family)
 

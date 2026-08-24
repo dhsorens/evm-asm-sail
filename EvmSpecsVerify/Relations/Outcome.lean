@@ -37,6 +37,7 @@ inductive ErrorRel : EvmError → ExceptionKind → Prop
   | stackOverflow : ErrorRel .stackOverflow .StackOverflow
   | outOfGas : ErrorRel .outOfGas .OutOfGas
   | invalidJumpDest : ErrorRel .invalidJumpDest .InvalidJump
+  | outOfBoundsRead : ErrorRel .outOfBoundsRead .InvalidOpcode
 
 /-- The value returned by the extraction's `execute`: the state-passing
 tuple (next pc, stack cursor, memory slice, remaining gas). -/

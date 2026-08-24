@@ -229,6 +229,11 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       warm-access charge (`200` warm / `3100` cold), and relates the external
       code length through the ledgered `ExtcodesizeAgree` world/code-store
       hypothesis
+- [x] `Relations/ReturnData.lean` + `Opcodes/Returndatasize.lean` +
+      `Opcodes/Returndatacopy.lean` — `ReturnDataRel` ties the extraction's
+      output-slice window to SpecRef's inline returndata; full size and copy
+      simulations cover zero/grow/in-window success, every charge failure,
+      and bounds failures after expansion (MM-7 diagnostic-kind abstraction)
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 
