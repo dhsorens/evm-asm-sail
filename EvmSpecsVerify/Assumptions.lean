@@ -73,8 +73,9 @@ EVM state can violate it, and whether it is eliminable by proving.
 
 ## Message-field ties and invariants (env family)
 
-* Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`,
-  `hcdreg`/`hcdrel`) — the extraction's `message`/`k_tx`/`calldata`
+* Register-field ties (`haddr`, `hcaller`, `hvalue`, `htx`/`horigin`/`hgp`,
+  `hcdreg`/`hcdrel`, and the block-env family `hhdr`/`hcid` + per-field
+  ties in Opcodes/BlockEnv.lean — fragments of the future `BlockEnvRel`) — the extraction's `message`/`k_tx`/`calldata`
   registers carry the same frame data as SpecRef's `Message`. These are
   fragments of the future `MessageRel`/`TxEnvRel`, threaded per opcode
   until the CALL family relates whole frames; established at frame entry.
@@ -83,9 +84,40 @@ EVM state can violate it, and whether it is eliminable by proving.
   discharged at frame entry (M3).
 * `CalldataRel` (Relations/Calldata.lean) covers both calldata windows
   (top-frame `InputCalldata` and nested-frame `MemoryCalldata`) — the read
-  path is fully proven; what remains for the CALL family is establishing
-  the nested window at frame entry (CALL sets up a parent-memory window
-  that reads back the child's `message.data`).
+  and copy paths are fully proven; what remains for the CALL family is
+  establishing the nested window at frame entry (CALL sets up a
+  parent-memory window that reads back the child's `message.data`).
+* `CalldataBelow` (Relations/Calldata.lean, `calldatacopy_step_equiv`) —
+  a nested frame's parent-memory calldata window lies entirely below the
+  current frame's base, so the current frame's memory writes (expansion
+  zero-fill, copy splice) cannot touch it. Trivially true for the
+  top-frame input-arena window. A frame-allocation invariant (child
+  frames are established above their parents); to be established at
+  frame entry with the rest of `CalldataRel` (M3).
+* `CodeRel` (Relations/Code.lean, `codesize_step_equiv` /
+  `codecopy_step_equiv`) — the `frame_code` register holds a slice whose
+  window reads back SpecRef's `evm.code` byte-for-byte (the same register
+  `JumpdestRel` reads for JUMPI). Established at frame entry (M3);
+  threaded per opcode meanwhile. Slice-length wf (`< 2^256`, also for
+  `message.data.length` in `calldatasize_step_equiv`) is the extraction's
+  `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
+  `word_of_source_byte_count`'s assert is unreachable under it.
+
+## Witness sufficiency (BLOCKHASH)
+
+* `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
+  `ancestorHashes` store + `k_n_headers` count represent SpecRef's
+  oldest-first `blockEnv.blockHashes` with reversed indexing. A
+  `BlockEnvRel` fragment, established at frame entry (M3).
+* `hwit : BlockhashReady sRef` (`blockhash_step_equiv`) — a
+  **lookup-specific domain restriction**: when this invocation has an
+  operand, enough gas, and an in-window depth, that one depth must be present
+  in the witness. Underflow, OOG, out-of-window queries, and short but
+  sufficient witnesses remain in scope. A missing in-window depth makes both
+  sides abort at the spec level — SpecRef `executionRejected`, the extraction
+  `fatal_error WitnessDeficient` — but those aligned outer errors are outside
+  the `StepResultRel` observation boundary. Eliminable only by widening the
+  outcome relation to pair spec aborts.
 
 ## Deliberate scope restrictions (this tranche)
 

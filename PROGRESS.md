@@ -193,6 +193,37 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `CalldataRel` (top-frame `InputCalldata` window ↔ `message.data`,
       byte-for-byte; `calldataRel_load_word` needs no range hypothesis —
       both sides zero-pad past the end)
+- [x] `Opcodes/Calldatasize.lean` / `Opcodes/Codesize.lean` /
+      `Opcodes/Calldatacopy.lean` — the size pushers and the first copy
+      opcode: CALLDATASIZE/CODESIZE on the charge-first pusher skeleton
+      (`calldataRel_length` and the `frame_code` length tie;
+      `word_of_source_byte_count` identity under the slice bound);
+      CALLDATACOPY composes the MSTORE expansion machinery with the new
+      `calldataRel_copy` (host copy = `writeArrayBytes` of SpecRef's
+      zero-padded `buffer_read`, either window), a generic
+      `memoryRel_write`, the three-way charge split
+      (`runS_charge_copy_ok/_oog`), and `CalldataBelow` window separation
+- [x] `Relations/Code.lean` + `Opcodes/Codecopy.lean` — `CodeRel` (the
+      `frame_code` window reads back `evm.code`; `codeRel_copy` reuses the
+      calldata window lemmas) and CODECOPY as the CALLDATACOPY harvest
+      through SpecRef's shared `copyFromBuffer`; `codesize_step_equiv`
+      tightened to take `CodeRel` instead of a bare length tie
+- [x] `Opcodes/Mstore8.lean` / `Opcodes/Gasprice.lean` — MSTORE8 as the
+      single-byte MSTORE harvest (byte codec `word_low_byte_masked`,
+      `runS_mem_store_byte`, the generic `memoryRel_write` with a
+      singleton) and GASPRICE on the ORIGIN `k_env` pusher skeleton
+      (codec-free `hgp` register tie)
+- [x] `Opcodes/Shapes/EnvPusher.lean` + `Opcodes/BlockEnv.lean` — the
+      block-env pusher family (COINBASE, TIMESTAMP, NUMBER, PREVRANDAO,
+      GASLIMIT, CHAINID, BASEFEE, SLOTNUM) through one generic
+      `envPush_step_equiv` (SpecRef `pushConstOf` ↔ Evm `envPushShape`
+      over `k_env`); per opcode only the field read and the header tie
+- [x] `Opcodes/Blockhash.lean` — BLOCKHASH over `AncestorRel` (the
+      parent-first ancestor store ↔ oldest-first `blockHashes`, reversed
+      indexing + `k_n_headers` count) and the 32-byte `hash_to_word_eq`
+      codec; the tracker mark carried verbatim (`ancestorMark`); the
+      aligned witness-deficient spec abort excluded by the ledgered,
+      lookup-specific `BlockhashReady` premise
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

@@ -63,3 +63,13 @@ import EvmSpecsVerify.Opcodes.Caller
 import EvmSpecsVerify.Opcodes.Callvalue
 import EvmSpecsVerify.Relations.Calldata
 import EvmSpecsVerify.Opcodes.Calldataload
+import EvmSpecsVerify.Opcodes.Calldatasize
+import EvmSpecsVerify.Opcodes.Codesize
+import EvmSpecsVerify.Opcodes.Calldatacopy
+import EvmSpecsVerify.Relations.Code
+import EvmSpecsVerify.Opcodes.Codecopy
+import EvmSpecsVerify.Opcodes.Mstore8
+import EvmSpecsVerify.Opcodes.Gasprice
+import EvmSpecsVerify.Opcodes.Shapes.EnvPusher
+import EvmSpecsVerify.Opcodes.BlockEnv
+import EvmSpecsVerify.Opcodes.Blockhash

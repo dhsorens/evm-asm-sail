@@ -23,6 +23,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 - **unop**: 1-in/1-out analogue — [`Shapes/Unop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Unop.lean)
 - **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
+- **env pusher**: base-cost `k_env` block-environment pushers (SpecRef `pushConstOf`, Evm `envPushShape`) — [`Shapes/EnvPusher.lean`](../EvmSpecsVerify/Opcodes/Shapes/EnvPusher.lean)
 - **memory / control / env / storage / system**: as named
 
 ## ALU family
@@ -73,28 +74,28 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CALLER | 0x33 | `iCaller` | `execute_caller` | env | **full** ([`caller_step_equiv`](../EvmSpecsVerify/Opcodes/Caller.lean#L205) — success/overflow/OOG/MM-5 double fault; codec bridge `address_to_word_eq`) |
 | CALLVALUE | 0x34 | `iCallvalue` | `execute_callvalue` | env | **full** ([`callvalue_step_equiv`](../EvmSpecsVerify/Opcodes/Callvalue.lean#L206) — success/overflow/OOG/MM-5 double fault; codec-free, message-value wf hypothesized) |
 | CALLDATALOAD | 0x35 | `iCalldataload` | `execute_calldataload` | env+memory | **full** ([`calldataload_step_equiv`](../EvmSpecsVerify/Opcodes/Calldataload.lean#L222) — success/underflow/OOG; `CalldataRel` covers both calldata windows (input arena / parent memory), both sides zero-pad so no range hypothesis) |
-| CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | unstated |
-| CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | unstated |
-| CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | unstated |
-| CODECOPY | 0x39 | `iCodecopy` | `execute_codecopy` | memory | unstated |
-| GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | unstated |
+| CALLDATASIZE | 0x36 | `iCalldatasize` | `execute_calldatasize` | env | **full** ([`calldatasize_step_equiv`](../EvmSpecsVerify/Opcodes/Calldatasize.lean#L216) — success/overflow/OOG/MM-5 double fault; `CalldataRel` supplies the length tie, slice-length wf hypothesized like CALLVALUE's `hwfv`) |
+| CALLDATACOPY | 0x37 | `iCalldatacopy` | `execute_calldatacopy` | memory | **full** ([`calldatacopy_step_equiv`](../EvmSpecsVerify/Opcodes/Calldatacopy.lean#L653) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3 (base/per-word/expansion, three-way charge split vs SpecRef's single charge); `MemoryRel` + MM-6 `MemGasSafe` + `CalldataRel` + `CalldataBelow` nested-window separation hypotheses) |
+| CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | **full** ([`codesize_step_equiv`](../EvmSpecsVerify/Opcodes/Codesize.lean#L217) — success/overflow/OOG/MM-5 double fault; `CodeRel` supplies the `frame_code` register read + length tie (shared with CODECOPY), code-length wf hypothesized) |
+| CODECOPY | 0x39 | `iCodecopy` | `execute_codecopy` | memory | **full** ([`codecopy_step_equiv`](../EvmSpecsVerify/Opcodes/Codecopy.lean#L642) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3, the CALLDATACOPY harvest through SpecRef's shared `copyFromBuffer`; `MemoryRel` + MM-6 `MemGasSafe` + `CodeRel` hypotheses — code regions are immutable, so no `CalldataBelow` analogue) |
+| GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | **full** ([`gasprice_step_equiv`](../EvmSpecsVerify/Opcodes/Gasprice.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie `hgp` (codec-free), envelope wf hypothesized) |
 | EXTCODESIZE | 0x3b | `iExtcodesize` | `execute_extcodesize` | env+world | unstated |
 | EXTCODECOPY | 0x3c | `iExtcodecopy` | `execute_extcodecopy` | memory+world | unstated |
 | RETURNDATASIZE | 0x3d | `iReturndatasize` | `execute_returndatasize` | env | unstated |
 | RETURNDATACOPY | 0x3e | `iReturndatacopy` | `execute_returndatacopy` | memory | unstated |
 | EXTCODEHASH | 0x3f | `iExtcodehash` | `execute_extcodehash` | env+world+crypto | unstated |
-| BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | unstated |
-| COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | unstated |
-| TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | unstated |
-| NUMBER | 0x43 | `iNumber` | `execute_number` | env | unstated |
-| PREVRANDAO | 0x44 | `iPrevrandao` | `execute_prevrandao` | env | unstated |
-| GASLIMIT | 0x45 | `iGaslimit` | `execute_gaslimit` | env | unstated |
-| CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | unstated |
+| BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | **full** ([`blockhash_step_equiv`](../EvmSpecsVerify/Opcodes/Blockhash.lean#L363) — success ×2 (in-window hash/out-of-window zero)/underflow/OOG; `AncestorRel` ties the reversed-index witness windows, codec `hash_to_word_eq`; `BlockhashReady` excludes only a reached missing-depth outer abort, while admitting short but sufficient witnesses; see `Assumptions.lean`) |
+| COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | **full** ([`coinbase_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L127) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header fee-recipient tie, wf via `address_to_word`) |
+| TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | **full** ([`timestamp_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L152) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header timestamp tie, u64 wf hypothesized) |
+| NUMBER | 0x43 | `iNumber` | `execute_number` | env | **full** ([`number_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L173) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header number tie, u64 wf hypothesized) |
+| PREVRANDAO | 0x44 | `iPrevrandao` | `execute_prevrandao` | env | **full** ([`prevrandao_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L194) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; randao word ↔ 32-byte decode tie, wf hypothesized) |
+| GASLIMIT | 0x45 | `iGaslimit` | `execute_gaslimit` | env | **full** ([`gaslimit_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L217) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header gas-limit tie, wf hypothesized) |
+| CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | **full** ([`chainid_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L238) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; `k_chain_id` register tie, u64 wf hypothesized) |
 | SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | unstated |
-| BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | unstated |
+| BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | **full** ([`basefee_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L258) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header base-fee tie, wf hypothesized) |
 | BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | unstated |
 | BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated |
-| SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | unstated |
+| SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | **full** ([`slotnum_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L278) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header slot-number tie, u64 wf hypothesized) |
 
 ## Stack / memory / storage / control
 
@@ -103,7 +104,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | POP | 0x50 | `iPop` | `execute_pop` | stack | **full** ([`pop_step_equiv`](../EvmSpecsVerify/Opcodes/Pop.lean#L176) — success/underflow/OOG; overflow unreachable: height decreases) |
 | MLOAD | 0x51 | `iMload` | `execute_mload` | memory | **full** ([`mload_step_equiv`](../EvmSpecsVerify/Opcodes/Mload.lean#L400) — success (grow/in-window)/underflow/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L388) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
-| MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | unstated |
+| MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | **full** ([`mstore8_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore8.lean#L396) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses, byte codec `word_low_byte_masked`) |
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L503) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis — see `Assumptions.lean`) |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |

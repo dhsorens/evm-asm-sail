@@ -25,8 +25,10 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   drop it from hypotheses without a plan to prove preservation.
 
 - **`omega` is blind to any comparison/arithmetic NODE whose type argument is
-  an abbrev (`U256`/`word`/`Uint`/`gas_constant`), and to raw `Nat.le`/`Nat.lt`
-  spellings.** The node's instance is fixed at *elaboration* of whatever
+  an abbrev (`U256`/`word`/`Uint`/`gas_constant`), and to raw
+  `Nat.le`/`Nat.lt`/`Nat.div`/`Nat.mod` spellings (the extraction emits the
+  latter; `rw` patterns written with `/`/`%` also fail to match them — bridge
+  with a defeq `show` in `/`/`%` spelling first).** The node's instance is fixed at *elaboration* of whatever
   statement introduced it; abbrev-typed operands can drag the whole binop to
   the abbrev even with a `Nat` operand present, and `(x : Nat)` ascriptions on
   variables do NOT reliably rescue it. Atoms of abbrev type *inside* an
@@ -45,6 +47,18 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
      still omega — convert the hypothesis instead and bridge with `exact`.
   `Int` powers: rewrite `(2:Int)^(256:Nat)` to a numeral via `decide` first
   (see `Representation/SignedWord.lean`, `fromSigned_eq`).
+- Instantiating a generic shape theorem (Binop/EnvPusher style) leaves goals
+  with un-reduced beta-redexes (`WordWf ((fun e => …) sRef.evm)`), which `rw`
+  cannot see into — `show` the beta-reduced statement first, then rewrite.
+- `omega` also ignores **disjunction hypotheses** and can't split a `¬(A ∨ B)`
+  goal — `rcases h with h | h <;> omega` for the former, `simp only [not_or]`
+  + per-conjunct `omega` for the latter. And when operands are match-bound
+  abbrev variables (`x : U256` from a stack match) or struct projections,
+  skip the ascription attempt entirely — go straight to the ∀-Nat key-clone
+  remedy; `(e : Nat)` ascriptions do not change the elaborated instance.
+- A multi-line `by` block inside `rw [… (by tac₁\n tac₂) …]` fails to parse
+  mid-bracket — keep in-`rw` proofs single-line (`by tac₁; tac₂`) or hoist a
+  `have` above the `rw`.
 
 ## Stack geometry
 
