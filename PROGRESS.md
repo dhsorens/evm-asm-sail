@@ -238,6 +238,14 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       output-slice window to SpecRef's inline returndata; full size and copy
       simulations cover zero/grow/in-window success, every charge failure,
       and bounds failures after expansion (MM-7 diagnostic-kind abstraction)
+- [ ] `Relations/ExternalCode.lean` → `Opcodes/Extcodecopy.lean` — establish
+      byte-level arbitrary-account code correspondence between SpecRef's
+      journalled `getAccount`/`getCode` and the extraction's cache/witness-backed
+      `k_code_copy`, including its exact host-memory write and cache-preservation
+      behavior. The existing current-frame `CodeRel` and scalar
+      `ExtcodesizeAgree`/`ExtcodehashAgree` do not imply this; EXTCODECOPY must
+      remain unstated until this bridge exists. Once established, reuse the
+      four-pop warm/cold copy shape (account + EIP-8038 read + copy + expansion)
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 
