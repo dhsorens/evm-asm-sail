@@ -109,7 +109,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | **full** ([`jump_step_equiv`](../EvmSpecsVerify/Opcodes/Jump.lean#L285) — taken jump/underflow/OOG/invalid destination; the JUMPI harvest through `do_jump` and `JumpdestRel`, sharing `ControlPost`; no fall-through branch, overflow unreachable for 1-in/0-out) |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L501) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
-| PC | 0x58 | `iPc` | `execute_pc` | env | unstated |
+| PC | 0x58 | `iPc` | `execute_pc` | env (live-state pusher) | **full** ([`pc_step_equiv`](../EvmSpecsVerify/Opcodes/Pc.lean#L221) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. The extraction recovers the opcode position as `pc_in - 1` (`alu_sub_one`, no wrap since `pc_in ≥ 1`); domain restricted by `hwfpc : pc_in < 2^256` — see `Assumptions.lean`) |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
 | GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
 | JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
@@ -143,7 +143,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 43 |
-| unstated | 46 |
+| full | 44 |
+| unstated | 45 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

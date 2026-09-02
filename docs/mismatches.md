@@ -189,8 +189,9 @@ unreachable / ambiguity / needs investigation).
   charge equivalent to SpecRef's single total charge for warm and cold targets.
 - **Verified 2026-09-02 (control family)**: `OPCODE_JUMPDEST = 1 = G_jumpdest`
   and `OPCODE_JUMP = 8 = G_mid` (`OPCODE_JUMPI = 10 = G_high` was already
-  covered by `jumpi_step_equiv`). Machine-checked by `jumpdest_step_equiv`
-  and `jump_step_equiv`.
+  covered by `jumpi_step_equiv`) and `OPCODE_PC = 2 = G_base`.
+  Machine-checked by `jumpdest_step_equiv`, `jump_step_equiv` and
+  `pc_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 
