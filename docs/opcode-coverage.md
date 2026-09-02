@@ -112,7 +112,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | PC | 0x58 | `iPc` | `execute_pc` | env | unstated |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
 | GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
-| JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | unstated |
+| JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
 | TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated |
 | MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
@@ -143,7 +143,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 41 |
-| unstated | 48 |
+| full | 42 |
+| unstated | 47 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
