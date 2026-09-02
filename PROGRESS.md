@@ -351,32 +351,25 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       the remaining member of that class and needs the persistent-storage
       relation instead.
 
+- [x] `Opcodes/Blobbasefee.lean` — the fake-exponential bridge, and the
+      only opcode whose two implementations run a **loop**.
+      `runS_blob_loop` relates SpecRef's fuelled `taylorAux` to the
+      extraction's `whileFuelM` over `(accumulator, output, term_index)`
+      by induction on SpecRef's fuel, with the loop's own fuel bounded by
+      `final < out + ef` rather than by SpecRef's (an over-approximation)
+      — each iteration adds at least one to the running sum.
+      The step theorem is stated on the **MM-15 agreement regime**,
+      `hword : price < 2 ^ 256`; that single hypothesis rules out both
+      extraction guards, because the running sum bounds the accumulator
+      (it is one of the summands), the iteration count and hence the term
+      index. No exponential estimate is needed anywhere.
+      MM-15 itself — the extraction hard-aborts above that bound while
+      SpecRef pushes an unreduced ≥ 2^256 price, inside the range its own
+      profile admits — stays open; `scripts/blob-fee-band.py` has the
+      numbers.
+
 Residual for the remaining `unstated` rows:
 
-- **BLOBBASEFEE** needs a fake-exponential bridge, and the comparison
-  that sized it turned up **MM-15** — the sharpest divergence in the
-  ledger. The two recurrences *are* the same (`output += acc;
-  acc := acc * num / (den * i)`, same schedule constants: Amsterdam picks
-  bpo2 on both sides, `den = 11684671`), but the guards are not: the
-  extraction `fatal_error NumericOverflow`s once the pre-division sum
-  reaches `den * 2^256`, which happens at `excess_blob_gas ≈ 177.45 * den`
-  — well inside the `excess_blob_gas ≤ 256 * den + 7 * 2^17` its own
-  profile permits — while SpecRef computes on and `stackPush`es a price
-  ≥ 2^256 unreduced. Numbers, root cause (`blob_fee_word_exponent_limit`
-  is 256 where `256 * ln 2 ≈ 177.45` is wanted) and reachability
-  (~2 260 maximum-blob blocks) are in `docs/mismatches.md`.
-  What that means for the slice: the step theorem can only be stated on
-  the agreement regime, `excess_blob_gas < 2 073 394 371`, carried as an
-  explicit bound — under which the extraction's guards provably never
-  fire, since the running sum bounds both the accumulator and the
-  iteration count. The remaining work is then mechanical but not small:
-  an induction relating SpecRef's fuelled `taylorAux` to the extraction's
-  `whileFuelM` loop (state triple `(acc, out, i)`), a generalization of
-  `Shapes/EnvPusher.lean`'s `envPushShape` to an arbitrary value
-  computation (BLOBBASEFEE is the second instance of that shape, so the
-  extraction is now justified), and a profile-parameter tie for the
-  schedule indices, which the Sail type system fixes but the Lean
-  extraction erases.
 - **SSTORE** is TSTORE with every hard part back. `TransientRel` shows the
   *shape* of the post it needs but none of the content: the extraction's
   `k_sstore` writes a `StorageValue {curr, orig}` row through the tx

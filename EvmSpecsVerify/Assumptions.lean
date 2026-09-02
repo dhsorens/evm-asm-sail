@@ -211,6 +211,35 @@ EVM state can violate it, and whether it is eliminable by proving.
   (M3). It is load-bearing in both directions here, because the two sides
   check it at different points (mismatch ledger MM-11).
 
+## Blob-fee regime and profile parameters (BLOBBASEFEE)
+
+* `hword` (`blobbasefee_step_equiv`) — the blob base fee fits a word.
+  **Not a convenience**: mismatch ledger MM-15 shows the two sides
+  genuinely disagree above it, inside the range the extraction's own
+  profile admits, so this hypothesis *is* the agreement regime. It is
+  also all the proof needs: inside it the running sum bounds the
+  accumulator, the iteration count and the term index, so neither
+  extraction overflow guard can fire and no exponential estimate is
+  required. Not eliminable — the divergence above it is real.
+* `hprice` (`blobbasefee_step_equiv`) — SpecRef's `taylor_exponential`
+  terminates within its fuel. Its other outcome is a `SpecError`, an
+  outer abort outside the step-result boundary (the same treatment MM-6's
+  spec aborts get). Eliminable by proving the fuel bound sufficient — a
+  numeric side-quest, not a modelling gap.
+* `hden` (`blobbasefee_step_equiv`) — the profile's blob-schedule
+  denominator index is `BLOB_BASE_FEE_UPDATE_FRACTION`. The Sail type
+  system fixes this per fork (`protocol_profile_parameters` correlates
+  fork and schedule), but the Lean extraction erases type quantifiers, so
+  it must be re-supplied. Discharged at tx level (M3) with the rest of
+  the profile.
+* `hcfg` (`BlobConfigOk`, `blobbasefee_step_equiv`) — the extraction's own
+  precondition on `blob_base_fee`: the fork has blobs and the header's
+  excess is within the profile ceiling. Outside it the extraction
+  `fatal_error`s, which is an outer abort.
+* `hexcess` (`blobbasefee_step_equiv`) — the header register's
+  `excess_blob_gas` equals SpecRef's `blockEnv.excessBlobGas`: another
+  `BlockEnvRel` fragment, like the ties in Opcodes/BlockEnv.lean.
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
