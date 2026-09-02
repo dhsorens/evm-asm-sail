@@ -280,9 +280,32 @@ unreachable / ambiguity / needs investigation).
   MM-10 were when the LOG slice lands: a new `ErrorRel` constructor pairing
   `.writeInStaticContext` with `WriteProtection`, plus `WriteProtection` as a
   fourth explicitly listed kind of `StepResultRel.haltedChargeFirst`. Both
-  are now in place and machine-checked by `log0_step_equiv`
-  (Opcodes/Log.lean); LOG1–LOG4 reuse them unchanged when their arities
-  land.
+  are now in place and machine-checked by `logn_step_equiv`
+  (Opcodes/Log.lean), which covers the whole family — every arity's
+  double-fault state included.
+
+## MM-12: `pop_log_topics` accepts an out-of-range LOG arity silently
+
+- **Area**: the LOG family at arities outside `0…4`.
+- **SpecRef**: `iLogN n` (InstructionsCore.lean:404) pops `n` topics for
+  **any** `n` — the operand block is `(List.range n).mapM stackPop`.
+- **`Evm`**: `pop_log_topics` (Execute.lean:135) matches `0`/`1`/`2`/`3`/`4`
+  and closes with a catch-all `| _ => pure (LogTopics0 (), top)` that pops
+  **nothing** and emits a topic-free record — while `charge_log_gas` still
+  bills `G_logtopic * n` and `validate_stack` still demands `n + 2`
+  operands. So at `n ≥ 5` the two sides emit different records *and* leave
+  the cursor at different heights.
+- **Trigger**: an `Instruction.LOG n` with `n ≥ 5`. **Neither decoder
+  builds one**: the extraction gates on `160 ≤b opcode && opcode ≤b 164`
+  (Interpreter.lean:133), and SpecRef enumerates `0xA0`–`0xA4` one arity
+  at a time (Interpreter.lean:345).
+- **Fork**: all. **Reachability**: *unreachable* — no decode step produces
+  the AST value. **Severity**: none.
+- **Disposition**: *unreachable*; recorded because it is what justifies
+  `logn_step_equiv`'s `hn : n ≤ 4`. That bound is exactly the decoders'
+  range rather than a proof convenience, so the theorem covers every LOG
+  either decoder can emit. Should a future fork widen the range, this
+  catch-all is where the two specifications part.
 
 ## MM-4: Step-boundary pc convention
 
@@ -385,10 +408,9 @@ unreachable / ambiguity / needs investigation).
   byte count, so the charge is `8 * size` on both sides. Its two guards
   (`units ≤b g`, then `exact_cost ≤b g`) exist only to avoid materializing
   an overflowing cost, and both fall through to `exc_halt OutOfGas`, which
-  is sound because `8 * size ≥ size`. Machine-checked for LOG0 by
-  `log0_step_equiv` (through `runS_charge_log_gas_ok`/`_oog_*`, which are
-  stated for a general `n`, so the LOG1–LOG4 arities add no new gas
-  reasoning).
+  is sound because `8 * size ≥ size`. Machine-checked for the whole
+  family by `logn_step_equiv`, through `runS_charge_log_gas_ok`/`_oog_*`;
+  the topic stage is a live OOG outcome from LOG1 up.
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.

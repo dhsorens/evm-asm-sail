@@ -294,4 +294,57 @@ theorem runS_stack_set (top : StackTop) (i : Nat) (w : word)
     replaceCurrentStack_eq, hframe]
   rfl
 
+/-! ## Multi-pop cursor arithmetic
+
+A handler that pops a whole block (the LOG family's `n` topics, and any
+later variadic opcode) retreats the cursor once per operand, so its
+post-state cursor is a *chain* `top - 1 - 1 - …`. `cursorDrop` names that
+chain; `cursorDrop top 1` is `top - 1` by `rfl`, so it unifies with the
+one-pop lemmas above without a rewrite. -/
+
+/-- The cursor after `k` pops. -/
+def cursorDrop (top : StackTop) : Nat → StackTop
+  | 0 => top
+  | k + 1 => cursorDrop (top - BitVec.ofNat 64 1) k
+
+theorem cursorDrop_toNat (top : StackTop) (k : Nat) (h : k ≤ top.toNat) :
+    (cursorDrop top k).toNat = top.toNat - k := by
+  induction k generalizing top with
+  | zero => rfl
+  | succ m ih =>
+    have h1 : (top - BitVec.ofNat 64 1).toNat = top.toNat - 1 :=
+      cursor_retreat_toNat top (by omega)
+    rw [show cursorDrop top (m + 1) = cursorDrop (top - BitVec.ofNat 64 1) m
+      from rfl, ih _ (by rw [h1]; omega), h1]
+    omega
+
+/-- `take_shrink` over a whole popped block. -/
+theorem take_shrink_list (l : List word) (ts S : List word) (k : Nat)
+    (hpfx : l.take (k + ts.length) = (ts ++ S).reverse) (hS : S.length = k) :
+    l.take k = S.reverse := by
+  induction ts generalizing l with
+  | nil => simpa using hpfx
+  | cons t ts' ih =>
+    refine ih l ?_
+    refine take_shrink l (ts' ++ S) t (k + ts'.length) ?_ (by simp; omega)
+    rw [show k + ts'.length + 1 = k + (t :: ts').length from by simp; omega]
+    simpa using hpfx
+
+/-- One step of a pop chain: the prefix and height hypotheses the *next*
+pop needs, from the ones this pop was given. -/
+theorem cursor_pop_step (l : List word) (top : StackTop) (t : word)
+    (S : List word)
+    (hpfx : l.take top.toNat = (t :: S).reverse)
+    (htop : top.toNat = (t :: S).length) :
+    l.take (top - BitVec.ofNat 64 1).toNat = S.reverse
+      ∧ (top - BitVec.ofNat 64 1).toNat = S.length := by
+  have hl : top.toNat = S.length + 1 := by simpa using htop
+  have h1 : (top - BitVec.ofNat 64 1).toNat = top.toNat - 1 :=
+    cursor_retreat_toNat top (by omega)
+  refine ⟨?_, by rw [h1]; omega⟩
+  rw [h1, show top.toNat - 1 = S.length from by omega]
+  have hpfx' : l.take (S.length + 1) = (t :: S).reverse := by
+    rw [show S.length + 1 = top.toNat from by omega]; exact hpfx
+  exact take_shrink l S t S.length hpfx' rfl
+
 end EvmSpecsVerify

@@ -220,6 +220,86 @@ theorem runS_k_log_memory (a : Evm.Defs.address) (ts : LogTopics)
             (runS_log_add_topic t3 a [t0, t1, t2] hs ss)))) ?_
     exact runS_log_add_data_memory s d a [t0, t1, t2, t3] hs ss hd
 
+/-! ## Popping the topic operands
+
+`pop_log_topics` matches on the arity and pops that many operands, so the
+five constructors of `LogTopics` are five different code paths. Reading
+them back through `topicWords` collapses them to one list again, which is
+what lets the LOG family share a single step theorem. -/
+
+/-- The `LogTopics` value carrying `ts`, in emission order. Inverse to
+`topicWords` on lists of at most four operands. -/
+def logTopicsOf : List word → LogTopics
+  | [] => .LogTopics0 ()
+  | [t0] => .LogTopics1 t0
+  | [t0, t1] => .LogTopics2 (t0, t1)
+  | [t0, t1, t2] => .LogTopics3 (t0, t1, t2)
+  | [t0, t1, t2, t3] => .LogTopics4 (t0, t1, t2, t3)
+  | _ => .LogTopics0 ()
+
+theorem topicWords_logTopicsOf (ts : List word) (hn : ts.length ≤ 4) :
+    topicWords (logTopicsOf ts) = ts := by
+  match ts with
+  | [] => rfl
+  | [_] => rfl
+  | [_, _] => rfl
+  | [_, _, _] => rfl
+  | [_, _, _, _] => rfl
+  | _ :: _ :: _ :: _ :: _ :: _ => simp at hn
+
+open Evm.Functions in
+/-- **The topic pops**, one lemma for all five arities: `ts.length` pops
+off the cursor, in stack order. -/
+theorem runS_pop_log_topics (top : StackTop) (hs : Evm.HostState)
+    (ss : SeqState) (l : List word) (frest : List (List word))
+    (ts rest : List word)
+    (hframe : hs.stackFrames = l :: frest)
+    (hpfx : l.take top.toNat = (ts ++ rest).reverse)
+    (htop : top.toNat = (ts ++ rest).length)
+    (hn : ts.length ≤ 4) :
+    runS (Evm.Functions.pop_log_topics ts.length top) hs ss
+      = .ok ((logTopicsOf ts, cursorDrop top ts.length), hs) ss := by
+  match ts with
+  | [] => exact runS_pure _ _ _
+  | [t0] =>
+    simp only [List.cons_append] at hpfx htop
+    exact runS_bind_ok (runS_pop top hs ss l frest t0 rest hframe hpfx htop)
+      (runS_pure _ _ _)
+  | [t0, t1] =>
+    simp only [List.cons_append] at hpfx htop
+    obtain ⟨hp1, ht1⟩ := cursor_pop_step l top t0 (t1 :: rest) hpfx htop
+    refine runS_bind_ok
+      (runS_pop top hs ss l frest t0 (t1 :: rest) hframe hpfx htop) ?_
+    exact runS_bind_ok (runS_pop _ hs ss l frest t1 rest hframe hp1 ht1)
+      (runS_pure _ _ _)
+  | [t0, t1, t2] =>
+    simp only [List.cons_append] at hpfx htop
+    obtain ⟨hp1, ht1⟩ :=
+      cursor_pop_step l top t0 (t1 :: t2 :: rest) hpfx htop
+    obtain ⟨hp2, ht2⟩ := cursor_pop_step l _ t1 (t2 :: rest) hp1 ht1
+    refine runS_bind_ok
+      (runS_pop top hs ss l frest t0 (t1 :: t2 :: rest) hframe hpfx htop) ?_
+    refine runS_bind_ok
+      (runS_pop _ hs ss l frest t1 (t2 :: rest) hframe hp1 ht1) ?_
+    exact runS_bind_ok (runS_pop _ hs ss l frest t2 rest hframe hp2 ht2)
+      (runS_pure _ _ _)
+  | [t0, t1, t2, t3] =>
+    simp only [List.cons_append] at hpfx htop
+    obtain ⟨hp1, ht1⟩ :=
+      cursor_pop_step l top t0 (t1 :: t2 :: t3 :: rest) hpfx htop
+    obtain ⟨hp2, ht2⟩ := cursor_pop_step l _ t1 (t2 :: t3 :: rest) hp1 ht1
+    obtain ⟨hp3, ht3⟩ := cursor_pop_step l _ t2 (t3 :: rest) hp2 ht2
+    refine runS_bind_ok
+      (runS_pop top hs ss l frest t0 (t1 :: t2 :: t3 :: rest) hframe hpfx
+        htop) ?_
+    refine runS_bind_ok
+      (runS_pop _ hs ss l frest t1 (t2 :: t3 :: rest) hframe hp1 ht1) ?_
+    refine runS_bind_ok
+      (runS_pop _ hs ss l frest t2 (t3 :: rest) hframe hp2 ht2) ?_
+    exact runS_bind_ok (runS_pop _ hs ss l frest t3 rest hframe hp3 ht3)
+      (runS_pure _ _ _)
+  | _ :: _ :: _ :: _ :: _ :: _ => simp at hn
+
 /-! ## Arena and store stability -/
 
 theorem getD_push_lt {α : Type} [Inhabited α] (a : Array α) (x : α)
