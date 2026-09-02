@@ -65,6 +65,7 @@ import EvmSpecsVerify.Opcodes.Address
 import EvmSpecsVerify.Opcodes.Origin
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Opcodes.Balance
+import EvmSpecsVerify.Opcodes.Selfbalance
 import EvmSpecsVerify.Opcodes.Extcodesize
 import EvmSpecsVerify.Opcodes.Extcodehash
 import EvmSpecsVerify.Relations.ExternalCode

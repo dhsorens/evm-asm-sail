@@ -66,6 +66,13 @@ EVM state can violate it, and whether it is eliminable by proving.
   account reads: SpecRef's journalled `getAccount` and the kernel's
   `k_get_balance` return the same balance, quantified over the ambient
   address stamps. Eliminable by the world tranche's account relation.
+* `SelfBalanceAgree` (Opcodes/Selfbalance.lean) — the own-account form of
+  `BalanceAgree`: SpecRef's journalled `getAccount message.currentTarget`
+  and the extraction's `k_get_balance (self_addr ())` return the same
+  balance, and the extraction's read leaves the operand stack alone.
+  Strictly weaker than `BalanceAgree` — SELFBALANCE consults no access set,
+  so nothing is quantified over ambient warm stamps. Eliminable by the
+  world tranche's account relation.
 * `ExtcodesizeAgree` (Opcodes/Extcodesize.lean) — the external-code sibling:
   SpecRef's `getAccount` + `getCode` and the extraction's
   `k_get_code_size` return the same code length, quantified over ambient
