@@ -7,7 +7,8 @@ match this table.
 
 Statuses: `unstated` · `stated` (theorem exists, may cite pending lemmas) ·
 `success-proven` (success path only — not acceptable as final) ·
-`full` (full `StepResultRel`: success + every reachable failure) · `n/a` (+ reason).
+`full` (full `StepResultRel`: success + every reachable failure — or, for
+revert-capable handlers, full `RevertResultRel`) · `n/a` (+ reason).
 Named theorems in the status column are markdown links to the `theorem` line.
 
 SpecRef handlers marked *(partial)* live in the `partial def mutual` block
@@ -136,7 +137,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | DELEGATECALL | 0xf4 | `iDelegatecall` *(partial)* | `execute_delegatecall` | system | unstated |
 | CREATE2 | 0xf5 | `iCreate2` *(partial)* | `execute_create2` | system | unstated |
 | STATICCALL | 0xfa | `iStaticcall` *(partial)* | `execute_staticcall` | system | unstated |
-| REVERT | 0xfd | `iRevert` | `execute_revert` | system | unstated |
+| REVERT | 0xfd | `iRevert` | `execute_revert` | system | **full** ([`revert_step_equiv`](../EvmSpecsVerify/Opcodes/Revert.lean#L521) — revert with output correspondence (`RevertPost`), zero/grow/in-window reads, underflow ×2, expansion OOG. Targets [`RevertResultRel`](../EvmSpecsVerify/Relations/Outcome.lean#L110), not `StepResultRel`: `.revert` is not an exceptional halt, so the gas survives. New MM-9 records the state-gas refill's layer, proven equal to SpecRef's own `refill_frame_state_gas` via `runR_refill`) |
 | INVALID | 0xfe | (dispatch throws `.invalidOpcode`) | `execute_invalid` | system | unstated |
 | SELFDESTRUCT | 0xff | `iSelfdestruct` | `execute_selfdestruct` | system+world | unstated |
 
@@ -144,7 +145,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 48 |
-| unstated | 41 |
+| full | 49 |
+| unstated | 40 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
