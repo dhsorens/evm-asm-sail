@@ -119,7 +119,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | **full** ([`tload_step_equiv`](../EvmSpecsVerify/Opcodes/Tload.lean#L246) — success/underflow/OOG; overflow unreachable for 1-in/1-out. EIP-1153 prices transient access flat on both sides, so `TloadAgree` needs no warm-stamp quantification unlike `SloadAgree`; the read value is behind that ledgered hypothesis — see `Assumptions.lean`) |
 | TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated (needs a transient-store relation in the post: `BasePost` observes only stack/gas/pc, so a `StepResultRel BasePost` theorem would say nothing about the write — the same prerequisite SSTORE has. Its `writeInStaticContext` ↔ `WriteProtection` path also needs a new `ErrorRel` constructor) |
-| MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
+| MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | **full** ([`mcopy_step_equiv`](../EvmSpecsVerify/Opcodes/Mcopy.lean#L711) — success ×3 (zero length/grow/in-window), underflow ×3, OOG at each of the extraction's three charges; overflow unreachable. Two new pieces: `calc_extend_pair_eq_single` proves SpecRef's two-range extension fold telescopes to the single range at `max destination source`, and `memoryRel_mcopy` (via the new `memoryRel_read`) proves the overlapping-safe copy agrees — both sides snapshot the source before writing, so no disjointness hypothesis is needed. `MemoryRel` + MM-6 `MemGasSafe`) |
 | PUSH (n, w) | 0x5f–0x7f | `iPushN` | `execute_push` | stack (immediate via fetch) | **full** ([`push_step_equiv`](../EvmSpecsVerify/Opcodes/Push.lean#L253) — success/overflow/OOG, underflow unreachable; decode-fidelity hypothesis for the fetched immediate (MM-3 scope); MM-5 on double faults) |
 | DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | **full** ([`dup_step_equiv`](../EvmSpecsVerify/Opcodes/Dup.lean#L240) — success/underflow/overflow/OOG; MM-5 on double faults) |
 | SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | **full** ([`swap_step_equiv`](../EvmSpecsVerify/Opcodes/Swap.lean#L338) — success/underflow/OOG/MM-5 double fault; overflow unreachable since the height is unchanged. `take_swap_writes` bridges SpecRef's head-indexed `listSwap S 0 n` to the extraction's two `stack_set` writes at cursor slots 0 and n; index conventions already agree (`iSwapN (op - 0x8F)`)) |
@@ -147,7 +147,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 74 |
-| unstated | 13 |
+| full | 75 |
+| unstated | 12 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **88** |

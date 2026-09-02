@@ -118,6 +118,18 @@ theorem writeArrayBytes_getD (vs : List byte) (a : Array byte) (p i : Nat) :
       · rw [if_neg (by simp only [List.length_cons]; omega),
           writeArrayByte_getD_ne _ _ _ _ hip]
 
+/-- The host's bulk read is a `List.range` map, so its length is exact. -/
+theorem readArrayBytes_length (a : Array byte) (base l : Nat) :
+    (readArrayBytes a base l).length = l := by
+  simp [readArrayBytes]
+
+theorem readArrayBytes_getD (a : Array byte) (base l i : Nat) (hi : i < l) :
+    (readArrayBytes a base l).getD i 0 = a.getD (base + i) 0 := by
+  simp only [readArrayBytes, List.getD, List.getElem?_map,
+    List.getElem?_range' ]
+  rw [List.getElem?_eq_getElem (by simpa using hi)]
+  simp
+
 theorem zeroFold_size (count : Nat) (b : Array byte) (start : Nat) :
     ((List.range count).foldl (fun r j => r.set! (start + j) 0) b).size
       = b.size := by
@@ -384,5 +396,48 @@ theorem runS_mem_store_byte (pos v : Nat) (hs : Evm.HostState)
   refine runS_bind_ok
     (runS_establishMemory_le (pos + 1) hs ss fr frest hframe hle) ?_
   exact runS_modify _ _ _
+
+/-! ## MCOPY's memmove -/
+
+open Evm.Functions in
+/-- A zero-length MCOPY is a no-op — the guard in `mem_mcopy` (and hence
+no `establishMemory` at all). -/
+theorem runS_mem_mcopy_zero (dst src : Nat) (hs : Evm.HostState)
+    (ss : SeqState) :
+    runS (Evm.Functions.mem_mcopy dst src 0) hs ss = .ok ((), hs) ss := by
+  simp only [Evm.Functions.mem_mcopy]
+  rw [if_neg (by simp)]
+  exact runS_pure _ _ _
+
+/-- The host state after MCOPY's splice, named so the run shape carries no
+multi-line structure-update literal. -/
+def mcopyHost (hs : Evm.HostState) (base dst src l : Nat) :
+    Evm.HostState :=
+  { hs with
+      memoryBytes :=
+        writeArrayBytes hs.memoryBytes (base + dst)
+          (readArrayBytes hs.memoryBytes (base + src) l) }
+
+open Evm.Functions in
+/-- **The host's memmove**, inside an already-established window: read the
+source bytes out of the *pre-copy* array, then splice them at the
+destination. The read-then-write order is what makes overlapping copies
+correct, and it is the same order SpecRef uses
+(`memory_write e.memory dst (memory_read_bytes e.memory src len)`). -/
+theorem runS_mem_mcopy (dst src l : Nat) (hs : Evm.HostState)
+    (ss : SeqState) (fr : Evm.MemoryFrame) (frest : List Evm.MemoryFrame)
+    (hframe : hs.memoryFrames = fr :: frest)
+    (hl : l ≠ 0)
+    (hin : max (src + l) (dst + l) ≤ fr.established) :
+    runS (Evm.Functions.mem_mcopy dst src l) hs ss =
+      .ok ((), mcopyHost hs fr.base dst src l) ss := by
+  simp only [Evm.Functions.mem_mcopy]
+  rw [if_pos (by simpa using hl)]
+  unfold mem_move
+  refine runS_bind_ok
+    (runS_establishMemory_le (max (src + l) (dst + l)) hs ss fr frest hframe
+      hin) ?_
+  refine runS_bind_ok (runS_get hs ss) ?_
+  exact runS_set _ _ _
 
 end EvmSpecsVerify

@@ -58,6 +58,7 @@ import EvmSpecsVerify.Opcodes.Msize
 import EvmSpecsVerify.Representation.EvmMemory
 import EvmSpecsVerify.Relations.Memory
 import EvmSpecsVerify.Opcodes.Mload
+import EvmSpecsVerify.Opcodes.Mcopy
 import EvmSpecsVerify.Opcodes.Mstore
 import EvmSpecsVerify.Opcodes.Return
 import EvmSpecsVerify.Opcodes.Revert
