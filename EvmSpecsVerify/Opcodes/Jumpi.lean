@@ -13,7 +13,7 @@ then either falls through (`pc+1`), jumps (`pc := dest` after checking
 `execute_jumpi` charges first, pops, and validates through `do_jump`
 (`frame_jumpdest_valid`: range check + per-code jump-table lookup). The two
 validation representations are tied by [`JumpdestRel`](../Relations/Jumpdest.lean);
-the success `Post` (`JumpiPost`) preserves it alongside `BasePost` — the fall
+the success `Post` (`ControlPost`, shared with [`JUMP`](Jump.lean)) preserves it alongside `BasePost` — the fall
 and jump cases both leave code, tables, and the valid set untouched.
 
 MM-4 note: on fall-through the returned pc is `pc_in = pc + 1` as for ALU;
@@ -33,8 +33,10 @@ namespace EvmSpecsVerify
 open EvmAsm.Stateless.SpecRef
 open Evm.Defs
 
-/-- Success post for control flow: `BasePost` plus jumpdest preservation. -/
-def JumpiPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
+/-- Success post for the control-flow family (JUMP/JUMPI): `BasePost` plus
+jumpdest preservation — every taken or untaken branch leaves the code, the
+jump tables, and SpecRef's valid-destination set untouched. -/
+def ControlPost (mem : EvmMemorySlice) (sR' : Machine) (step : EvmStep)
     (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
   BasePost mem sR' step hs' ss' ∧ JumpdestRel sR' hs' ss'
 
@@ -501,7 +503,7 @@ theorem jumpi_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     (hrel : StateRel sRef top g hs ss)
     (hjd : JumpdestRel sRef hs ss)
     (hpc : pc_in = sRef.evm.pc + 1) :
-    StepResultRel (JumpiPost mem) (runR iJumpi sRef)
+    StepResultRel (ControlPost mem) (runR iJumpi sRef)
       (runS (Evm.Functions.execute (.JUMPI ()) pc_in top mem g) hs ss) := by
   obtain ⟨hstackR, hgasR, hrunR, hrunE, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
   obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, hwfS⟩ := hstackR

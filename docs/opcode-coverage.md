@@ -107,8 +107,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | **full** ([`mstore8_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore8.lean#L396) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses, byte codec `word_low_byte_masked`) |
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L503) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis — see `Assumptions.lean`) |
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
-| JUMP | 0x56 | `iJump` | `execute_jump` | control | unstated |
-| JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L499) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
+| JUMP | 0x56 | `iJump` | `execute_jump` | control | **full** ([`jump_step_equiv`](../EvmSpecsVerify/Opcodes/Jump.lean#L285) — taken jump/underflow/OOG/invalid destination; the JUMPI harvest through `do_jump` and `JumpdestRel`, sharing `ControlPost`; no fall-through branch, overflow unreachable for 1-in/0-out) |
+| JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L501) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
 | PC | 0x58 | `iPc` | `execute_pc` | env | unstated |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
 | GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
@@ -143,7 +143,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 42 |
-| unstated | 47 |
+| full | 43 |
+| unstated | 46 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
