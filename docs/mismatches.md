@@ -307,6 +307,71 @@ unreachable / ambiguity / needs investigation).
   either decoder can emit. Should a future fork widen the range, this
   catch-all is where the two specifications part.
 
+## MM-13: The zero transient write — delete a row vs store the zero
+
+- **Area**: `TSTORE` (`0x5d`), and any later writer of transient storage.
+- **SpecRef**: `setTransientStorage` (StateTracker.lean:289) branches on the
+  value: `if value == 0` it **filters the row out** of
+  `transientStorage`, otherwise it `dictSet`s it.
+- **`Evm`**: `transient_store` (HostAxioms.lean:2009) always `assocPut`s,
+  so a zero write leaves an explicit zero row behind.
+- **Trigger**: any `TSTORE` of zero to a slot. The two maps then differ
+  structurally for the rest of the transaction.
+- **Why it is unobservable**: both readers return zero for an absent key
+  (`getTransientStorage`'s `getD 0`, `transient_load`'s `getD default`),
+  and **nothing on either side enumerates the map** — SpecRef touches
+  `transientStorage` only in get/set and the whole-map journal snapshot
+  (StateTracker.lean:337), the extraction only in load/store, the
+  whole-map journal frame, and `transient_reset` at transaction end. A
+  row holding zero and an absent row are therefore indistinguishable
+  through every observation either specification makes.
+- **Fork**: Cancun onward (EIP-1153). **Reachability**: trivially
+  reachable. **Severity**: none — representation only.
+- **Disposition**: *intentional abstraction*. It is the reason
+  `TransientRel` (Relations/Transient.lean) is stated **pointwise** —
+  "the two maps read the same at every well-formed key" — rather than
+  structurally. Machine-checked by `transientRel_write`, whose two
+  branches are exactly the delete case and the store case meeting at the
+  same read.
+
+## MM-14: SpecRef's static guard runs before the stack check, the extraction's after
+
+- **Area**: `TSTORE` (`0x5d`); the same crossing applies to `SSTORE`
+  (`0x55`) and `SELFDESTRUCT` (`0xff`).
+- **SpecRef**: `iTstore` (InstructionsCore.lean:503) tests
+  `message.isStatic` as its **first** statement — before either pop —
+  and throws `.writeInStaticContext`. `iSstore` (:456) and
+  `iSelfdestruct` (Interpreter.lean:283) lead the same way.
+- **`Evm`**: `execute_tstore` (Execute.lean:1500) also leads with
+  `guard_static` — but `execute` hoists `validate_stack` *outside*
+  `execute_opcode` (Execute.lean:3801), so the stack check happens first
+  on this side.
+- **Trigger**: a `TSTORE` in a static frame with fewer than two operands.
+  SpecRef reports `.writeInStaticContext`, the extraction reports
+  `StackUnderflow`. Both are exceptional halts consuming all frame gas,
+  so the divergence is a step diagnostic, not a chain observation — the
+  same class as MM-5, MM-10 and MM-11.
+- **The pair with MM-11 is the interesting part.** For LOG, SpecRef's
+  guard sits too *late* (after the charge, so a static + unaffordable
+  frame reports `outOfGas`); for TSTORE it sits too *early* (before the
+  stack validation, so a static + underflowing frame reports
+  `writeInStaticContext`). Both come from the same structural fact: the
+  extraction has one fixed order — validate stack, then `guard_static`,
+  then charge — while SpecRef places the guard per handler, following the
+  Python statement order.
+- **Expected EVM behavior**: unspecified in practice. Both faults abort
+  the frame identically; execution-specs raises whichever its own
+  statement order reaches first, which is what SpecRef mirrors.
+- **Fork**: all (static calls since Byzantium; Cancun for TSTORE).
+  **Reachability**: trivially reachable. **Severity**: none at the chain
+  observation boundary.
+- **Disposition**: *intentional abstraction*, encoded the way MM-5 /
+  MM-10 / MM-11 were: `StepResultRel.haltedStaticFirst`, pairing SpecRef
+  `.writeInStaticContext` with the extraction's `StackUnderflow`. It
+  admits **only** `StackUnderflow` — every opcode in this class is
+  `n`-in/0-out, so overflow is unreachable. Machine-checked by
+  `tstore_step_equiv`.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.
@@ -411,6 +476,9 @@ unreachable / ambiguity / needs investigation).
   is sound because `8 * size ≥ size`. Machine-checked for the whole
   family by `logn_step_equiv`, through `runS_charge_log_gas_ok`/`_oog_*`;
   the topic stage is a live OOG outcome from LOG1 up.
+- **Verified 2026-09-02 (TSTORE)**: `OPCODE_TSTORE = 100 = G_warm_access`,
+  flat like TLOAD and with no warm/cold component on either side.
+  Machine-checked by `tstore_step_equiv`.
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.
