@@ -927,10 +927,11 @@ def check_counts(data: dict) -> None:
     declared = data["opcodeCounts"]
     actual = Counter(o["statusKind"] for o in data["opcodes"])
     actual["total"] = len(data["opcodes"])
+    keys = (set(declared) | set(actual)) - {""}
     problems = [
-        f"  {k}: table says {declared.get(k)}, rows say {actual.get(k, 0)}"
-        for k in ("full", "unstated", "n/a", "total")
-        if declared.get(k) != actual.get(k, 0)
+        f"  {k}: table says {declared.get(k, 0)}, rows say {actual.get(k, 0)}"
+        for k in sorted(keys)
+        if declared.get(k, 0) != actual.get(k, 0)
     ]
     if problems:
         raise SystemExit(

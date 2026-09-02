@@ -595,6 +595,17 @@ theorem memoryRel_write (M : Bytes) (hs : Evm.HostState)
     rw [memory_write_getD M _ pos i hwl, if_neg (by omega)]
     exact htail i hge hi
 
+/-- The host state after a metered memory expansion: the arena zero-filled
+up to the new mark and the active frame's mark raised. Named so the
+memory-family run shapes carry no multi-line structure-update literal
+(MCOPY and LOG both need it). -/
+def expandedHost (hs : Evm.HostState) (off len req : Nat)
+    (mfrest : List Evm.MemoryFrame) : Evm.HostState :=
+  { hs with
+      memoryBytes := zeroMemoryRange hs.memoryBytes (off + len) (req - len)
+      memoryFrames :=
+        ({ base := off, established := req } : Evm.MemoryFrame) :: mfrest }
+
 theorem memGasSafe_mono_gas (M : Bytes) {g g' : Nat} (h : g' ≤ g)
     (hsafe : MemGasSafe M g) : MemGasSafe M g' := by
   unfold MemGasSafe at hsafe ⊢

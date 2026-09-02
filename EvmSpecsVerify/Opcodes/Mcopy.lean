@@ -455,15 +455,6 @@ theorem runS_execute_mcopy_ok_zero (pc_in : Nat) (top : StackTop)
     exact runS_pure _ _ _
   exact runS_bind_ok hbody (runS_pure _ _ _)
 
-/-- The expanded host state, named to keep the run shapes free of
-multi-line structure-update literals. -/
-def mcopyExpanded (hs : Evm.HostState) (off len R : Nat)
-    (mfrest : List Evm.MemoryFrame) : Evm.HostState :=
-  { hs with
-      memoryBytes := zeroMemoryRange hs.memoryBytes (off + len) (R - len)
-      memoryFrames :=
-        ({ base := off, established := R } : Evm.MemoryFrame) :: mfrest }
-
 open Evm.Functions in
 /-- Success with expansion: the window grows to `max destination source +
 length`, then the memmove runs inside it. -/
@@ -496,7 +487,7 @@ theorem runS_execute_mcopy_ok_grow (pc_in : Nat) (top : StackTop)
           g - G_verylow - G_copy_word * Evm.Functions.memory_word_count z
             - Evm.Functions.memory_expansion_cost ⟨off, len, msf⟩
                 (max x y + z)),
-        mcopyHost (mcopyExpanded hs off len (max x y + z) mfrest) off x y z)
+        mcopyHost (expandedHost hs off len (max x y + z) mfrest) off x y z)
         ss := by
   have hn : top.toNat = rest.length + 3 := by simpa using htop
   have hret1 : (top - BitVec.ofNat 64 1).toNat = top.toNat - 1 :=
@@ -530,7 +521,7 @@ theorem runS_execute_mcopy_ok_grow (pc_in : Nat) (top : StackTop)
           g - G_verylow - G_copy_word * Evm.Functions.memory_word_count z
             - Evm.Functions.memory_expansion_cost ⟨off, len, msf⟩
                 (max x y + z)),
-        mcopyHost (mcopyExpanded hs off len (max x y + z) mfrest)
+        mcopyHost (expandedHost hs off len (max x y + z) mfrest)
           off x y z) ss := by
     simp only [Evm.Functions.execute_mcopy]
     refine runS_bind_ok (runS_charge_ok g G_verylow hs ss hbase) ?_
@@ -958,7 +949,7 @@ theorem mcopy_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
             (max x y + z) mfrest
             ⟨⟨mfrest, hmframe⟩, haligned, hbytes, htail⟩ hgrow
           have hrelStored := memoryRel_mcopy _
-            (mcopyExpanded hs off len (max x y + z) mfrest) off
+            (expandedHost hs off len (max x y + z) mfrest) off
             (max x y + z) x y z hrel' (by omega) (by omega)
           rw [hexpandBy]
           refine StepResultRel.success ?_

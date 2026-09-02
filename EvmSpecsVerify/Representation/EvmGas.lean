@@ -267,4 +267,129 @@ theorem runS_validate_stack_overflow (g : Nat) (top : StackTop)
     runS_exc_halt g .StackOverflow hs ss prof sp msg hprof hsp hmsg hfork,
     runS_pure]
 
+/-! ## The LOG charge
+
+`charge_log_gas` is the only three-stage charge in the extraction: base,
+then `G_logtopic * n`, then the per-byte payload cost through
+`charge_word_scaled_gas`. SpecRef charges the three components in one
+`charge_gas`, so a single SpecRef OOG state maps to whichever of the
+three stages fails first — hence one lemma per stage.
+
+The payload stage's two guards (`units ≤b g`, then `exact_cost ≤b g`)
+exist only to avoid materializing an overflowing cost; both fall through
+to the same `exc_halt OutOfGas`, and `8 * size ≥ size` makes the first
+redundant, which is why `_oog_data` needs only the exact-cost bound. -/
+
+theorem runS_charge_log_gas_ok (g n size : Nat) (hs : HostState)
+    (ss : SeqState)
+    (hgas : G_log + G_logtopic * n + G_logdata * size ≤ g) :
+    runS (Evm.Functions.charge_log_gas g n size) hs ss =
+      .ok ((true, g - G_log - G_logtopic * n - G_logdata * size), hs) ss := by
+  simp only [Evm.Functions.G_log, Evm.Functions.G_logtopic,
+    Evm.Functions.G_logdata] at hgas ⊢
+  have hgas : (375 : Nat) + 375 * n + 8 * size ≤ g := hgas
+  simp only [Evm.Functions.charge_log_gas, Evm.Functions.G_log,
+    Evm.Functions.G_logtopic, Evm.Functions.G_logdata]
+  refine runS_bind_ok (runS_charge_ok g 375 hs ss (by omega)) ?_
+  rw [if_pos rfl]
+  simp only [intMul_toNat]
+  refine runS_bind_ok
+    (runS_charge_ok (g - 375) (375 * n) hs ss (by omega)) ?_
+  rw [if_pos rfl]
+  simp only [Evm.Functions.charge_word_scaled_gas, intMul_toNat]
+  by_cases hz : size = 0
+  · subst hz
+    rw [if_pos (by simp)]
+    simp only [Nat.mul_zero, Nat.sub_zero]
+    exact runS_pure _ _ _
+  · rw [if_neg (by simp [hz])]
+    rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    exact runS_charge_ok _ _ hs ss (by omega)
+
+theorem runS_charge_log_gas_oog_base (g n size : Nat) (hs : HostState)
+    (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hgas : g < G_log) :
+    runS (Evm.Functions.charge_log_gas g n size) hs ss =
+      .ok ((false, GAS_ZERO), hs)
+        { ss with regs := haltRegs ss msg (.OutOfGas) } := by
+  simp only [Evm.Functions.G_log] at hgas
+  simp only [Evm.Functions.charge_log_gas, Evm.Functions.G_log]
+  refine runS_bind_ok
+    (runS_charge_oog g 375 hs ss prof sp msg hprof hsp hmsg hfork hgas) ?_
+  rw [if_neg (by simp)]
+  exact runS_pure _ _ _
+
+theorem runS_charge_log_gas_oog_topics (g n size : Nat) (hs : HostState)
+    (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hbase : G_log ≤ g)
+    (hgas : g - G_log < G_logtopic * n) :
+    runS (Evm.Functions.charge_log_gas g n size) hs ss =
+      .ok ((false, GAS_ZERO), hs)
+        { ss with regs := haltRegs ss msg (.OutOfGas) } := by
+  simp only [Evm.Functions.G_log, Evm.Functions.G_logtopic] at hbase hgas
+  simp only [Evm.Functions.charge_log_gas, Evm.Functions.G_log,
+    Evm.Functions.G_logtopic]
+  refine runS_bind_ok (runS_charge_ok g 375 hs ss hbase) ?_
+  rw [if_pos rfl]
+  simp only [intMul_toNat]
+  refine runS_bind_ok
+    (runS_charge_oog (g - 375) (375 * n) hs ss prof sp msg hprof hsp hmsg
+      hfork hgas) ?_
+  rw [if_neg (by simp)]
+  exact runS_pure _ _ _
+
+theorem runS_charge_log_gas_oog_data (g n size : Nat) (hs : HostState)
+    (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hbase : G_log + G_logtopic * n ≤ g)
+    (hgas : g - G_log - G_logtopic * n < G_logdata * size) :
+    runS (Evm.Functions.charge_log_gas g n size) hs ss =
+      .ok ((false, GAS_ZERO), hs)
+        { ss with regs := haltRegs ss msg (.OutOfGas) } := by
+  simp only [Evm.Functions.G_log, Evm.Functions.G_logtopic,
+    Evm.Functions.G_logdata] at hbase hgas
+  have hbaseN : (375 : Nat) + 375 * n ≤ g := hbase
+  have hgasN : g - 375 - 375 * n < 8 * size := hgas
+  have hz : size ≠ 0 := by
+    intro hc
+    rw [hc] at hgasN
+    omega
+  simp only [Evm.Functions.charge_log_gas, Evm.Functions.G_log,
+    Evm.Functions.G_logtopic, Evm.Functions.G_logdata]
+  have hb1 : (375 : Nat) ≤ g := by omega
+  have hb2 : (375 : Nat) * n ≤ g - 375 := by omega
+  refine runS_bind_ok (runS_charge_ok g 375 hs ss hb1) ?_
+  rw [if_pos rfl]
+  simp only [intMul_toNat]
+  refine runS_bind_ok
+    (runS_charge_ok (g - 375) (375 * n) hs ss hb2) ?_
+  rw [if_pos rfl]
+  simp only [Evm.Functions.charge_word_scaled_gas, intMul_toNat]
+  rw [if_neg (by simp [hz])]
+  by_cases hunits : size ≤ g - 375 - 375 * n
+  · rw [if_pos (by simp only [decide_eq_true_eq]; omega)]
+    rw [if_neg (by simp only [decide_eq_true_eq]; omega)]
+    refine runS_bind_ok
+      (runS_exc_halt _ .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork) ?_
+    exact runS_pure _ _ _
+  · rw [if_neg (by simp only [decide_eq_true_eq]; omega)]
+    refine runS_bind_ok
+      (runS_exc_halt _ .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork) ?_
+    exact runS_pure _ _ _
+
 end EvmSpecsVerify

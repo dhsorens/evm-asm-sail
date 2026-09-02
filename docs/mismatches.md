@@ -279,8 +279,10 @@ unreachable / ambiguity / needs investigation).
 - **Disposition**: *intentional abstraction*, to be encoded the way MM-5 and
   MM-10 were when the LOG slice lands: a new `ErrorRel` constructor pairing
   `.writeInStaticContext` with `WriteProtection`, plus `WriteProtection` as a
-  fourth explicitly listed kind of `StepResultRel.haltedChargeFirst`. Not yet
-  machine-checked — see the LOG residual in `PROGRESS.md`.
+  fourth explicitly listed kind of `StepResultRel.haltedChargeFirst`. Both
+  are now in place and machine-checked by `log0_step_equiv`
+  (Opcodes/Log.lean); LOG1–LOG4 reuse them unchanged when their arities
+  land.
 
 ## MM-4: Step-boundary pc convention
 
@@ -383,8 +385,10 @@ unreachable / ambiguity / needs investigation).
   byte count, so the charge is `8 * size` on both sides. Its two guards
   (`units ≤b g`, then `exact_cost ≤b g`) exist only to avoid materializing
   an overflowing cost, and both fall through to `exc_halt OutOfGas`, which
-  is sound because `8 * size ≥ size`. Not yet machine-checked (LOG is
-  `unstated`), so this is inspection, not proof.
+  is sound because `8 * size ≥ size`. Machine-checked for LOG0 by
+  `log0_step_equiv` (through `runS_charge_log_gas_ok`/`_oog_*`, which are
+  stated for a general `n`, so the LOG1–LOG4 arities add no new gas
+  reasoning).
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.
