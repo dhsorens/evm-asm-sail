@@ -142,6 +142,24 @@ theorem length_writeListAt (l : List word) (p : Nat) (w : word) :
   · rw [length_replaceListAt]; omega
   · rw [length_replaceListAt]; simp; omega
 
+/-- `replaceListAt` is `List.set`, so every downstream argument can use the
+standard library's `set` lemmas instead of re-inducting. -/
+theorem replaceListAt_eq_set {α : Type} (l : List α) (p : Nat) (w : α) :
+    replaceListAt l p w = l.set p w := by
+  induction l generalizing p with
+  | nil => rfl
+  | cons a t ih =>
+    cases p with
+    | zero => rfl
+    | succ q => simp [replaceListAt_cons_succ, ih]
+
+/-- In-range `writeListAt` is `List.set` (the pad-and-append branch is dead
+below the length). -/
+theorem writeListAt_eq_set (l : List word) (p : Nat) (w : word)
+    (h : p < l.length) : writeListAt l p w = l.set p w := by
+  unfold writeListAt
+  rw [if_pos h, replaceListAt_eq_set]
+
 /-- Truncating a one-longer reversed-stack prefix drops the top element:
 the list-geometry step each `pop` takes on the prefix relation. -/
 theorem take_shrink (l S : List word) (a : word) (k : Nat)
@@ -258,6 +276,22 @@ theorem runS_push_word (top : StackTop) (w : word) (hs : HostState)
   simp only [runS_bind, runS_pure, runS_modify]
   rw [currentStack_of_frame hs l rest hframe, hpos, replaceCurrentStack_eq,
     hframe]
+  rfl
+
+/-- `stack_set` writes in place at slot `i` below the cursor — position
+`top.toNat - 1 - i` of the bottom-indexed frame list — and moves no cursor.
+The single primitive SWAP uses. -/
+theorem runS_stack_set (top : StackTop) (i : Nat) (w : word)
+    (hs : HostState) (ss : SeqState) (l : List word)
+    (rest : List (List word)) (hframe : hs.stackFrames = l :: rest) :
+    runS (Evm.Functions.stack_set top i w) hs ss =
+      .ok ((),
+        { hs with stackFrames :=
+            writeListAt l (top.toNat - 1 - i) w :: rest }) ss := by
+  simp only [Evm.Functions.stack_set, Evm.Functions.stack_slot_write,
+    runS_modify]
+  rw [currentStack_of_frame hs l rest hframe, stackSlotPosition_eq,
+    replaceCurrentStack_eq, hframe]
   rfl
 
 end EvmSpecsVerify

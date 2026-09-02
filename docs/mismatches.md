@@ -71,6 +71,11 @@ unreachable / ambiguity / needs investigation).
   `StepResultRel.haltedChargeFirst` constructor (Relations/Outcome.lean) pairing
   SpecRef `.outOfGas` with the extraction's stack-fault kind on exactly these
   double-fault states. Single-fault states still align kind-for-kind.
+  Discharging artifacts: `push_step_equiv`, `dup_step_equiv`,
+  `swap_step_equiv` (underflow only — SWAP cannot overflow), the
+  `envPush_step_equiv` family, and the live-state pushers
+  `pc_step_equiv` / `gas_step_equiv` / `msize_step_equiv` (overflow only —
+  0-in cannot underflow).
 
 ## MM-6: u32 memory space — `memory_access` fatal-errors where SpecRef extends
 
@@ -218,7 +223,8 @@ unreachable / ambiguity / needs investigation).
   covered by `jumpi_step_equiv`), `OPCODE_PC = 2 = G_base` and
   `OPCODE_GAS = 2 = G_base` and `OPCODE_MSIZE = 2 = G_base`.
   Machine-checked by `jumpdest_step_equiv`, `jump_step_equiv`,
-  `pc_step_equiv`, `gas_step_equiv` and `msize_step_equiv`.
+  `pc_step_equiv`, `gas_step_equiv` and `msize_step_equiv`; and
+  `OPCODE_SWAP = 3 = G_verylow` by `swap_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 
