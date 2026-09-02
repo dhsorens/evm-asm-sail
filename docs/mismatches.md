@@ -73,9 +73,12 @@ unreachable / ambiguity / needs investigation).
   double-fault states. Single-fault states still align kind-for-kind.
   Discharging artifacts: `push_step_equiv`, `dup_step_equiv`,
   `swap_step_equiv` (underflow only — SWAP cannot overflow), the
-  `envPush_step_equiv` family, and the live-state pushers
+  `envPush_step_equiv` family, the live-state pushers
   `pc_step_equiv` / `gas_step_equiv` / `msize_step_equiv` (overflow only —
-  0-in cannot underflow).
+  0-in cannot underflow), and `dupn_step_equiv` (valid-immediate case).
+  MM-10 adds a **third** admitted kind to the same constructor for the
+  invalid-immediate double fault; the three are listed explicitly, never as
+  `k ≠ OutOfGas`.
 
 ## MM-6: u32 memory space — `memory_access` fatal-errors where SpecRef extends
 
@@ -180,6 +183,52 @@ unreachable / ambiguity / needs investigation).
   **is** SpecRef's `refill_frame_state_gas`, so `RevertPost` compares the
   extraction's registers against a genuine SpecRef state rather than an
   invented one. Machine-checked by `revert_step_equiv`.
+
+## MM-10: Immediate-validity diagnostics and decode/charge order (DUPN family)
+
+- **Area**: the EIP-663 deep-stack opcodes with a one-byte immediate —
+  DUPN (`0xe6`), SWAPN (`0xe7`), EXCHANGE (`0xe8`).
+- **SpecRef**: `iDupn` charges **first**, then reads the immediate out of
+  its own code buffer and calls `decode_single` (Vm.lean:269), which
+  `throw`s `.invalidParameter "DUPN/SWAPN immediate out of range"` for a
+  byte in `91 … 127` (EXCHANGE: `decode_pair`, `82 … 127`, with a
+  different message).
+- **`Evm`**: `execute_dupn` (Execute.lean:1625) tests
+  `deep_stack_immediate_valid` **before** `charge` and halts with
+  `InvalidOpcode`. Its `opcode_stack_effect (.DUPN imm)` returns `(0, 0)`
+  for an invalid immediate, so the hoisted `validate_stack` waves the step
+  through and the handler's own check is what faults.
+- **Two divergences stack up**:
+  1. *Diagnostic kind*: `.invalidParameter why` vs `InvalidOpcode`. Both
+     are exceptional halts — SpecRef's `EvmError.isHalt` is `true` for
+     `.invalidParameter` (Vm.lean:75), and the extraction zeroes the
+     frame's gas — so the two agree on everything externally observable
+     (all gas consumed, frame failed, no state change). Same class as MM-7.
+  2. *Order*: because SpecRef charges before decoding and the extraction
+     decodes before charging, a state that is **both** out of gas **and**
+     carries an invalid immediate reports `outOfGas` on the SpecRef side
+     and `InvalidOpcode` on the extraction's.
+- **Trigger**: (1) any DUPN/SWAPN immediate in `91 … 127` (EXCHANGE:
+  `82 … 127`); (2) additionally `gasLeft < 3`.
+- **Expected EVM behavior**: EELS raises `InvalidParameter`, an
+  `ExceptionalHalt` subclass, so SpecRef matches upstream on the kind. The
+  extraction's choice is the more natural reading of "an instruction whose
+  immediate cannot be decoded is not a valid instruction"; nothing
+  distinguishes them at the frame boundary.
+- **Fork**: Amsterdam (EIP-663). **Reachability**: trivially reachable
+  from a crafted code buffer. **Severity**: none externally; a step-level
+  diagnostic divergence only.
+- **Likely cause**: the extraction has no `InvalidParameter` halt kind — its
+  `ExceptionKind` enumeration stops at the Yellow-Paper set — and hoists
+  the check above `charge` for the same reason it hoists `validate_stack`
+  (MM-1/MM-5).
+- **Disposition**: *intentional abstraction*, paired in the outcome
+  relation rather than papered over: `ErrorRel.invalidParameter` pairs the
+  kinds (Relations/Outcome.lean) and `StepResultRel.haltedChargeFirst`
+  admits `InvalidOpcode` as its third kind alongside the two MM-5 stack
+  faults. Both are listed **explicitly** rather than as `k ≠ OutOfGas`, so
+  a future kind cannot slip in silently. Machine-checked by
+  `dupn_step_equiv` (Opcodes/Dupn.lean).
 
 ## MM-4: Step-boundary pc convention
 

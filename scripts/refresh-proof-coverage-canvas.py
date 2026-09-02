@@ -283,7 +283,7 @@ def load_data() -> dict:
     opcodes: list[dict] = []
     opcode_counts: dict[str, int] = {}
     for sec, headers, rows in opc:
-        if sec == "Counts (must match `EvmSpecsVerify/Coverage/Registry.lean`)":
+        if sec.startswith("Counts"):
             for r in rows:
                 label = strip_md(r.get("status", "")).lower()
                 count_raw = strip_md(r.get("count", "0")).replace(",", "")
@@ -916,8 +916,33 @@ def write_html(data: dict) -> None:
     HTML_OUT.write_text(render_html(data))
 
 
+def check_counts(data: dict) -> None:
+    """Fail loudly when the Counts table disagrees with the rows above it.
+
+    The table drifted silently for many slices before this guard existed
+    (it read 51 full / 38 unstated / 90 total against 71 / 16 / 88 actual),
+    because nothing recomputed it. Statuses are per-row, and rows are 1:1
+    with `Evm.Defs.ast` constructors.
+    """
+    declared = data["opcodeCounts"]
+    actual = Counter(o["statusKind"] for o in data["opcodes"])
+    actual["total"] = len(data["opcodes"])
+    problems = [
+        f"  {k}: table says {declared.get(k)}, rows say {actual.get(k, 0)}"
+        for k in ("full", "unstated", "n/a", "total")
+        if declared.get(k) != actual.get(k, 0)
+    ]
+    if problems:
+        raise SystemExit(
+            "docs/opcode-coverage.md Counts table disagrees with its rows:\n"
+            + "\n".join(problems)
+            + "\nFix the Counts table (or the row statuses) and re-run."
+        )
+
+
 def main() -> int:
     data = load_data()
+    check_counts(data)
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(

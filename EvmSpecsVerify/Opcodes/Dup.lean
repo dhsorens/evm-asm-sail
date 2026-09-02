@@ -259,7 +259,7 @@ theorem dup_step_equiv (n : Nat) (hn1 : 1 ≤ n)
       · rw [runS_execute_dup_overflow n pc_in top g mem hs ss prof
           sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)
           (by omega)]
-        exact StepResultRel.haltedChargeFirst (Or.inr rfl)
+        exact StepResultRel.haltedChargeFirst (Or.inr (Or.inl rfl))
           (haltRegs_frame_status ss msg .StackOverflow)
       · rw [runS_execute_dup_oog n pc_in top g mem hs ss prof
           sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)

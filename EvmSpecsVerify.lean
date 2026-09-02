@@ -44,6 +44,7 @@ import EvmSpecsVerify.Opcodes.Exp
 import EvmSpecsVerify.Opcodes.Pop
 import EvmSpecsVerify.Opcodes.Dup
 import EvmSpecsVerify.Opcodes.Swap
+import EvmSpecsVerify.Opcodes.Dupn
 import EvmSpecsVerify.Opcodes.Push
 import EvmSpecsVerify.Relations.Jumpdest
 import EvmSpecsVerify.Opcodes.Jumpi

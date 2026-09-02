@@ -232,7 +232,7 @@ theorem calldatasize_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
     by_cases hov : sRef.evm.stack.length = 1024
     · rw [runS_execute_calldatasize_overflow pc_in top g mem hs ss prof
         sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)]
-      exact StepResultRel.haltedChargeFirst (Or.inr rfl)
+      exact StepResultRel.haltedChargeFirst (Or.inr (Or.inl rfl))
         (haltRegs_frame_status ss msg .StackOverflow)
     · rw [runS_execute_calldatasize_oog pc_in top g mem hs ss prof
         sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)

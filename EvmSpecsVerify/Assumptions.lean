@@ -167,6 +167,18 @@ EVM state can violate it, and whether it is eliminable by proving.
   versioned hash is 32 bytes (the `hwfv` analogue). A `TxEnvRel` fragment,
   established at frame entry (M3).
 
+## Immediate decode fidelity (PUSH / DUPN family)
+
+* `himm` (`dupn_step_equiv`) — the byte SpecRef reads out of its own code
+  buffer at `pc + 1` is the byte the extraction's `.DUPN` constructor
+  carries. The two sides split the decoder differently: SpecRef fetches the
+  immediate *inside* the handler, the extraction decodes it upstream of
+  `execute` and passes it as a constructor argument, so no single `def`
+  contains both reads and nothing local can relate them. The same shape as
+  PUSH's `hv`; it is an artifact of the MM-3 dispatch boundary, not a
+  restriction on reachable states, and is discharged once a decode-layer
+  simulation exists (`CodeRel` already ties the underlying code bytes).
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
