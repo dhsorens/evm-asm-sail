@@ -281,6 +281,15 @@ Residual for the remaining `unstated` rows:
   are outer aborts, outside the `StepResultRel` boundary. Sizing: an
   EXP-shaped slice (compare `runS_alu_exp` ↔ `powMod` in
   `Opcodes/Exp.lean`), not a harvest.
+- **TSTORE** needs a transient-store relation in the success post.
+  `BasePost` observes only stack, gas and pc, so a
+  `StepResultRel BasePost` theorem for TSTORE would be green and
+  meaningless — it would not relate the write at all. The prerequisite is
+  the same one SSTORE has (the comparison-matrix "persistent storage" /
+  transient rows). Its static-context path also needs a new `ErrorRel`
+  constructor pairing SpecRef `.writeInStaticContext` with the
+  extraction's `WriteProtection` (`guard_static`, Execute.lean:108); both
+  sides check static **before** popping or charging, so the kinds align.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

@@ -265,7 +265,11 @@ unreachable / ambiguity / needs investigation).
 - **Verified 2026-09-02 (BLOBHASH)**: `OPCODE_BLOBHASH = 3 = G_verylow`,
   machine-checked by `blobhash_step_equiv`. `OPCODE_BLOBBASEFEE = 2 =
   G_base` is a constant match by inspection but not yet machine-checked —
-  BLOBBASEFEE is blocked on the fake-exponential bridge. This closes the own-account
+  BLOBBASEFEE is blocked on the fake-exponential bridge.
+- **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
+  WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
+  prices transient access flat). Machine-checked by `tload_step_equiv`.
+  `OPCODE_TSTORE = 100` matches by inspection, pending TSTORE's slice. This closes the own-account
   case of the open account subset; SSTORE and the CALL/CREATE-family
   account writes remain.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).

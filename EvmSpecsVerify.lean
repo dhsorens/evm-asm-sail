@@ -60,6 +60,7 @@ import EvmSpecsVerify.Opcodes.Return
 import EvmSpecsVerify.Opcodes.Revert
 import EvmSpecsVerify.Relations.Warm
 import EvmSpecsVerify.Opcodes.Sload
+import EvmSpecsVerify.Opcodes.Tload
 import EvmSpecsVerify.Opcodes.Stop
 import EvmSpecsVerify.Representation.AddressWord
 import EvmSpecsVerify.Opcodes.Address
