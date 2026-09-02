@@ -149,6 +149,15 @@ EVM state can violate it, and whether it is eliminable by proving.
   wf above, and unreachable rather than merely unproven. Discharged at
   frame entry with the code relation (M3).
 
+* `BlobHashAgree` (Opcodes/Blobhash.lean) — SpecRef's
+  `message.txEnv.blobVersionedHashes` indexed with a 32-zero-byte default
+  and the extraction's `k_blobhash` (index vs `k_tx`'s `blob_hashes.count`,
+  then a 32-byte stateless-input-slice load, `ZERO_WORD` past the end)
+  agree at **every** index — both zero-pad rather than fault, so no range
+  restriction enters. Its `wf` clause is the envelope invariant that each
+  versioned hash is 32 bytes (the `hwfv` analogue). A `TxEnvRel` fragment,
+  established at frame entry (M3).
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first

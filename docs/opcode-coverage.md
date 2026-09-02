@@ -95,8 +95,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | **full** ([`chainid_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L238) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; `k_chain_id` register tie, u64 wf hypothesized) |
 | SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | **full** ([`selfbalance_step_equiv`](../EvmSpecsVerify/Opcodes/Selfbalance.lean#L248) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. No warm/cold split: the own account is a flat `5` on both sides, so `SelfBalanceAgree` needs no warm-stamp quantification unlike `BalanceAgree` — see `Assumptions.lean`) |
 | BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | **full** ([`basefee_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L258) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header base-fee tie, wf hypothesized) |
-| BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | unstated |
-| BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated |
+| BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | **full** ([`blobhash_step_equiv`](../EvmSpecsVerify/Opcodes/Blobhash.lean#L240) — success/underflow/OOG; overflow unreachable for 1-in/1-out. Both sides zero-pad past the end of the versioned-hash list, so one success case covers in- and out-of-range indices with no range hypothesis; `BlobHashAgree` ties SpecRef's `txEnv.blobVersionedHashes` to the extraction's `k_tx` input-slice load) |
+| BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated (needs a fake-exponential bridge: SpecRef's fuelled `taylorAux` vs the extraction's `whileFuelM` `fake_exponential_word` — same recurrence, different fuel and overflow guards; an EXP-sized slice of its own — see `PROGRESS.md`) |
 | SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | **full** ([`slotnum_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L278) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header slot-number tie, u64 wf hypothesized) |
 
 ## Stack / memory / storage / control
@@ -145,7 +145,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 49 |
-| unstated | 40 |
+| full | 50 |
+| unstated | 39 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
