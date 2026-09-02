@@ -56,6 +56,7 @@ import EvmSpecsVerify.Opcodes.Pc
 import EvmSpecsVerify.Opcodes.Gas
 import EvmSpecsVerify.Opcodes.Msize
 import EvmSpecsVerify.Representation.EvmMemory
+import EvmSpecsVerify.Relations.Log
 import EvmSpecsVerify.Relations.Memory
 import EvmSpecsVerify.Opcodes.Mload
 import EvmSpecsVerify.Opcodes.Mcopy

@@ -180,6 +180,20 @@ EVM state can violate it, and whether it is eliminable by proving.
   restriction on reachable states, and is discharged once a decode-layer
   simulation exists (`CodeRel` already ties the underlying code bytes).
 
+## Log store correspondence (LOG family)
+
+* `LogRel` (Relations/Log.lean) — SpecRef's frame-local `Evm.logs` vs the
+  extraction's block-lifetime `HostState.logs` rows from a frame `base`,
+  with the payload read out of the shared `logBytes` arena. The `base`
+  offset is intrinsic, not a weakening: SpecRef resets `logs` per frame and
+  merges into the parent on success, while the host array only grows within
+  a transaction, so no frame-local statement can pin `logs.size` to the list
+  length alone. Its `bounded` field (each related row's span already lies
+  inside the arena) is a store invariant the host maintains by construction
+  — every emission appends its payload before recording the span — and is
+  what makes the relation stable under further emission (`logRel_append`).
+  Established at frame entry with the rest of the frame relations (M3).
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
