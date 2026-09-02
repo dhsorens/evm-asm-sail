@@ -125,7 +125,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | **full** ([`swap_step_equiv`](../EvmSpecsVerify/Opcodes/Swap.lean#L338) — success/underflow/OOG/MM-5 double fault; overflow unreachable since the height is unchanged. `take_swap_writes` bridges SpecRef's head-indexed `listSwap S 0 n` to the extraction's two `stack_set` writes at cursor slots 0 and n; index conventions already agree (`iSwapN (op - 0x8F)`)) |
 | LOG n | 0xa0–0xa4 | `iLogN` | `execute_log` | memory+logs | unstated |
 | DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | **full** ([`dupn_step_equiv`](../EvmSpecsVerify/Opcodes/Dupn.lean#L487) — success, invalid immediate, underflow, overflow, OOG, plus the MM-5 and MM-10 double faults. First opcode with an immediate-validity outcome: `decode_single_agree` proves SpecRef's `(x + 145) % 256` and the extraction's two-branch `x + 145` / `x - 111` are the same decoder, MM-10 records the `.invalidParameter`/`InvalidOpcode` kind split and the decode/charge order, and the ledgered `himm` ties the immediate byte across the MM-3 dispatch boundary) |
-| SWAPN | 0xe7 | `iSwapn` | `execute_swapn` | stack (fork-gated, immediate) | unstated |
+| SWAPN | 0xe7 | `iSwapn` | `execute_swapn` | stack (fork-gated, immediate) | **full** ([`swapn_step_equiv`](../EvmSpecsVerify/Opcodes/Swapn.lean#L343) — success, invalid immediate, underflow, OOG, plus the MM-5 and MM-10 double faults; overflow unreachable (height-preserving, `opcode_stack_effect = (n+1, n+1)`). A harvest in both directions: the decoder from DUPN (`decode_single` is shared), the permutation from SWAP (`take_swap_writes`, `listSwap_mem`, `swapHost`) — `execute_swapn`'s tail is `execute_swap`'s) |
 | EXCHANGE | 0xe8 | `iExchange` | `execute_exchange` | stack (fork-gated, immediate) | unstated |
 
 ## System
@@ -147,7 +147,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 72 |
-| unstated | 15 |
+| full | 73 |
+| unstated | 14 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **88** |
