@@ -24,6 +24,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 - **ternop**: 3-in/1-out (ADDMOD, MULMOD) — [`Shapes/Ternop.lean`](../EvmSpecsVerify/Opcodes/Shapes/Ternop.lean)
 - **stack**: pure stack manipulation (POP/PUSH/DUP/SWAP/…)
 - **env pusher**: base-cost `k_env` block-environment pushers (SpecRef `pushConstOf`, Evm `envPushShape`) — [`Shapes/EnvPusher.lean`](../EvmSpecsVerify/Opcodes/Shapes/EnvPusher.lean)
+- **live-state pusher**: base-cost 0-in/1-out pushers whose word comes from the live step state, read *after* the charge (SpecRef `livePushOf`) — [`Shapes/LivePusher.lean`](../EvmSpecsVerify/Opcodes/Shapes/LivePusher.lean)
 - **memory / control / env / storage / system**: as named
 
 ## ALU family
@@ -109,9 +110,9 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | **full** ([`jump_step_equiv`](../EvmSpecsVerify/Opcodes/Jump.lean#L285) — taken jump/underflow/OOG/invalid destination; the JUMPI harvest through `do_jump` and `JumpdestRel`, sharing `ControlPost`; no fall-through branch, overflow unreachable for 1-in/0-out) |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L501) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
-| PC | 0x58 | `iPc` | `execute_pc` | env (live-state pusher) | **full** ([`pc_step_equiv`](../EvmSpecsVerify/Opcodes/Pc.lean#L221) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. The extraction recovers the opcode position as `pc_in - 1` (`alu_sub_one`, no wrap since `pc_in ≥ 1`); domain restricted by `hwfpc : pc_in < 2^256` — see `Assumptions.lean`) |
+| PC | 0x58 | `iPc` | `execute_pc` | env (live-state pusher) | **full** ([`pc_step_equiv`](../EvmSpecsVerify/Opcodes/Pc.lean#L98) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. The extraction recovers the opcode position as `pc_in - 1` (`alu_sub_one`, no wrap since `pc_in ≥ 1`); domain restricted by `hwfpc : pc_in < 2^256` — see `Assumptions.lean`) |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
-| GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
+| GAS | 0x5a | `iGas` | `execute_gas` | env (live-state pusher) | **full** ([`gas_step_equiv`](../EvmSpecsVerify/Opcodes/Gas.lean#L114) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. Both sides push the *post-charge* gas (`gasLeft - 2`); domain restricted by `hwfg` for the new MM-8 `push_gas` modular reduction — see `Assumptions.lean`) |
 | JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
 | TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated |
@@ -143,7 +144,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 44 |
-| unstated | 45 |
+| full | 45 |
+| unstated | 44 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

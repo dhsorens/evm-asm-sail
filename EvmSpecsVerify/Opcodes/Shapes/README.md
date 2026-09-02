@@ -49,6 +49,22 @@ Each harvested [`Opcodes/<Op>.lean`](../) file is `rfl` dispatch + `aluF = fSpec
 | [`Unop.lean`](Unop.lean) | `unOp cost f` | [`unopShape`](Unop.lean#L74) | [`ISZERO`](../Iszero.lean) [`NOT`](../Not.lean) [`CLZ`](../Clz.lean) |
 | [`Ternop.lean`](Ternop.lean) | [`ternOp`](Ternop.lean#L50) (named here; SpecRef has no combinator) | [`ternopShape`](Ternop.lean#L122) | [`ADDMOD`](../Addmod.lean); MULMOD residual |
 
+## Pusher shapes (0-in/1-out, charge-first)
+
+Two shapes, split by *where the pushed word comes from*. Both are
+charge-first on the SpecRef side, so both inherit mismatch-ledger MM-5 on
+double-fault states (full stack ∧ out of gas).
+
+| File | SpecRef combinator | `Evm` side | Instantiations |
+| --- | --- | --- | --- |
+| [`EnvPusher.lean`](EnvPusher.lean) | [`pushConstOf`](EnvPusher.lean#L38) — reads the machine **before** charging | [`envPushShape`](EnvPusher.lean#L86) via [`EnvPushDispatch`](EnvPusher.lean#L98), value from a `k_env` field | [`COINBASE`/`TIMESTAMP`/`NUMBER`/`PREVRANDAO`/`GASLIMIT`/`CHAINID`/`BASEFEE`/`SLOTNUM`](../BlockEnv.lean) |
+| [`LivePusher.lean`](LivePusher.lean) | [`livePushOf`](LivePusher.lean#L54) — reads the machine **after** charging ([`chargedEvm`](LivePusher.lean#L44)) | [`LivePushDispatch`](LivePusher.lean#L118) over the handler body, value from the live step state | [`PC`](../Pc.lean) [`GAS`](../Gas.lean); MSIZE reuses the SpecRef half only |
+
+The read-order distinction is not cosmetic: GAS pushes `gasLeft - 2`
+precisely because its read follows the charge. Step theorems:
+[`envPush_step_equiv`](EnvPusher.lean#L203),
+[`livePush_step_equiv`](LivePusher.lean#L197).
+
 ## Shape-file template
 
 Every `Shapes/Foo.lean` (and future Env/Memory/…):

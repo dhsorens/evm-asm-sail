@@ -117,6 +117,32 @@ unreachable / ambiguity / needs investigation).
   `ErrorRel.outOfBoundsRead`; `returndatacopy_step_equiv` proves the complete
   in-bounds and out-of-bounds paths without weakening `StepResultRel`.
 
+## MM-8: `push_gas` reduces modulo `2^256` where SpecRef pushes a raw `Nat`
+
+- **Area**: GAS (and any future site that pushes a gas quantity as a word).
+- **SpecRef**: `iGas` pushes `evm.gasLeft` — an unbounded `Nat` — directly
+  (InstructionsCore.lean:278).
+- **`Evm`**: `push_gas` (Machine.lean:196) pushes
+  `u256 (value mod 2^256)`; `u256` is the identity, so the modulus is the
+  whole content. Its own doc comment says transaction validation
+  establishes the bound and the reduction "retains modular behavior outside
+  that invariant".
+- **Trigger**: a frame carrying more than `2^256 - 1` live gas. The two
+  sides then push **different words** — and, unlike MM-6, the extraction
+  does not abort, it silently wraps.
+- **Expected EVM behavior**: `GAS` pushes the remaining gas as a 256-bit
+  word; gas is `u64`-bounded in every real transaction (block gas limits
+  are ~`3.6 × 10^7`), so the values coincide.
+- **Fork**: all. **Reachability**: only with unbounded gas (our `g : Nat`
+  is unbounded, as in MM-6). **Severity**: none under real budgets.
+- **Likely cause**: intentional — the extraction keeps total functions by
+  reducing instead of asserting.
+- **Disposition**: *intentional abstraction* — threaded as
+  `hwfg : WordWf sRef.evm.gasLeft` on `gas_step_equiv` (Opcodes/Gas.lean)
+  and ledgered in `Assumptions.lean`; `runS_push_gas` is where the
+  reduction is discharged. Eliminable by bounding frame gas globally, the
+  same frame-entry invariant MM-6's `MemGasSafe` wants.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.
@@ -189,9 +215,9 @@ unreachable / ambiguity / needs investigation).
   charge equivalent to SpecRef's single total charge for warm and cold targets.
 - **Verified 2026-09-02 (control family)**: `OPCODE_JUMPDEST = 1 = G_jumpdest`
   and `OPCODE_JUMP = 8 = G_mid` (`OPCODE_JUMPI = 10 = G_high` was already
-  covered by `jumpi_step_equiv`) and `OPCODE_PC = 2 = G_base`.
-  Machine-checked by `jumpdest_step_equiv`, `jump_step_equiv` and
-  `pc_step_equiv`.
+  covered by `jumpi_step_equiv`), `OPCODE_PC = 2 = G_base` and
+  `OPCODE_GAS = 2 = G_base`. Machine-checked by `jumpdest_step_equiv`,
+  `jump_step_equiv`, `pc_step_equiv` and `gas_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 
