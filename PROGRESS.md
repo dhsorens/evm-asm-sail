@@ -134,6 +134,15 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 ### M2 — Shape validators across machinery (next tranche)
 
+**Where M2 stands (2026-09-02): 78 of 88 AST constructors are `full`.**
+Every opcode that does not need the world-state tranche or is not blocked
+by MM-3 now has a full-outcome step theorem. The nine that remain are
+exactly those two classes: SSTORE and SELFDESTRUCT need world relations
+(persistent storage, accounts), and INVALID plus the six-member
+CREATE/CALL family have no SpecRef `def` to target while dispatch is
+`partial` (MM-3). The residual notes at the end of this section scope
+each one.
+
 - [x] `Opcodes/Dup.lean` — DUP1–DUP16 (`dup_step_equiv`, full `StepResultRel`):
       first reachable stack overflow and first charge-first SpecRef handler.
       Discovered **MM-5**: on double-fault states (bad stack shape ∧ OOG) the
