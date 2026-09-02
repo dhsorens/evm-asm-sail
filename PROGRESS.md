@@ -353,18 +353,30 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 Residual for the remaining `unstated` rows:
 
-- **BLOBBASEFEE** needs a fake-exponential bridge. SpecRef's
-  `taylor_exponential` (fuelled `taylorAux`, `Gas.lean:114`) and the
-  extraction's `fake_exponential_word` (`whileFuelM`, `Gas.lean:107`) are
-  the **same recurrence** — `output += acc; acc := acc * num / (den * i)`,
-  starting `acc = factor * den` with `BLOB_MIN_GASPRICE = 1`, terminating
-  at `acc = 0`, dividing by `den` at the end — but they differ in fuel and
-  in guard behavior: SpecRef throws a `SpecError` on fuel exhaustion, the
-  extraction `fatal_error NumericOverflow`s past `den * 2^256`, and it also
-  aborts unless `excess_blob_gas ≤ profile.excess_blob_gas_limit`. All three
-  are outer aborts, outside the `StepResultRel` boundary. Sizing: an
-  EXP-shaped slice (compare `runS_alu_exp` ↔ `powMod` in
-  `Opcodes/Exp.lean`), not a harvest.
+- **BLOBBASEFEE** needs a fake-exponential bridge, and the comparison
+  that sized it turned up **MM-15** — the sharpest divergence in the
+  ledger. The two recurrences *are* the same (`output += acc;
+  acc := acc * num / (den * i)`, same schedule constants: Amsterdam picks
+  bpo2 on both sides, `den = 11684671`), but the guards are not: the
+  extraction `fatal_error NumericOverflow`s once the pre-division sum
+  reaches `den * 2^256`, which happens at `excess_blob_gas ≈ 177.45 * den`
+  — well inside the `excess_blob_gas ≤ 256 * den + 7 * 2^17` its own
+  profile permits — while SpecRef computes on and `stackPush`es a price
+  ≥ 2^256 unreduced. Numbers, root cause (`blob_fee_word_exponent_limit`
+  is 256 where `256 * ln 2 ≈ 177.45` is wanted) and reachability
+  (~2 260 maximum-blob blocks) are in `docs/mismatches.md`.
+  What that means for the slice: the step theorem can only be stated on
+  the agreement regime, `excess_blob_gas < 2 073 394 371`, carried as an
+  explicit bound — under which the extraction's guards provably never
+  fire, since the running sum bounds both the accumulator and the
+  iteration count. The remaining work is then mechanical but not small:
+  an induction relating SpecRef's fuelled `taylorAux` to the extraction's
+  `whileFuelM` loop (state triple `(acc, out, i)`), a generalization of
+  `Shapes/EnvPusher.lean`'s `envPushShape` to an arbitrary value
+  computation (BLOBBASEFEE is the second instance of that shape, so the
+  extraction is now justified), and a profile-parameter tie for the
+  schedule indices, which the Sail type system fixes but the Lean
+  extraction erases.
 - **SSTORE** is TSTORE with every hard part back. `TransientRel` shows the
   *shape* of the post it needs but none of the content: the extraction's
   `k_sstore` writes a `StorageValue {curr, orig}` row through the tx
