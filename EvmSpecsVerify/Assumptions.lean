@@ -169,7 +169,8 @@ EVM state can violate it, and whether it is eliminable by proving.
 
 ## Immediate decode fidelity (PUSH / DUPN family)
 
-* `himm` (`dupn_step_equiv` / `swapn_step_equiv`) — the byte SpecRef reads out of its own code
+* `himm` (`dupn_step_equiv` / `swapn_step_equiv` / `exchange_step_equiv`)
+  — the byte SpecRef reads out of its own code
   buffer at `pc + 1` is the byte the extraction's `.DUPN` constructor
   carries. The two sides split the decoder differently: SpecRef fetches the
   immediate *inside* the handler, the extraction decodes it upstream of

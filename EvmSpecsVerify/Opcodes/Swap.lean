@@ -52,87 +52,109 @@ theorem listSwap_length (S : List U256) (i j : Nat) :
     (listSwap S i j).length = S.length := by
   rw [listSwap_eq]; simp
 
+/-- `listSwap S i j` agrees with `S` away from the two swapped indices.
+Stated for an arbitrary pair because EXCHANGE swaps `(n, m)` where SWAP
+and SWAPN only ever swap `(0, n)`. -/
+theorem listSwap_getElem?_gen (S : List U256) (t i j k : Nat)
+    (ht : t = S.length) (hij : i ≠ j) (hi : i < t) (hj : j < t) (hk : k < t) :
+    (listSwap S i j)[k]? =
+      if k = i then S[j]? else if k = j then S[i]? else S[k]? := by
+  rw [listSwap_eq]
+  simp only [List.getElem?_set, List.length_set]
+  by_cases hki : k = i
+  · subst hki
+    rw [if_neg (by omega), if_pos rfl, if_pos (by omega), if_pos rfl]
+    simp [List.getD_eq_getElem?_getD,
+      List.getElem?_eq_getElem (show j < S.length by omega)]
+  · by_cases hkj : k = j
+    · subst hkj
+      rw [if_pos rfl, if_pos (by omega), if_neg (by omega), if_pos rfl]
+      simp [List.getD_eq_getElem?_getD,
+        List.getElem?_eq_getElem (show i < S.length by omega)]
+    · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega),
+        if_neg (by omega)]
+
 /-- `listSwap S 0 n` agrees with `S` away from the two swapped indices. -/
 theorem listSwap_getElem? (S : List U256) (t n j : Nat) (ht : t = S.length)
     (hn : 0 < n) (hnt : n < t) (hj : j < t) :
     (listSwap S 0 n)[j]? =
-      if j = 0 then S[n]? else if j = n then S[0]? else S[j]? := by
-  rw [listSwap_eq]
-  simp only [List.getElem?_set, List.length_set]
-  by_cases h0 : j = 0
-  · subst h0
-    rw [if_neg (by omega), if_pos rfl, if_pos (by omega)]
-    rw [List.getElem?_eq_getElem (by omega)]
-    simp [List.getD_eq_getElem?_getD,
-      List.getElem?_eq_getElem (show n < S.length by omega)]
-  · by_cases hjn : j = n
-    · subst hjn
-      rw [if_pos rfl, if_pos (by omega)]
-      rw [List.getElem?_eq_getElem (show 0 < S.length by omega)]
-      simp only [List.getD_eq_getElem?_getD,
-        List.getElem?_eq_getElem (show 0 < S.length by omega)]
-      simp [h0]
-    · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega),
-        if_neg (by omega)]
+      if j = 0 then S[n]? else if j = n then S[0]? else S[j]? :=
+  listSwap_getElem?_gen S t 0 n j ht (by omega) (by omega) hnt hj
 
 /-- A swap is a permutation, so it introduces no new entries — the stack
 well-formedness invariant survives. -/
-theorem listSwap_mem (S : List U256) (t n : Nat) (ht : t = S.length)
-    (hn : 0 < n) (hnt : n < t) {x : U256} (hx : x ∈ listSwap S 0 n) :
-    x ∈ S := by
+theorem listSwap_mem_gen (S : List U256) (t i j : Nat) (ht : t = S.length)
+    (hij : i ≠ j) (hi : i < t) (hj : j < t) {x : U256}
+    (hx : x ∈ listSwap S i j) : x ∈ S := by
   rw [List.mem_iff_getElem?] at hx
-  obtain ⟨j, hj⟩ := hx
-  have hjlt : j < t := by
-    have h : j < (listSwap S 0 n).length := by
+  obtain ⟨k, hk⟩ := hx
+  have hklt : k < t := by
+    have h : k < (listSwap S i j).length := by
       by_contra hc
-      rw [List.getElem?_eq_none (by omega)] at hj
-      exact absurd hj (by simp)
+      rw [List.getElem?_eq_none (by omega)] at hk
+      exact absurd hk (by simp)
     rw [listSwap_length] at h
     omega
-  rw [listSwap_getElem? S t n j ht hn hnt hjlt] at hj
-  split at hj
-  · exact List.mem_iff_getElem?.mpr ⟨n, hj⟩
-  · split at hj
-    · exact List.mem_iff_getElem?.mpr ⟨0, hj⟩
-    · exact List.mem_iff_getElem?.mpr ⟨j, hj⟩
+  rw [listSwap_getElem?_gen S t i j k ht hij hi hj hklt] at hk
+  split at hk
+  · exact List.mem_iff_getElem?.mpr ⟨j, hk⟩
+  · split at hk
+    · exact List.mem_iff_getElem?.mpr ⟨i, hk⟩
+    · exact List.mem_iff_getElem?.mpr ⟨k, hk⟩
 
-/-- **The coordinate bridge.** Two in-place writes at frame positions
-`t - 1` and `t - 1 - n` turn the reversed-prefix representation of `S` into
-that of `listSwap S 0 n`. -/
-theorem take_swap_writes (l : List word) (S : List U256) (t n : Nat)
+theorem listSwap_mem (S : List U256) (t n : Nat) (ht : t = S.length)
+    (hn : 0 < n) (hnt : n < t) {x : U256} (hx : x ∈ listSwap S 0 n) :
+    x ∈ S :=
+  listSwap_mem_gen S t 0 n ht (by omega) (by omega) hnt hx
+
+/-- **The coordinate bridge**, for an arbitrary index pair. Two in-place
+writes at frame positions `t - 1 - i` and `t - 1 - j` turn the
+reversed-prefix representation of `S` into that of `listSwap S i j`.
+The frame is indexed from the bottom and the stack from the top, so a
+stack index `i` is frame position `t - 1 - i`; that reversal is the whole
+content of this lemma. -/
+theorem take_swap_writes_gen (l : List word) (S : List U256) (t i j : Nat)
     (hpfx : l.take t = S.reverse) (ht : t = S.length)
-    (hn : 0 < n) (hnt : n < t) (hlen : t ≤ l.length) :
-    ((l.set (t - 1) (S.getD n 0)).set (t - 1 - n) (S.getD 0 0)).take t
-      = (listSwap S 0 n).reverse := by
-  have hlS : (listSwap S 0 n).length = t := by rw [listSwap_length]; omega
-  have hli : ∀ i, i < t → l[i]? = S[t - 1 - i]? := by
-    intro i hi
-    have h1 : (l.take t)[i]? = l[i]? := List.getElem?_take_of_lt hi
+    (hij : i ≠ j) (hi : i < t) (hj : j < t) (hlen : t ≤ l.length) :
+    ((l.set (t - 1 - i) (S.getD j 0)).set (t - 1 - j) (S.getD i 0)).take t
+      = (listSwap S i j).reverse := by
+  have hlS : (listSwap S i j).length = t := by rw [listSwap_length]; omega
+  have hli : ∀ p, p < t → l[p]? = S[t - 1 - p]? := by
+    intro p hp
+    have h1 : (l.take t)[p]? = l[p]? := List.getElem?_take_of_lt hp
     rw [← h1, hpfx, List.getElem?_reverse (by omega)]
     congr 1
     omega
   apply List.ext_getElem?
-  intro i
-  by_cases hi : i < t
-  · rw [List.getElem?_take_of_lt hi, List.getElem?_reverse (by omega), hlS,
-      listSwap_getElem? S t n (t - 1 - i) ht hn hnt (by omega)]
+  intro p
+  by_cases hp : p < t
+  · rw [List.getElem?_take_of_lt hp, List.getElem?_reverse (by omega), hlS,
+      listSwap_getElem?_gen S t i j (t - 1 - p) ht hij hi hj (by omega)]
     simp only [List.getElem?_set, List.length_set]
-    by_cases hitop : i = t - 1
-    · subst hitop
+    by_cases hpi : p = t - 1 - i
+    · subst hpi
       rw [if_neg (by omega), if_pos rfl, if_pos (by omega), if_pos (by omega)]
       simp [List.getD_eq_getElem?_getD,
-        List.getElem?_eq_getElem (show n < S.length by omega)]
-    · by_cases hin : i = t - 1 - n
-      · subst hin
+        List.getElem?_eq_getElem (show j < S.length by omega)]
+    · by_cases hpj : p = t - 1 - j
+      · subst hpj
         rw [if_pos rfl, if_pos (by omega), if_neg (by omega),
           if_pos (by omega)]
         simp [List.getD_eq_getElem?_getD,
-          List.getElem?_eq_getElem (show 0 < S.length by omega)]
+          List.getElem?_eq_getElem (show i < S.length by omega)]
       · rw [if_neg (by omega), if_neg (by omega), if_neg (by omega),
           if_neg (by omega)]
-        exact hli i hi
+        exact hli p hp
   · rw [List.getElem?_eq_none (by simp; omega),
       List.getElem?_eq_none (by simp [hlS]; omega)]
+
+/-- The `(0, n)` instance SWAP and SWAPN use. -/
+theorem take_swap_writes (l : List word) (S : List U256) (t n : Nat)
+    (hpfx : l.take t = S.reverse) (ht : t = S.length)
+    (hn : 0 < n) (hnt : n < t) (hlen : t ≤ l.length) :
+    ((l.set (t - 1) (S.getD n 0)).set (t - 1 - n) (S.getD 0 0)).take t
+      = (listSwap S 0 n).reverse :=
+  take_swap_writes_gen l S t 0 n hpfx ht (by omega) (by omega) hnt hlen
 
 /-- The host state after SWAP's two in-place writes, named so the run
 shapes below carry no multi-line structure-update literal. Stated with
@@ -141,6 +163,17 @@ applies directly. -/
 def swapHost (hs : Evm.HostState) (l : List word)
     (frest : List (List word)) (t n : Nat) (a b : word) : Evm.HostState :=
   { hs with stackFrames := (l.set (t - 1) a).set (t - 1 - n) b :: frest }
+
+/-- The same, for two writes at arbitrary stack indices `i` and `j`
+(EXCHANGE); `swapHost` is the `i = 0` instance. -/
+def swapHostAt (hs : Evm.HostState) (l : List word)
+    (frest : List (List word)) (t i j : Nat) (a b : word) : Evm.HostState :=
+  { hs with
+      stackFrames := (l.set (t - 1 - i) a).set (t - 1 - j) b :: frest }
+
+theorem swapHost_eq (hs : Evm.HostState) (l : List word)
+    (frest : List (List word)) (t n : Nat) (a b : word) :
+    swapHost hs l frest t n a b = swapHostAt hs l frest t 0 n a b := rfl
 
 /-! ## SpecRef run shapes -/
 
