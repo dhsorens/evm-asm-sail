@@ -216,8 +216,9 @@ unreachable / ambiguity / needs investigation).
 - **Verified 2026-09-02 (control family)**: `OPCODE_JUMPDEST = 1 = G_jumpdest`
   and `OPCODE_JUMP = 8 = G_mid` (`OPCODE_JUMPI = 10 = G_high` was already
   covered by `jumpi_step_equiv`), `OPCODE_PC = 2 = G_base` and
-  `OPCODE_GAS = 2 = G_base`. Machine-checked by `jumpdest_step_equiv`,
-  `jump_step_equiv`, `pc_step_equiv` and `gas_step_equiv`.
+  `OPCODE_GAS = 2 = G_base` and `OPCODE_MSIZE = 2 = G_base`.
+  Machine-checked by `jumpdest_step_equiv`, `jump_step_equiv`,
+  `pc_step_equiv`, `gas_step_equiv` and `msize_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 
