@@ -87,6 +87,15 @@ theorem runR_liftTx_ok (m : TxM α) (s : Machine) (a : α)
         Except.ok (Except.ok a, { s with txState := ts })) := rfl
   rw [hshape, h]
 
+/-- Run a pure spec computation (`Except SpecError`) through
+`EvmM.liftSpec`: on `.ok` the machine is untouched. The `.error` case is
+an outer abort, outside the step-result boundary. -/
+theorem runR_liftSpec_ok {α : Type} (m : Except SpecError α) (s : Machine)
+    (a : α) (h : m = .ok a) :
+    runR (EvmM.liftSpec m) s = .ok (.ok a, s) := by
+  rw [h]
+  rfl
+
 /-! ## Stack primitives -/
 
 theorem runR_stackPop_cons (s : Machine) (x : U256) (rest : List U256)

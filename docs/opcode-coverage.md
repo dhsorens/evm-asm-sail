@@ -98,7 +98,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | **full** ([`selfbalance_step_equiv`](../EvmSpecsVerify/Opcodes/Selfbalance.lean#L248) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. No warm/cold split: the own account is a flat `5` on both sides, so `SelfBalanceAgree` needs no warm-stamp quantification unlike `BalanceAgree` — see `Assumptions.lean`) |
 | BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | **full** ([`basefee_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L258) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header base-fee tie, wf hypothesized) |
 | BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | **full** ([`blobhash_step_equiv`](../EvmSpecsVerify/Opcodes/Blobhash.lean#L240) — success/underflow/OOG; overflow unreachable for 1-in/1-out. Both sides zero-pad past the end of the versioned-hash list, so one success case covers in- and out-of-range indices with no range hypothesis; `BlobHashAgree` ties SpecRef's `txEnv.blobVersionedHashes` to the extraction's `k_tx` input-slice load) |
-| BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated (**MM-15**: the two recurrences agree, the guards do not — the extraction `fatal_error`s once the pre-division sum reaches `den * 2^256`, at `excess_blob_gas ≈ 177.45 * den`, inside the `256 * den + 7 * 2^17` its own profile permits, while SpecRef pushes a price ≥ 2^256 unreduced. A step theorem is possible only on the agreement regime `excess_blob_gas < 2 073 394 371`, carried as an explicit bound; see `docs/mismatches.md` and `PROGRESS.md`) |
+| BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | **full** ([`blobbasefee_step_equiv`](../EvmSpecsVerify/Opcodes/Blobbasefee.lean#L504) — success/overflow/OOG/MM-5 double fault, in the agreement regime. The only opcode whose two implementations run a *loop*: `runS_blob_loop` relates SpecRef's fuelled `taylorAux` to the extraction's `whileFuelM` over `(accumulator, output, term_index)` by induction on SpecRef's fuel. **MM-15** is why the regime is explicit: the guards disagree outside `price < 2^256`, and that band lies inside what the extraction's own `excess_blob_gas_limit` admits. Inside it neither guard can fire — the running sum bounds the accumulator, the iteration count and the term index, so no exponential estimate is needed. `hden` ties the profile's schedule denominator (fixed by the Sail types, erased by the extraction)) |
 | SLOTNUM | 0x4b | `iSlotnum` | `execute_slotnum` | env (fork-gated) | **full** ([`slotnum_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L278) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header slot-number tie, u64 wf hypothesized) |
 
 ## Stack / memory / storage / control
@@ -147,7 +147,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 77 |
-| unstated | 10 |
+| full | 78 |
+| unstated | 9 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **88** |

@@ -440,10 +440,13 @@ all and SpecRef produces a stack entry that is not a word.
   aliases mean SpecRef cannot express that check, so this is a modelling
   gap rather than a coding slip.
 - **Disposition**: *needs investigation* (the only entry in that class).
-  Until it is resolved, a `blobbasefee_step_equiv` can only be stated on
-  the agreement regime — `excess_blob_gas < 2 073 394 371`, equivalently
-  the price fitting a word — carried as an explicit ledgered bound. The
-  coverage row stays `unstated` until that slice lands; see `PROGRESS.md`.
+  The agreement regime is now machine-checked: `blobbasefee_step_equiv`
+  (Opcodes/Blobbasefee.lean) proves the two sides equal under
+  `hword : price < 2 ^ 256`, which is exactly the band's lower edge. The
+  proof needs no exponential estimate — inside the regime the running sum
+  bounds the accumulator, the iteration count and the term index, so
+  neither extraction guard can fire. What remains open is the divergence
+  itself, above that bound.
 
 ## MM-4: Step-boundary pc convention
 
@@ -549,6 +552,8 @@ all and SpecRef produces a stack entry that is not a word.
   is sound because `8 * size ≥ size`. Machine-checked for the whole
   family by `logn_step_equiv`, through `runS_charge_log_gas_ok`/`_oog_*`;
   the topic stage is a live OOG outcome from LOG1 up.
+- **Verified 2026-09-02 (BLOBBASEFEE)**: `OPCODE_BLOBBASEFEE = 2 =
+  G_base`. Machine-checked by `blobbasefee_step_equiv`.
 - **Verified 2026-09-02 (TSTORE)**: `OPCODE_TSTORE = 100 = G_warm_access`,
   flat like TLOAD and with no warm/cold component on either side.
   Machine-checked by `tstore_step_equiv`.
