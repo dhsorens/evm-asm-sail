@@ -126,6 +126,16 @@ EVM state can violate it, and whether it is eliminable by proving.
   `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
   `word_of_source_byte_count`'s assert is unreachable under it.
 
+* `hwfpc` (`pc_step_equiv`) — the advanced program counter is a
+  well-formed word (`pc_in < 2^256`). SpecRef's `Machine.pc` is an
+  unbounded `Nat`; the extraction embeds it with
+  `word_of_source_byte_count`, whose assert spec-aborts above `2^256`.
+  The extraction's code slices live in a u32 space (and EIP-170 caps
+  deployed code at 24576 bytes), so every reachable pc is ~70 orders of
+  magnitude below the bound — the same class as the `CodeRel` slice-length
+  wf above, and unreachable rather than merely unproven. Discharged at
+  frame entry with the code relation (M3).
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first
