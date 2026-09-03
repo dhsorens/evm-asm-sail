@@ -691,6 +691,116 @@ theorem runS_credit_state_gas_refund_reservoir (g amount : Nat)
   refine runS_bind_ok (runS_writeReg _ _ _ _) ?_
   exact runS_pure _ _ _
 
+/-- Reading a register other than the one just written. -/
+theorem regs_get?_insert_ne {r k : Register}
+    (m : Std.ExtDHashMap Register Evm.Defs.RegisterType)
+    (v : Evm.Defs.RegisterType k) (h : r ≠ k) :
+    (m.insert k v).get? r = m.get? r := by
+  simp only [Std.ExtDHashMap.get?_insert]
+  refine dif_neg (fun hh => h ?_)
+  have : k = r := by simpa using hh
+  exact this.symm
+
+/-! ### Closed forms
+
+The three credit branches and the three state-charge branches each
+collapse to one `min`-shaped formula, which is what lets a step theorem
+chain through them without case analysis. -/
+
+/-- The credit, in closed form: `min amount spilled` back to execution
+gas, the rest to the reservoir. -/
+theorem runS_credit_closed (g amount : Nat) (hs : Evm.HostState)
+    (ss : SeqState) (res sp : Nat)
+    (hres : ss.regs.get? Register.state_gas_remaining = some res)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp) :
+    ∃ ss', runS (Evm.Functions.credit_state_gas_refund g amount) hs ss
+        = .ok (g + min amount sp, hs) ss'
+      ∧ ss'.regs.get? Register.state_gas_remaining
+          = some (res + (amount - min amount sp))
+      ∧ ss'.regs.get? Register.state_gas_spilled = some (sp - min amount sp)
+      ∧ ∀ (r : Register), r ≠ Register.state_gas_remaining →
+          r ≠ Register.state_gas_spilled →
+          ss'.regs.get? r = ss.regs.get? r := by
+  by_cases hz : amount = 0
+  · subst hz
+    simp only [Nat.zero_min, Nat.add_zero, Nat.sub_zero]
+    exact ⟨ss, runS_credit_state_gas_refund_zero g hs ss sp hsp, hres, hsp,
+      fun _ _ _ => rfl⟩
+  · by_cases hle : amount ≤ sp
+    · rw [Nat.min_eq_left hle]
+      refine ⟨_, runS_credit_state_gas_refund_spill g amount hs ss sp hsp hz
+        hle, ?_, ?_, ?_⟩
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simpa using hres
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simp
+      · intro r _ h2
+        exact regs_get?_insert_ne _ _ h2
+    · have hlt : sp < amount := Nat.lt_of_not_le hle
+      rw [Nat.min_eq_right (Nat.le_of_lt hlt)]
+      by_cases hsp0 : sp = 0
+      · subst hsp0
+        simp only [Nat.add_zero, Nat.sub_zero]
+        refine ⟨_, runS_credit_state_gas_refund_reservoir g amount hs ss res
+          hres hsp hz, ?_, ?_, ?_⟩
+        · simp only [Std.ExtDHashMap.get?_insert]
+          simp
+        · simp only [Std.ExtDHashMap.get?_insert]
+          simpa using hsp
+        · intro r h1 _
+          exact regs_get?_insert_ne _ _ h1
+      · refine ⟨_, runS_credit_state_gas_refund_mixed g amount hs ss res sp
+          hres hsp hsp0 hlt, ?_, ?_, ?_⟩
+        · simp only [Std.ExtDHashMap.get?_insert]
+          simp
+        · simp only [Std.ExtDHashMap.get?_insert]
+          simp [Evm.Functions.STATE_GAS_SPILL_ZERO]
+        · intro r h1 h2
+          rw [regs_get?_insert_ne _ _ h1, regs_get?_insert_ne _ _ h2]
+
+/-- The state charge, in closed form: the reservoir first, then a spill
+out of execution gas. -/
+theorem runS_charge_state_closed (g amount : Nat) (hs : Evm.HostState)
+    (ss : SeqState) (res sp : Nat)
+    (hres : ss.regs.get? Register.state_gas_remaining = some res)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hafford : amount - min amount res ≤ g)
+    (hroom : sp + (amount - min amount res) ≤ 2 ^ 24) :
+    ∃ ss', runS (Evm.Functions.charge_state_gas g amount) hs ss
+        = .ok ((true, g - (amount - min amount res)), hs) ss'
+      ∧ ss'.regs.get? Register.state_gas_remaining
+          = some (res - min amount res)
+      ∧ ss'.regs.get? Register.state_gas_spilled
+          = some (sp + (amount - min amount res))
+      ∧ ∀ (r : Register), r ≠ Register.state_gas_remaining →
+          r ≠ Register.state_gas_spilled →
+          ss'.regs.get? r = ss.regs.get? r := by
+  by_cases hz : amount = 0
+  · subst hz
+    simp only [Nat.zero_min, Nat.sub_zero, Nat.sub_self, Nat.add_zero]
+    exact ⟨ss, runS_charge_state_gas_zero g hs ss, hres, hsp,
+      fun _ _ _ => rfl⟩
+  · by_cases hle : amount ≤ res
+    · rw [Nat.min_eq_left hle, Nat.sub_self, Nat.sub_zero, Nat.add_zero]
+      refine ⟨_, runS_charge_state_gas_reservoir g amount hs ss res hres hz
+        hle, ?_, ?_, ?_⟩
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simp
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simpa using hsp
+      · intro r h1 _
+        exact regs_get?_insert_ne _ _ h1
+    · have hlt : res < amount := Nat.lt_of_not_le hle
+      rw [Nat.min_eq_right (Nat.le_of_lt hlt)] at hafford hroom ⊢
+      refine ⟨_, runS_charge_state_gas_spill g amount hs ss res sp hres hsp hz
+        hlt hafford hroom, ?_, ?_, ?_⟩
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simp [Evm.Functions.GAS_ZERO]
+      · simp only [Std.ExtDHashMap.get?_insert]
+        simp
+      · intro r h1 h2
+        rw [regs_get?_insert_ne _ _ h2, regs_get?_insert_ne _ _ h1]
+
 /-! ### `record_refund` -/
 
 /-- The signed refund accumulator. The extraction validates the sum

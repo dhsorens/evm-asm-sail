@@ -202,26 +202,6 @@ theorem runR_iSload_cold_oog (s : Machine) (x : U256) (rest : List U256)
 /-! ## `Evm` run shapes -/
 
 open Evm.Functions in
-theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_is_warm aV x) hs ss =
-      .ok (decide (hs.warmEpoch ≤ (assocGet hs.warmSlots
-          ({ addr := aV, slot := x } : Evm.Defs.StorageKey)).getD 0),
-        hs) ss := by
-  simp only [Evm.Functions.storage_is_warm, runS_bind, runS_get, runS_pure]
-
-open Evm.Functions in
-theorem runS_storage_mark_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_mark_warm aV x) hs ss =
-      .ok ((),
-        { hs with warmSlots :=
-            assocPut hs.warmSlots ({ addr := aV, slot := x } :
-              Evm.Defs.StorageKey) hs.warmEpoch })
-        ss := by
-  simp only [Evm.Functions.storage_mark_warm, runS_modify]
-
-open Evm.Functions in
 /-- The Amsterdam SLOAD charge, warm or cold. -/
 theorem runS_sload_cost (warmb : Bool) (hs : Evm.HostState) (ss : SeqState)
     (prof : ExecutionProfile)

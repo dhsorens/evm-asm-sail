@@ -83,4 +83,45 @@ theorem runE_bind_throw {m : Evm.SailME α β} {k : β → Evm.SailME α γ} {a 
     runE (m >>= k) hs ss = .ok (.error (.inr a), hs') ss' :=
   runS_bind_ok h1 (runS_pure _ _ _)
 
+/-! ## Guarded statements
+
+The do-elaborator turns `if c then act` inside a `SailME` block into
+`if c then (liftM act >>= k) else (pure b >>= k)`, with the continuation
+pushed into both branches. This lemma steps over one such guard without
+splitting the proof: the post-state is an `if`, which the caller's own
+`if`-shaped definitions match. -/
+
+/-- The same guard in *value* position (`let x ← if c then … else …`),
+where the do-elaborator leaves the continuation outside. -/
+theorem runE_bind_cond {α β γ : Type} (cond : Bool) (m : Evm.SailM γ)
+    (a b : γ) (k : γ → Evm.SailME α β) {hs hs' : HostState}
+    {ss ss' : SeqState}
+    {r : EStateM.Result SailError SeqState
+      (Except (SailError ⊕ α) β × HostState)}
+    (hm : runS m hs ss = .ok (a, hs') ss')
+    (h : runE (k (if cond = true then a else b))
+        (if cond = true then hs' else hs)
+        (if cond = true then ss' else ss) = r) :
+    runE ((if cond = true then liftM m else pure b) >>= k) hs ss = r := by
+  cases cond
+  · rw [if_neg (by simp)] at h ⊢
+    exact runE_bind_ok (runE_pure _ _ _) h
+  · rw [if_pos rfl] at h ⊢
+    exact runE_bind_ok (runE_lift hm) h
+
+theorem runE_cond_val {α β γ : Type} (cond : Bool) (m : Evm.SailM γ) (a b : γ)
+    (k : γ → Evm.SailME α β) {hs hs' : HostState} {ss ss' : SeqState}
+    {r : EStateM.Result SailError SeqState
+      (Except (SailError ⊕ α) β × HostState)}
+    (hm : runS m hs ss = .ok (a, hs') ss')
+    (h : runE (k (if cond = true then a else b))
+        (if cond = true then hs' else hs)
+        (if cond = true then ss' else ss) = r) :
+    runE (if cond = true then liftM m >>= k else pure b >>= k) hs ss = r := by
+  cases cond
+  · rw [if_neg (by simp)] at h ⊢
+    exact runE_bind_ok (runE_pure _ _ _) h
+  · rw [if_pos rfl] at h ⊢
+    exact runE_bind_ok (runE_lift hm) h
+
 end EvmSpecsVerify

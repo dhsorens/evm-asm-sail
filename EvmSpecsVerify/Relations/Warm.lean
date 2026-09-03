@@ -131,6 +131,24 @@ theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
       .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
   simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
 
+theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
+    (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.storage_is_warm aV x) hs ss =
+      .ok (decide (hs.warmEpoch ≤ (assocGet hs.warmSlots
+          ({ addr := aV, slot := x } : Evm.Defs.StorageKey)).getD 0),
+        hs) ss := by
+  simp only [Evm.Functions.storage_is_warm, runS_bind, runS_get, runS_pure]
+
+theorem runS_storage_mark_warm (aV : Evm.Defs.address) (x : Nat)
+    (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.storage_mark_warm aV x) hs ss =
+      .ok ((),
+        { hs with warmSlots :=
+            assocPut hs.warmSlots ({ addr := aV, slot := x } :
+              Evm.Defs.StorageKey) hs.warmEpoch })
+        ss := by
+  simp only [Evm.Functions.storage_mark_warm, runS_modify]
+
 /-! ## `assocGet` / `assocPut` characterization -/
 
 /-- The derived `BEq` on `StorageKey` compares fields. -/
