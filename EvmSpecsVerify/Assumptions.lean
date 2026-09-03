@@ -46,6 +46,22 @@ EVM state can violate it, and whether it is eliminable by proving.
   theorems; eliminable only by bounding `g` globally (frame-entry invariant),
   future work.
 
+## Gas budget and refund range (SSTORE)
+
+* `hroom` / `hhead` on `sstore_step_equiv` (Opcodes/Sstore.lean) — the
+  two extraction-only hard aborts of the Amsterdam state-gas path
+  (mismatch ledger MM-17), the state-gas analogues of `MemGasSafe`:
+  `state_gas_spill_add` spec-aborts once the recorded spill passes `2^24`
+  (EIP-7825's transaction gas limit, the same constant on both sides) and
+  `validated_refund_add` spec-aborts outside `±gas_refund_bound`, while
+  SpecRef tracks both quantities as unbounded `Nat`/`Int`. Both
+  hypotheses are stated on the pre-state — the spill plus one
+  `STORAGE_SET`, the counter plus one step's worst-case refund movement —
+  so a caller establishes them from the frame it already has. Unreachable
+  for a well-formed transaction, but the argument is transaction-level
+  (`SstoreRefundHeadroom` records the arithmetic); eliminable only by a
+  frame-entry gas/refund invariant, as for `MemGasSafe`.
+
 ## Storage read agreement (SLOAD)
 
 * `SloadAgree` (Opcodes/Sload.lean) — the two sides' storage reads return
@@ -85,13 +101,37 @@ EVM state can violate it, and whether it is eliminable by proving.
   one.
 
 * `StorageRel` (Relations/Storage.lean) — a *relation*, not an agreement
-  assumption: SpecRef's transaction-layer `storageWrites` and the
-  extraction's `storageTx` overlay agree pointwise on presence and live
+  assumption: every row the extraction's `storageTx` overlay holds,
+  SpecRef's transaction-layer `storageWrites` holds with the same live
   value, and the extraction's stored `orig` is the value SpecRef
-  recomputes with `getStorageOriginal`. `storageRel_write` preserves it
-  across one write, `storageRel_frame` across the read bookkeeping every
-  SpecRef probe performs. Its `wf` field plays the role
-  `TransientRel.wf` does. Consumed by `sloadAgree_of_storageRel` above.
+  recomputes with `getStorageOriginal`. **One-directional by design**
+  (mismatch ledger MM-16): an `SSTORE` that writes the value already
+  there records a row on SpecRef's side and none on the extraction's, so
+  the converse inclusion is false on a reachable state.
+  `storageRel_write` preserves it across a changing write,
+  `storageRel_write_noop` across that no-op, `storageRel_frame` across
+  the read bookkeeping every SpecRef probe performs, and
+  `storageRel_hostFrame` across host steps that leave the overlay alone.
+  Its `wf` field plays the role `TransientRel.wf` does. Consumed by
+  `sloadAgree_of_storageRel` above and by `sstore_step_equiv`.
+
+## Storage write agreement (SSTORE)
+
+* `SstoreAgree` (Opcodes/Sstore.lean) — the writer's sibling of
+  `SloadAgree`: SpecRef's `getStorageOriginal`/`getStorage` return the
+  `orig`/`curr` pair of the row the extraction's `k_sload` returns, and
+  SpecRef's `setStorage` succeeds. It also records `k_sload`'s framing —
+  it leaves the operand stack, the warm stamps and the `storageTx`
+  overlay alone (its caching is one layer down, in `storageBlock`), and
+  when the overlay already holds a row for the slot, that row is the one
+  it returns. Threaded on `sstore_step_equiv` only for the *values*: the
+  Amsterdam schedule (`sstoreCst_eq`), the warm/cold accounting
+  (`WarmRel`), the two-dimensional gas and the refund are proven
+  outright. `sstoreAgree_of_storageRel` reduces it, exactly as for
+  `SloadAgree`, to the transaction-overlay regime plus SpecRef's
+  account-existence check — that check has no counterpart in `k_sstore`
+  (SpecRef rejects a store to a non-existent account, the extraction
+  writes the row), so it stays a hypothesis rather than being derived.
 
 * `TransientRel` (Relations/Transient.lean) — a *relation*, threaded on
   `tstore_step_equiv` the way `LogRel` is on the LOG family, not an

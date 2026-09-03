@@ -370,7 +370,8 @@ unreachable / ambiguity / needs investigation).
   `.writeInStaticContext` with the extraction's `StackUnderflow`. It
   admits **only** `StackUnderflow` — every opcode in this class is
   `n`-in/0-out, so overflow is unreachable. Machine-checked by
-  `tstore_step_equiv`.
+  `tstore_step_equiv` and, for SSTORE, by `sstore_step_equiv`
+  (2026-09-03); SELFDESTRUCT is the remaining member of the class.
 
 ## MM-15: The blob base fee overflows a word inside the extraction's own permitted range
 
@@ -447,6 +448,80 @@ all and SpecRef produces a stack entry that is not a word.
   bounds the accumulator, the iteration count and the term index, so
   neither extraction guard can fire. What remains open is the divergence
   itself, above that bound.
+
+## MM-16: The no-op `SSTORE` records a row on SpecRef's side and none on the extraction's
+
+- **Area**: `SSTORE` (`0x55`), the transaction-layer storage overlay.
+- **SpecRef**: `iSstore` calls `setStorage target key new_value`
+  unconditionally (InstructionsCore.lean:492). `setStorage` writes the
+  slot into `ts.storageWrites` whatever it held before, so a store of the
+  value already there creates (or refreshes) a write row.
+- **`Evm`**: `execute_sstore` guards the write —
+  `if entry.curr != value then k_sstore …` (Execute.lean:1476) — so the
+  same step leaves `storageTx` untouched. `k_sstore` itself is
+  unconditional; the guard is in the handler.
+- **Trigger**: any `SSTORE` whose new value equals the slot's current
+  value, on a slot the transaction has not written yet. Trivially
+  reachable (`SSTORE(k, SLOAD(k))`, or two identical stores).
+- **Expected EVM behavior**: the *value* is the same either way, and gas
+  and refunds are computed from `(original, current, new)` before the
+  write, so no execution-visible quantity differs. What differs is
+  *presence* in the transaction's write set, and presence is observable
+  in principle: SpecRef's `accountHasStorage` reads
+  `storageWrites.get(address)` truthiness (StateTracker.lean:211), the
+  extraction's `storage_has_writes` reads its overlay, and the
+  block-access-list drain at transaction end walks the same structures.
+  A slot written with its own value belongs in the BAL — execution-specs
+  records the write and lets the encoder drop no-ops — so SpecRef's side
+  is the conservative one.
+- **Fork**: all (the guard predates Amsterdam). **Reachability**:
+  trivially reachable. **Severity**: none within a step; potentially
+  observable at transaction end, in the BAL rather than in execution.
+- **Likely cause**: the extraction's guard is an optimisation of the
+  journal (avoid an undo entry for a write that changes nothing) that
+  also skips the row.
+- **Disposition**: *relation* — `StorageRel`
+  (Relations/Storage.lean) is deliberately **one-directional**: every row
+  the extraction holds, SpecRef holds with the same live value, and not
+  conversely. `storageRel_write_noop` is the step lemma that carries the
+  relation across exactly this case, and `sstore_step_equiv` uses it. The
+  weakening is what the elision forces; the converse direction is
+  recoverable only by relating the BAL drain, which is out of scope here.
+
+## MM-17: `SSTORE`'s two extraction-only hard aborts (state-gas spill cap, refund range)
+
+- **Area**: `SSTORE` (`0x55`); Amsterdam state gas (`debit_state_gas`) and
+  the refund accumulator (`record_refund`).
+- **`Evm`**: `debit_state_gas`'s spill leg goes through
+  `state_gas_spill_add`, which `fatal_error ExecutionInvalid`s when the
+  *recorded spill* would exceed `state_gas_spill_room`'s ceiling of `2^24`
+  (Gas.lean:549-558 — `eip7825_transaction_gas_limit`, Defs.lean:249), and
+  `record_refund` goes through `validated_refund_add`, which does the same
+  when the running refund leaves `±gas_refund_bound = 199 · (2^64 − 1)`
+  (Machine.lean:95, Defs.lean:724).
+- **SpecRef**: `charge_state_gas` tracks `stateGasSpilled` as an
+  unbounded `Nat` and `refundCounter` as an unbounded `Int`; neither
+  quantity has a step-level ceiling.
+- **Trigger**: none reachable. Spilled state gas is bounded by the gas
+  the frame has actually spent, hence by the transaction's gas limit,
+  which is `2^24` on **both** sides (EIP-7825/EIP-8037:
+  `TX_MAX_GAS_LIMIT = 16777216`, Transactions.lean:518, and
+  `eip7825_transaction_gas_limit`); under that same cap a transaction
+  affords at most `2^24 / G_sstore_sentry ≈ 7291` `SSTORE`s
+  (`G_sstore_sentry = 2301`), each moving the refund by at most
+  `R_amsterdam_storage_clear + G_amsterdam_storage_write = 22480` — three
+  orders of magnitude below the bound.
+- **Fork**: Amsterdam (both guards are Amsterdam-era).
+  **Reachability**: unreachable for a well-formed transaction, but the
+  argument is a *transaction-level* invariant, not a step-level one.
+  **Severity**: none.
+- **Likely cause**: defensive bounds on the extraction's fixed-width
+  registers, with no counterpart in SpecRef's unbounded arithmetic.
+- **Disposition**: *unreachable*, threaded as step hypotheses rather than
+  eliminated — `hroom` and `hhead` on `sstore_step_equiv`, the refund
+  analogue of `MemGasSafe` (MM-6). Both are stated on the **pre**-state,
+  so what a caller has to establish is that one `SSTORE`'s worst-case
+  movement still fits; a transaction-level tranche discharges them.
 
 ## MM-4: Step-boundary pc convention
 
@@ -561,10 +636,26 @@ all and SpecRef produces a stack entry that is not a word.
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.
   `OPCODE_TSTORE = 100` matches by inspection, pending TSTORE's slice. This closes the own-account
-  case of the open account subset; SSTORE and the CALL/CREATE-family
-  account writes remain.
+  case of the open account subset; the CALL/CREATE-family account writes
+  remain.
+- **Verified 2026-09-03 (SSTORE — the whole two-dimensional schedule)**:
+  the extraction computes all four prices in one record and SpecRef inlines
+  them; `sstoreCst_eq` (Opcodes/Sstore.lean) proves the record equal field
+  by field at Amsterdam — `execution` = access (`3000`/`100`) plus
+  `G_amsterdam_storage_write = 10000 = STORAGE_WRITE` on a clean write,
+  `refund` = SpecRef's three conditional `refundCounter` updates composed
+  (`R_amsterdam_storage_clear = 12480 = REFUND_STORAGE_CLEAR`),
+  `state_charge` and `state_credit` = `StateGasCosts.STORAGE_SET`
+  (`64 · 1530 = 97920`) under the same three-way conditions. The EIP-2200
+  sentry agrees too: `G_sstore_sentry = 2301 = CALL_STIPEND + 1` dominates
+  the warm access cost, so `sstore_sentry_cost` is SpecRef's
+  `max access_cost (CALL_STIPEND + 1)` (`sstore_sentry_cost_eq`).
+  Machine-checked end to end by `sstore_step_equiv`, whose gas triple is
+  the shared closed form `sstoreGasOut`. **The storage half of the open
+  subset is closed; only the CALL/CREATE-family account writes remain.**
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
-- **Disposition**: *needs investigation* (SSTORE/account subset only).
+- **Disposition**: *needs investigation* (CALL/CREATE account-write subset
+  only; ALU, storage and account-read schedules are machine-checked).
 
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 

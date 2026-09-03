@@ -32,7 +32,7 @@ Reachable outcomes: success (warm/cold) / stack underflow / out-of-gas
 (warm/cold; overflow unreachable for 1-in/1-out).
 -/
 
-open private pcAdd isWarmStorageKey warmStorageKey from
+open private pcAdd warmStorageKey from
   EvmAsm.Stateless.SpecRef.InstructionsCore
 open private writeListAt assocGet assocPut from Evm.HostAxioms
 
@@ -81,9 +81,7 @@ theorem sloadAgree_of_storageRel (sRef : Machine) (hs : Evm.HostState)
     fun ws => runS_k_sload_hit aV x e _ ss hrow, fun _ => rfl, fun _ => rfl,
     fun _ => rfl⟩
   rw [← haddr]
-  refine runTx_getStorage_tx_hit _ _ _ _ ?_
-  rw [← hsr.curr aV x hx, hrow]
-  rfl
+  exact runTx_getStorage_tx_hit _ _ _ _ (hsr.curr aV x hx e hrow)
 
 /-! ## Small warm-set helpers -/
 
@@ -99,11 +97,6 @@ private theorem hostState_set_stackFrames_warmEpoch (h : Evm.HostState)
   rfl
 
 /-! ## SpecRef run shapes -/
-
-theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
-    runR (isWarmStorageKey key) s =
-      .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
-  simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
 
 theorem runR_iSload_underflow (s : Machine) (hstack : s.evm.stack = []) :
     runR iSload s = .ok (.error .stackUnderflow, s) := by
@@ -207,26 +200,6 @@ theorem runR_iSload_cold_oog (s : Machine) (x : U256) (rest : List U256)
   exact runR_bind_err (runR_charge_gas_oog _ _ hgas)
 
 /-! ## `Evm` run shapes -/
-
-open Evm.Functions in
-theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_is_warm aV x) hs ss =
-      .ok (decide (hs.warmEpoch ≤ (assocGet hs.warmSlots
-          ({ addr := aV, slot := x } : Evm.Defs.StorageKey)).getD 0),
-        hs) ss := by
-  simp only [Evm.Functions.storage_is_warm, runS_bind, runS_get, runS_pure]
-
-open Evm.Functions in
-theorem runS_storage_mark_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_mark_warm aV x) hs ss =
-      .ok ((),
-        { hs with warmSlots :=
-            assocPut hs.warmSlots ({ addr := aV, slot := x } :
-              Evm.Defs.StorageKey) hs.warmEpoch })
-        ss := by
-  simp only [Evm.Functions.storage_mark_warm, runS_modify]
 
 open Evm.Functions in
 /-- The Amsterdam SLOAD charge, warm or cold. -/

@@ -23,6 +23,16 @@ next to the live `curr`; SpecRef recomputes that from the block layer with
 `getStorageOriginal`, so the relation ties the stored `orig` to
 [`specOrig`](#) rather than to another stored field.
 
+The `curr` component is **one-directional** — every row the extraction
+holds, SpecRef holds with the same live value, but not conversely.
+Mismatch ledger MM-16 is why: a `SSTORE` writing the value already in the
+slot is skipped by the extraction (`if entry.curr != v`) and recorded by
+SpecRef (`setStorage` unconditionally), so a spec-side row with no
+extraction row is a reachable state. Every consumer needs exactly the
+direction that survives — `sloadAgree_of_storageRel` starts from an
+extraction row — and `storageRel_write_noop` is the preservation lemma
+for that step.
+
 Below the transaction layer the two sides are not related here: the
 extraction's block overlay doubles as its witness read-through cache and
 its miss path is a keccak-hashed authenticated trie walk, which stays in
@@ -149,6 +159,40 @@ theorem runTx_getStorageOriginal_ok (ts : TransactionState) (a : Address)
       simp only [hslot] at h
       exact ⟨specPreStateReadOf ts a, by rw [h]; rfl, rfl, rfl, rfl, rfl⟩
 
+/-- The converse read: a successful `getStorageOriginal` run pins
+`specOrig`. `SstoreAgree` carries the run equations (that is what
+`iSstore`'s chain consumes), and `storageRel_write` needs the value fact,
+so one of the two has to be derived. -/
+theorem runTx_getStorageOriginal_val (ts ts' : TransactionState) (a : Address)
+    (k : Bytes32) (v : U256)
+    (h : (getStorageOriginal a k).run ts = .ok (v, ts')) :
+    specOrig ts a k = .ok v := by
+  rw [runTx_getStorageOriginal] at h
+  unfold specOrig
+  by_cases hc : ts.createdAccounts.contains a = true
+  · rw [if_pos hc] at h ⊢
+    obtain ⟨hv, -⟩ : (0 : U256) = v ∧ ts = ts' := by
+      simpa using Except.ok.inj h
+    rw [hv]
+  · rw [if_neg hc] at h ⊢
+    cases hslot : specBlockSlot ts a k with
+    | some w =>
+      rw [hslot] at h
+      obtain ⟨hv, -⟩ : w = v ∧ ts = ts' := by simpa using Except.ok.inj h
+      rw [hv]
+    | none =>
+      rw [hslot] at h
+      cases hg : get_storage ts.parent.preState a k with
+      | error e =>
+        rw [hg] at h
+        simp [Except.map] at h
+      | ok w =>
+        rw [hg] at h
+        obtain ⟨hv, -⟩ : w = v ∧ specPreStateReadOf ts a = ts' := by
+          simpa [Except.map] using Except.ok.inj h
+        show Except.ok w = Except.ok v
+        rw [hv]
+
 /-- `setStorage` after its account-existence check. -/
 theorem runTx_setStorage (ts ts₁ : TransactionState) (a : Address)
     (k : Bytes32) (v : U256) (acct : EvmAsm.Stateless.SpecRef.Account)
@@ -158,6 +202,178 @@ theorem runTx_setStorage (ts ts₁ : TransactionState) (a : Address)
   simp only [StateT.run_bind, h, except_ok_bind]
   rw [if_neg (by simp)]
   rfl
+
+/-! ## The bookkeeping frame
+
+`StorageRel` reads exactly four fields of the transaction state
+(`storageWrites`, `parent.storageWrites`, `parent.preState`,
+`createdAccounts`), and every tracker *read* touches only the
+bookkeeping sets. These lemmas say so, which is what lets a multi-read
+handler like `SSTORE` carry the relation from its first read to its
+write. -/
+
+/-- The four fields, as a proposition on a pair of states. -/
+def StorageFieldsEq (ts ts' : TransactionState) : Prop :=
+  ts'.storageWrites = ts.storageWrites
+    ∧ ts'.parent.storageWrites = ts.parent.storageWrites
+    ∧ ts'.parent.preState = ts.parent.preState
+    ∧ ts'.createdAccounts = ts.createdAccounts
+
+theorem storageFieldsEq_refl (ts : TransactionState) : StorageFieldsEq ts ts :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+theorem storageFieldsEq_trans {ts ts' ts'' : TransactionState}
+    (h1 : StorageFieldsEq ts ts') (h2 : StorageFieldsEq ts' ts'') :
+    StorageFieldsEq ts ts'' :=
+  ⟨h2.1.trans h1.1, h2.2.1.trans h1.2.1, h2.2.2.1.trans h1.2.2.1,
+    h2.2.2.2.trans h1.2.2.2⟩
+
+theorem storageFieldsEq_readOf (ts : TransactionState) (a : Address)
+    (k : Bytes32) : StorageFieldsEq ts (specStorageReadOf ts a k) :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+theorem storageFieldsEq_preStateReadOf (ts : TransactionState) (a : Address) :
+    StorageFieldsEq ts (specPreStateReadOf ts a) :=
+  ⟨rfl, rfl, rfl, rfl⟩
+
+/-- `getStorageOriginal` records at most a witness-reaching read. -/
+theorem storageFieldsEq_getStorageOriginal (ts ts' : TransactionState)
+    (a : Address) (k : Bytes32) (v : U256)
+    (h : (getStorageOriginal a k).run ts = .ok (v, ts')) :
+    StorageFieldsEq ts ts' := by
+  rw [runTx_getStorageOriginal] at h
+  split at h
+  · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸ storageFieldsEq_refl ts
+  · split at h
+    · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸ storageFieldsEq_refl ts
+    · cases hg : get_storage ts.parent.preState a k with
+      | error e => rw [hg] at h; simp [Except.map] at h
+      | ok w =>
+        rw [hg] at h
+        obtain ⟨-, hts⟩ : v = w ∧ ts' = specPreStateReadOf ts a := by
+          simpa [Except.map] using (Except.ok.inj h).symm
+        exact hts ▸ storageFieldsEq_preStateReadOf ts a
+
+/-- `getStorage` records the read and, on a witness fall-through, the
+pre-state read. -/
+theorem storageFieldsEq_getStorage (ts ts' : TransactionState) (a : Address)
+    (k : Bytes32) (v : U256)
+    (h : (getStorage a k).run ts = .ok (v, ts')) :
+    StorageFieldsEq ts ts' := by
+  unfold getStorage at h
+  simp only [StateT.run_bind, StateT.run_modify, StateT.run_get,
+    pure_bind] at h
+  split at h
+  · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸
+      storageFieldsEq_readOf ts a k
+  · split at h
+    · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸
+        storageFieldsEq_readOf ts a k
+    · simp only [StateT.run_bind, pure_bind, StateT.run_lift,
+        recordPreStateRead, StateT.run_modify] at h
+      cases hg : get_storage ts.parent.preState a k with
+      | error e =>
+        rw [hg] at h
+        simp at h
+      | ok w =>
+        rw [hg] at h
+        refine storageFieldsEq_trans (storageFieldsEq_readOf ts a k) ?_
+        obtain ⟨-, hts⟩ :
+            v = w ∧ ts' = specPreStateReadOf (specStorageReadOf ts a k) a := by
+          simpa using (Except.ok.inj h).symm
+        exact hts ▸ storageFieldsEq_preStateReadOf _ a
+
+/-- `getAccountOptional`'s bookkeeping. -/
+def specAccountReadOf (ts : TransactionState) (a : Address) :
+    TransactionState :=
+  { ts with accountReads := setAdd ts.accountReads a }
+
+theorem storageFieldsEq_accountReadOf (ts : TransactionState) (a : Address) :
+    StorageFieldsEq ts (specAccountReadOf ts a) := ⟨rfl, rfl, rfl, rfl⟩
+
+/-- The account lookup `setStorage` performs first records reads only. -/
+theorem storageFieldsEq_getAccountOptional (ts ts' : TransactionState)
+    (a : Address) (r : Option EvmAsm.Stateless.SpecRef.Account)
+    (h : (getAccountOptional a).run ts = .ok (r, ts')) :
+    StorageFieldsEq ts ts' := by
+  unfold getAccountOptional at h
+  simp only [StateT.run_bind, StateT.run_modify, StateT.run_get,
+    pure_bind] at h
+  split at h
+  · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸
+      storageFieldsEq_accountReadOf ts a
+  · refine storageFieldsEq_trans (storageFieldsEq_accountReadOf ts a) ?_
+    unfold get_pre_state_account_optional at h
+    simp only [StateT.run_bind, StateT.run_modify, StateT.run_get,
+      pure_bind] at h
+    split at h
+    · exact (Prod.mk.injEq .. ▸ (Except.ok.inj h)).2 ▸
+        storageFieldsEq_accountReadOf _ a
+    · simp only [StateT.run_bind, pure_bind, StateT.run_lift,
+        recordPreStateRead, StateT.run_modify] at h
+      refine storageFieldsEq_trans (storageFieldsEq_accountReadOf _ a) ?_
+      cases hg : get_account_optional ts.parent.preState a with
+      | error e =>
+        rw [hg] at h
+        simp at h
+      | ok w =>
+        rw [hg] at h
+        obtain ⟨-, hts⟩ :
+            r = w ∧ ts' = specPreStateReadOf
+              (specAccountReadOf (specAccountReadOf ts a) a) a := by
+          simpa using (Except.ok.inj h).symm
+        exact hts ▸ storageFieldsEq_preStateReadOf _ a
+
+/-- `specTxSlot` reads only the framed write map. -/
+theorem storageFieldsEq_specTxSlot {ts ts' : TransactionState}
+    (h : StorageFieldsEq ts ts') (a : Address) (k : Bytes32) :
+    specTxSlot ts' a k = specTxSlot ts a k := by
+  unfold specTxSlot
+  rw [h.1]
+
+/-- `specOrig` reads only the four framed fields. -/
+theorem storageFieldsEq_specOrig {ts ts' : TransactionState}
+    (h : StorageFieldsEq ts ts') (a : Address) (k : Bytes32) :
+    specOrig ts' a k = specOrig ts a k := by
+  obtain ⟨-, h2, h3, h4⟩ := h
+  unfold specOrig specBlockSlot
+  rw [h2, h3, h4]
+
+/-- **`setStorage`'s frame.** Its only storage-visible effect is the
+nested `dictSet`; the account-existence check it performs first records
+reads. The account must exist — SpecRef rejects otherwise, and the
+extraction's `k_sstore` has no such check — which is why `SstoreAgree`
+carries the run equation rather than deriving it. -/
+theorem runTx_setStorage_frame (ts ts' : TransactionState) (a : Address)
+    (k : Bytes32) (v : U256)
+    (h : (setStorage a k v).run ts = .ok ((), ts')) :
+    ts'.storageWrites = (specStorageWrite ts a k v).storageWrites
+      ∧ ts'.parent.storageWrites = ts.parent.storageWrites
+      ∧ ts'.parent.preState = ts.parent.preState
+      ∧ ts'.createdAccounts = ts.createdAccounts := by
+  unfold setStorage at h
+  simp only [StateT.run_bind] at h
+  cases hacct : (getAccountOptional a).run ts with
+  | error e =>
+    rw [hacct] at h
+    cases h
+  | ok p =>
+    obtain ⟨r, ts₁⟩ := p
+    rw [hacct, except_ok_bind] at h
+    obtain ⟨f1, f2, f3, f4⟩ :=
+      storageFieldsEq_getAccountOptional ts ts₁ a r hacct
+    cases r with
+    | none =>
+      rw [if_pos (by simp)] at h
+      cases h
+    | some acct =>
+      rw [if_neg (by simp)] at h
+      simp only [pure_bind, StateT.run_modify] at h
+      obtain ⟨-, hts⟩ : True ∧ ts' = specStorageWrite ts₁ a k v := by
+        refine ⟨trivial, ?_⟩
+        simpa using (Except.ok.inj h).symm
+      subst hts
+      exact ⟨by simp only [specStorageWrite, f1], f2, f3, f4⟩
 
 /-! ## SpecRef's nested `dictSet`, through its lookup -/
 
@@ -248,10 +464,13 @@ word). Presence is part of the agreement: a row exists on one side
 exactly when the slot has a transaction-layer write on the other. -/
 structure StorageRel (ts : TransactionState) (hs : Evm.HostState) :
     Prop where
-  /-- The live value, and the existence of the row. -/
+  /-- Every row the extraction holds, SpecRef holds with the same live
+  value. The converse fails by design — see MM-16 in the ledger: a
+  `SSTORE` that writes the value already there records a row on SpecRef's
+  side and none on the extraction's. -/
   curr : ∀ (aV : Evm.Defs.address) (w : Nat), WordWf w →
-    (hostStorageSlot hs aV w).map (·.curr)
-      = specTxSlot ts aV.toList (toBeBytes32 w)
+    ∀ e, hostStorageSlot hs aV w = some e →
+      specTxSlot ts aV.toList (toBeBytes32 w) = some e.curr
   /-- The extraction's `orig` is the transaction-start value SpecRef
   recomputes with `getStorageOriginal`. -/
   orig : ∀ (aV : Evm.Defs.address) (w : Nat), WordWf w →
@@ -281,10 +500,39 @@ theorem storageRel_frame {ts ts' : TransactionState} {hs : Evm.HostState}
     unfold specOrig specBlockSlot
     rw [h2, h3, h4]
   exact
-    { curr := fun aV w hw => by rw [hslot]; exact hrel.curr aV w hw
+    { curr := fun aV w hw e he => by rw [hslot]; exact hrel.curr aV w hw e he
       orig := fun aV w hw e he => by
         rw [horig]; exact hrel.orig aV w hw e he
       wf := hrel.wf }
+
+/-- The relation reads only the extraction's `storageTx` overlay, so a
+host step that leaves it alone — `k_sload`'s block-level caching, the
+warm stamp — cannot break it. -/
+theorem storageRel_hostFrame {ts : TransactionState} {hs hs' : Evm.HostState}
+    (h : hs'.storageTx = hs.storageTx) (hrel : StorageRel ts hs) :
+    StorageRel ts hs' := by
+  have hslot : ∀ (aV : Evm.Defs.address) (w : Nat),
+      hostStorageSlot hs' aV w = hostStorageSlot hs aV w := by
+    intro aV w
+    unfold hostStorageSlot
+    rw [h]
+  exact
+    { curr := fun aV w hw e he => hrel.curr aV w hw e (by rw [← hslot]; exact he)
+      orig := fun aV w hw e he => hrel.orig aV w hw e (by rw [← hslot]; exact he)
+      wf := fun aV w hw e he => hrel.wf aV w hw e (by rw [← hslot]; exact he) }
+
+/-- The two key-inequalities every "some other slot" case needs: the
+extraction's `StorageKey` and SpecRef's `(address, 32-byte key)` pair are
+both injective in the host key. -/
+private theorem storageKey_ne (aV bV : Evm.Defs.address) (x w : Nat)
+    (hx : WordWf x) (hw : WordWf w) (hkey : ¬(bV = aV ∧ w = x)) :
+    ({ addr := bV, slot := w } : Evm.Defs.StorageKey)
+        ≠ { addr := aV, slot := x }
+      ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) := by
+  refine ⟨fun hc => ?_, fun hc => ?_⟩
+  · injection hc with h1 h2
+    exact hkey ⟨h1, h2⟩
+  · exact hkey ⟨Vector.toList_inj.mp hc.1, toBeBytes32_inj hw hx hc.2⟩
 
 /-- **`StorageRel` is stable under one `SSTORE`.** The extraction writes
 the whole `StorageValue`; SpecRef writes only the live value and leaves
@@ -301,24 +549,19 @@ theorem storageRel_write (ts : TransactionState) (hs : Evm.HostState)
       ¬(bV = aV ∧ w = x) →
       ({ addr := bV, slot := w } : Evm.Defs.StorageKey)
           ≠ { addr := aV, slot := x }
-        ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) := by
-    intro bV w hw hkey
-    refine ⟨fun hc => ?_, fun hc => ?_⟩
-    · injection hc with h1 h2
-      exact hkey ⟨h1, h2⟩
-    · exact hkey ⟨Vector.toList_inj.mp hc.1, toBeBytes32_inj hw hx hc.2⟩
+        ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) :=
+    fun bV w hw hkey => storageKey_ne aV bV x w hx hw hkey
   constructor
   case curr =>
-    intro bV w hw
+    intro bV w hw e' he'
     by_cases hkey : bV = aV ∧ w = x
     · obtain ⟨rfl, rfl⟩ := hkey
-      rw [hostStorageSlot, hostStorageWrite, assocGet_put_self,
-        specTxSlot_write_self]
-      rfl
+      rw [hostStorageSlot, hostStorageWrite, assocGet_put_self] at he'
+      rw [← Option.some.inj he', specTxSlot_write_self]
     · obtain ⟨h1, h2⟩ := hne bV w hw hkey
-      rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1,
-        specTxSlot_write_ne _ _ _ _ _ _ h2]
-      exact hrel.curr bV w hw
+      rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1] at he'
+      rw [specTxSlot_write_ne _ _ _ _ _ _ h2]
+      exact hrel.curr bV w hw e' he'
   case orig =>
     intro bV w hw e' he'
     rw [specOrig_write]
@@ -340,6 +583,32 @@ theorem storageRel_write (ts : TransactionState) (hs : Evm.HostState)
     · obtain ⟨h1, _⟩ := hne bV w hw hkey
       rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1] at he'
       exact hrel.wf bV w hw e' he'
+
+/-- **The no-op `SSTORE` (MM-16).** When the value written is the value
+already there, the extraction skips `k_sstore` while SpecRef's
+`setStorage` records the row anyway. The relation is one-directional
+precisely so that this step preserves it: the new SpecRef row agrees with
+the extraction's row if there is one, and is invisible to the relation if
+there is not. -/
+theorem storageRel_write_noop (ts : TransactionState) (hs : Evm.HostState)
+    (aV : Evm.Defs.address) (x v : Nat) (hx : WordWf x)
+    (hsame : ∀ e, hostStorageSlot hs aV x = some e → e.curr = v)
+    (hrel : StorageRel ts hs) :
+    StorageRel (specStorageWrite ts aV.toList (toBeBytes32 x) v) hs := by
+  constructor
+  case curr =>
+    intro bV w hw e' he'
+    by_cases hkey : bV = aV ∧ w = x
+    · obtain ⟨rfl, rfl⟩ := hkey
+      rw [specTxSlot_write_self, hsame e' he']
+    · obtain ⟨_, h2⟩ := storageKey_ne aV bV x w hx hw hkey
+      rw [specTxSlot_write_ne _ _ _ _ _ _ h2]
+      exact hrel.curr bV w hw e' he'
+  case orig =>
+    intro bV w hw e' he'
+    rw [specOrig_write]
+    exact hrel.orig bV w hw e' he'
+  case wf => exact hrel.wf
 
 /-! ## The success post for the persistent writer -/
 

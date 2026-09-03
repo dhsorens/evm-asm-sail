@@ -110,7 +110,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MSTORE | 0x52 | `iMstore` | `execute_mstore` | memory | **full** ([`mstore_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore.lean#L391) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses) |
 | MSTORE8 | 0x53 | `iMstore8` | `execute_mstore8` | memory | **full** ([`mstore8_step_equiv`](../EvmSpecsVerify/Opcodes/Mstore8.lean#L396) — success (grow/in-window)/underflow ×2/OOG ×2; `MemoryRel` + MM-6 `MemGasSafe` hypotheses, byte codec `word_low_byte_masked`) |
 | SLOAD | 0x54 | `iSload` | `execute_sload` | storage | **full** ([`sload_step_equiv`](../EvmSpecsVerify/Opcodes/Sload.lean#L459) — success (warm/cold)/underflow/OOG ×2; warm-cold accounting and gas proven outright via `WarmRel`, the value read behind the ledgered `SloadAgree` hypothesis, now dischargeable for a slot already written in this transaction by `sloadAgree_of_storageRel` (`StorageRel`, Relations/Storage.lean) — see `Assumptions.lean`) |
-| SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | unstated (the persistent-storage relation, plus warm/cold, the Amsterdam sentry, the EIP-2200 refund branches and two-dimensional state gas — the largest slice left; see `PROGRESS.md`. Its static-guard ordering is already covered by MM-14 / `haltedStaticFirst`) |
+| SSTORE | 0x55 | `iSstore` | `execute_sstore` | storage | **full** ([`sstore_step_equiv`](../EvmSpecsVerify/Opcodes/Sstore.lean#L1846) — success, the static halt, the EIP-2200 sentry, execution-gas and state-gas OOG, underflow, plus the MM-14 double fault. The Amsterdam schedule is proven outright field by field (`sstoreCst_eq`: execution, refund, state charge, state credit), as are warm/cold accounting (`WarmRel`), the two-dimensional gas with its credit leg (`sstorePostEvm_gas` = `sstoreGasOut`) and the refund counter (`RefundRel`). Post is [`SstorePost`](../EvmSpecsVerify/Opcodes/Sstore.lean#L1826) = `StoragePost` ∧ `WarmRel` ∧ `RefundRel`. The values read and written are behind the ledgered `SstoreAgree` hypothesis, dischargeable for a slot already written in this transaction by `sstoreAgree_of_storageRel` modulo SpecRef's account-existence check; MM-16 records why `StorageRel` is one-directional (the no-op store's elided row) and MM-17 the two extraction-only hard aborts threaded as `hroom`/`hhead` — see `Assumptions.lean`) |
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | **full** ([`jump_step_equiv`](../EvmSpecsVerify/Opcodes/Jump.lean#L285) — taken jump/underflow/OOG/invalid destination; the JUMPI harvest through `do_jump` and `JumpdestRel`, sharing `ControlPost`; no fall-through branch, overflow unreachable for 1-in/0-out) |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L501) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
 | PC | 0x58 | `iPc` | `execute_pc` | env (live-state pusher) | **full** ([`pc_step_equiv`](../EvmSpecsVerify/Opcodes/Pc.lean#L98) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. The extraction recovers the opcode position as `pc_in - 1` (`alu_sub_one`, no wrap since `pc_in ≥ 1`); domain restricted by `hwfpc : pc_in < 2^256` — see `Assumptions.lean`) |
@@ -147,7 +147,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 78 |
-| unstated | 9 |
+| full | 79 |
+| unstated | 8 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **88** |

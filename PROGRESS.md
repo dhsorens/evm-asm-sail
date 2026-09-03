@@ -134,14 +134,13 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 ### M2 — Shape validators across machinery (next tranche)
 
-**Where M2 stands (2026-09-02): 78 of 88 AST constructors are `full`.**
+**Where M2 stands (2026-09-03): 79 of 88 AST constructors are `full`.**
 Every opcode that does not need the world-state tranche or is not blocked
-by MM-3 now has a full-outcome step theorem. The nine that remain are
-exactly those two classes: SSTORE and SELFDESTRUCT need world relations
-(persistent storage, accounts), and INVALID plus the six-member
-CREATE/CALL family have no SpecRef `def` to target while dispatch is
-`partial` (MM-3). The residual notes at the end of this section scope
-each one.
+by MM-3 now has a full-outcome step theorem. The eight that remain are
+exactly those two classes: SELFDESTRUCT needs the account side of the
+world relation, and INVALID plus the six-member CREATE/CALL family have
+no SpecRef `def` to target while dispatch is `partial` (MM-3). The
+residual notes at the end of this section scope each one.
 
 - [x] `Opcodes/Dup.lean` — DUP1–DUP16 (`dup_step_equiv`, full `StepResultRel`):
       first reachable stack overflow and first charge-first SpecRef handler.
@@ -382,8 +381,10 @@ each one.
       `SloadAgree` waits on it too. `StorageRel` relates the
       **transaction** overlay pointwise — `TransactionState.storageWrites`
       (a nested address → slot dict) against `HostState.storageTx` (an
-      `assocPut` map of `StorageValue {curr, orig}` rows) — on presence
-      *and* live value, and ties the extraction's stored `orig` to the
+      `assocPut` map of `StorageValue {curr, orig}` rows) — one-directional
+      on presence (MM-16, found while proving SSTORE: the extraction skips
+      the write when the value is unchanged, so a SpecRef row can have no
+      extraction row), and ties the extraction's stored `orig` to the
       value SpecRef recomputes with `getStorageOriginal` (`specOrig`),
       since SpecRef stores no such field. `storageRel_write` preserves it
       across a write; `storageRel_frame` across the read bookkeeping
@@ -404,23 +405,37 @@ each one.
       `runE_bind_throw`, `runS_sailME_throw`) in the `EvmMonad.lean`
       style. `execute_sstore` is the second such handler.
 
+- [x] `Opcodes/Sstore.lean` — SSTORE (`sstore_step_equiv`, full
+      `StepResultRel`), the widest single step in the comparison and the
+      last opcode that needed a world relation. Proven outright: the
+      Amsterdam schedule field by field (`sstoreCst_eq` — execution,
+      refund, state charge, state credit, so MM-2 is discharged for
+      SSTORE), the EIP-2200 sentry (`sstore_sentry_cost` = SpecRef's
+      `max access_cost (CALL_STIPEND + 1)`), EIP-2929 warm/cold
+      (`WarmRel`), the EIP-3529 refund counter (`RefundRel`,
+      `specRefundDelta` = the extraction's record field), and Amsterdam's
+      two-dimensional gas including the `credit_state_gas_refund` leg —
+      the two sides' three gas quantities meet in one closed form,
+      `sstoreGasOut`, which is how a 36-way branch product became a
+      case-free proof (`runS_credit_closed` / `runS_charge_state_closed`
+      collapse the credit and the charge; `runE_bind_cond` /
+      `runE_cond_val` step over the two trailing guards). Outcomes:
+      success, the static halt, the sentry, execution-gas OOG,
+      state-gas OOG, underflow, and the MM-14 double fault.
+      **Two findings.** MM-16: the extraction guards its write with
+      `entry.curr != value`, so a no-op store records a SpecRef row and
+      no extraction row — `StorageRel` is one-directional by design and
+      `storageRel_write_noop` is the step lemma for that case. MM-17: the
+      extraction's `state_gas_spill_add` and `validated_refund_add`
+      hard-abort on bounds SpecRef does not have, threaded as the
+      pre-state hypotheses `hroom`/`hhead` (the state-gas analogue of
+      `MemGasSafe`). What stays ledgered is `SstoreAgree` — the values
+      read and written — reduced by `sstoreAgree_of_storageRel` to the
+      transaction-overlay regime plus SpecRef's account-existence check,
+      which `k_sstore` has no counterpart for.
+
 Residual for the remaining `unstated` rows:
 
-- **SSTORE** is TSTORE with every hard part back. `StorageRel` (landed,
-  above) supplies the write relation and the `orig` correspondence; the
-  rest is still open: the extraction's
-  `k_sstore` writes a `StorageValue {curr, orig}` row through the tx
-  cache, with the transaction-original value supplied by a **preceding**
-  `k_sload` (Execute.lean:1458), against SpecRef's separate
-  `getStorageOriginal` / `getStorage` reads — so on a tx-overlay miss the
-  step still depends on the base layers `SloadAgree` covers. On top of
-  the write relation it needs: EIP-2929 warm/cold (`WarmRel` exists), the Amsterdam
-  `sstore_sentry_cost` vs SpecRef's `check_gas (max access_cost
-  (CALL_STIPEND + 1))`, the EIP-2200 refund counter's three branches, and
-  two-dimensional state gas with a `credit_state_gas_refund` leg. That is
-  the persistent-storage relation the `SloadAgree` row also waits on —
-  the largest single slice left. Its static-guard ordering is already
-  covered (MM-14, `haltedStaticFirst`).
 - **SELFDESTRUCT** needs account deletion, the balance transfer, and the
   created-account set — the account side of the world relation, not the
   storage side. MM-14 covers its guard ordering too.
