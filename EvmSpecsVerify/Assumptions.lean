@@ -126,6 +126,12 @@ EVM state can violate it, and whether it is eliminable by proving.
   `≤ 2^32 - 1` slice-type invariant, hypothesized like `hwfv`;
   `word_of_source_byte_count`'s assert is unreachable under it.
 
+* `hwfg` (`gas_step_equiv`) — the frame's live gas is a well-formed word
+  (`gasLeft < 2^256`). Mismatch ledger MM-8: the extraction's `push_gas`
+  reduces modulo `2^256` while SpecRef pushes the raw `Nat`, so above the
+  modulus the two push different words — silently, without an abort. Real
+  gas is `u64`-bounded, so the restriction excludes no reachable state.
+  Eliminable by the same global gas bound `MemGasSafe` wants.
 * `hwfpc` (`pc_step_equiv`) — the advanced program counter is a
   well-formed word (`pc_in < 2^256`). SpecRef's `Machine.pc` is an
   unbounded `Nat`; the extraction embeds it with
