@@ -23,6 +23,16 @@ next to the live `curr`; SpecRef recomputes that from the block layer with
 `getStorageOriginal`, so the relation ties the stored `orig` to
 [`specOrig`](#) rather than to another stored field.
 
+The `curr` component is **one-directional** — every row the extraction
+holds, SpecRef holds with the same live value, but not conversely.
+Mismatch ledger MM-16 is why: a `SSTORE` writing the value already in the
+slot is skipped by the extraction (`if entry.curr != v`) and recorded by
+SpecRef (`setStorage` unconditionally), so a spec-side row with no
+extraction row is a reachable state. Every consumer needs exactly the
+direction that survives — `sloadAgree_of_storageRel` starts from an
+extraction row — and `storageRel_write_noop` is the preservation lemma
+for that step.
+
 Below the transaction layer the two sides are not related here: the
 extraction's block overlay doubles as its witness read-through cache and
 its miss path is a keccak-hashed authenticated trie walk, which stays in
@@ -248,10 +258,13 @@ word). Presence is part of the agreement: a row exists on one side
 exactly when the slot has a transaction-layer write on the other. -/
 structure StorageRel (ts : TransactionState) (hs : Evm.HostState) :
     Prop where
-  /-- The live value, and the existence of the row. -/
+  /-- Every row the extraction holds, SpecRef holds with the same live
+  value. The converse fails by design — see MM-16 in the ledger: a
+  `SSTORE` that writes the value already there records a row on SpecRef's
+  side and none on the extraction's. -/
   curr : ∀ (aV : Evm.Defs.address) (w : Nat), WordWf w →
-    (hostStorageSlot hs aV w).map (·.curr)
-      = specTxSlot ts aV.toList (toBeBytes32 w)
+    ∀ e, hostStorageSlot hs aV w = some e →
+      specTxSlot ts aV.toList (toBeBytes32 w) = some e.curr
   /-- The extraction's `orig` is the transaction-start value SpecRef
   recomputes with `getStorageOriginal`. -/
   orig : ∀ (aV : Evm.Defs.address) (w : Nat), WordWf w →
@@ -281,10 +294,23 @@ theorem storageRel_frame {ts ts' : TransactionState} {hs : Evm.HostState}
     unfold specOrig specBlockSlot
     rw [h2, h3, h4]
   exact
-    { curr := fun aV w hw => by rw [hslot]; exact hrel.curr aV w hw
+    { curr := fun aV w hw e he => by rw [hslot]; exact hrel.curr aV w hw e he
       orig := fun aV w hw e he => by
         rw [horig]; exact hrel.orig aV w hw e he
       wf := hrel.wf }
+
+/-- The two key-inequalities every "some other slot" case needs: the
+extraction's `StorageKey` and SpecRef's `(address, 32-byte key)` pair are
+both injective in the host key. -/
+private theorem storageKey_ne (aV bV : Evm.Defs.address) (x w : Nat)
+    (hx : WordWf x) (hw : WordWf w) (hkey : ¬(bV = aV ∧ w = x)) :
+    ({ addr := bV, slot := w } : Evm.Defs.StorageKey)
+        ≠ { addr := aV, slot := x }
+      ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) := by
+  refine ⟨fun hc => ?_, fun hc => ?_⟩
+  · injection hc with h1 h2
+    exact hkey ⟨h1, h2⟩
+  · exact hkey ⟨Vector.toList_inj.mp hc.1, toBeBytes32_inj hw hx hc.2⟩
 
 /-- **`StorageRel` is stable under one `SSTORE`.** The extraction writes
 the whole `StorageValue`; SpecRef writes only the live value and leaves
@@ -301,24 +327,19 @@ theorem storageRel_write (ts : TransactionState) (hs : Evm.HostState)
       ¬(bV = aV ∧ w = x) →
       ({ addr := bV, slot := w } : Evm.Defs.StorageKey)
           ≠ { addr := aV, slot := x }
-        ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) := by
-    intro bV w hw hkey
-    refine ⟨fun hc => ?_, fun hc => ?_⟩
-    · injection hc with h1 h2
-      exact hkey ⟨h1, h2⟩
-    · exact hkey ⟨Vector.toList_inj.mp hc.1, toBeBytes32_inj hw hx hc.2⟩
+        ∧ ¬(bV.toList = aV.toList ∧ toBeBytes32 w = toBeBytes32 x) :=
+    fun bV w hw hkey => storageKey_ne aV bV x w hx hw hkey
   constructor
   case curr =>
-    intro bV w hw
+    intro bV w hw e' he'
     by_cases hkey : bV = aV ∧ w = x
     · obtain ⟨rfl, rfl⟩ := hkey
-      rw [hostStorageSlot, hostStorageWrite, assocGet_put_self,
-        specTxSlot_write_self]
-      rfl
+      rw [hostStorageSlot, hostStorageWrite, assocGet_put_self] at he'
+      rw [← Option.some.inj he', specTxSlot_write_self]
     · obtain ⟨h1, h2⟩ := hne bV w hw hkey
-      rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1,
-        specTxSlot_write_ne _ _ _ _ _ _ h2]
-      exact hrel.curr bV w hw
+      rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1] at he'
+      rw [specTxSlot_write_ne _ _ _ _ _ _ h2]
+      exact hrel.curr bV w hw e' he'
   case orig =>
     intro bV w hw e' he'
     rw [specOrig_write]
@@ -340,6 +361,32 @@ theorem storageRel_write (ts : TransactionState) (hs : Evm.HostState)
     · obtain ⟨h1, _⟩ := hne bV w hw hkey
       rw [hostStorageSlot, hostStorageWrite, assocGet_put_ne _ _ _ _ h1] at he'
       exact hrel.wf bV w hw e' he'
+
+/-- **The no-op `SSTORE` (MM-16).** When the value written is the value
+already there, the extraction skips `k_sstore` while SpecRef's
+`setStorage` records the row anyway. The relation is one-directional
+precisely so that this step preserves it: the new SpecRef row agrees with
+the extraction's row if there is one, and is invisible to the relation if
+there is not. -/
+theorem storageRel_write_noop (ts : TransactionState) (hs : Evm.HostState)
+    (aV : Evm.Defs.address) (x v : Nat) (hx : WordWf x)
+    (hsame : ∀ e, hostStorageSlot hs aV x = some e → e.curr = v)
+    (hrel : StorageRel ts hs) :
+    StorageRel (specStorageWrite ts aV.toList (toBeBytes32 x) v) hs := by
+  constructor
+  case curr =>
+    intro bV w hw e' he'
+    by_cases hkey : bV = aV ∧ w = x
+    · obtain ⟨rfl, rfl⟩ := hkey
+      rw [specTxSlot_write_self, hsame e' he']
+    · obtain ⟨_, h2⟩ := storageKey_ne aV bV x w hx hw hkey
+      rw [specTxSlot_write_ne _ _ _ _ _ _ h2]
+      exact hrel.curr bV w hw e' he'
+  case orig =>
+    intro bV w hw e' he'
+    rw [specOrig_write]
+    exact hrel.orig bV w hw e' he'
+  case wf => exact hrel.wf
 
 /-! ## The success post for the persistent writer -/
 

@@ -140,4 +140,75 @@ theorem runR_charge_gas_oog (s : Machine) (amount : Uint)
   simp only [charge_gas, runR_bind, runR_getEvm]
   simp [hgas]
 
+/-! ## Two-dimensional gas (Amsterdam)
+
+`check_gas` is a sentry — it reads the live gas without spending it.
+`charge_state_gas` spends the frame's state-gas reservoir first and
+spills the remainder into execution gas; `credit_state_gas_refund` is its
+LIFO inverse (execution gas up to the recorded spill, then the
+reservoir). SSTORE is the first opcode to use any of the three. -/
+
+theorem runR_check_gas (s : Machine) (amount : Uint)
+    (hgas : amount ≤ s.evm.gasLeft) :
+    runR (check_gas amount) s = .ok (.ok (), s) := by
+  simp only [check_gas, runR_bind, runR_getEvm]
+  simp [Nat.not_lt.mpr hgas]
+
+theorem runR_check_gas_oog (s : Machine) (amount : Uint)
+    (hgas : s.evm.gasLeft < amount) :
+    runR (check_gas amount) s = .ok (.error .outOfGas, s) := by
+  simp only [check_gas, runR_bind, runR_getEvm]
+  simp [hgas]
+
+/-- The reservoir covers the charge. -/
+theorem runR_charge_state_gas_reservoir (s : Machine) (amount : Uint)
+    (h : amount ≤ s.evm.stateGasLeft) :
+    runR (charge_state_gas amount) s =
+      .ok (.ok (),
+        { s with evm := { s.evm with
+            stateGasLeft := s.evm.stateGasLeft - amount } }) := by
+  simp only [charge_state_gas, runR_bind, runR_getEvm]
+  rw [if_pos h]
+  exact runR_modifyEvm _ _
+
+/-- The reservoir runs out and the remainder spills into execution gas. -/
+theorem runR_charge_state_gas_spill (s : Machine) (amount : Uint)
+    (h1 : s.evm.stateGasLeft < amount)
+    (h2 : amount ≤ s.evm.stateGasLeft + s.evm.gasLeft) :
+    runR (charge_state_gas amount) s =
+      .ok (.ok (),
+        { s with evm := { s.evm with
+            stateGasLeft := 0
+            gasLeft := s.evm.gasLeft - (amount - s.evm.stateGasLeft)
+            stateGasSpilled :=
+              s.evm.stateGasSpilled + (amount - s.evm.stateGasLeft) } }) := by
+  simp only [charge_state_gas, runR_bind, runR_getEvm]
+  rw [if_neg (Nat.not_le.mpr h1), if_pos h2]
+  exact runR_modifyEvm _ _
+
+theorem runR_charge_state_gas_oog (s : Machine) (amount : Uint)
+    (h : s.evm.stateGasLeft + s.evm.gasLeft < amount) :
+    runR (charge_state_gas amount) s = .ok (.error .outOfGas, s) := by
+  have key : ∀ a b c : Nat, a + b < c → ¬(c ≤ a) ∧ ¬(c ≤ a + b) :=
+    fun _ _ _ hh => ⟨by omega, by omega⟩
+  obtain ⟨h1, h2⟩ := key s.evm.stateGasLeft s.evm.gasLeft amount h
+  simp only [charge_state_gas, runR_bind, runR_getEvm]
+  rw [if_neg h1, if_neg h2]
+  exact runR_throw _ _
+
+/-- The credit is unconditional: `min amount spilled` goes back to
+execution gas, the rest to the reservoir. -/
+theorem runR_credit_state_gas_refund (s : Machine) (amount : Uint) :
+    runR (credit_state_gas_refund amount) s =
+      .ok (.ok (),
+        { s with evm := { s.evm with
+            gasLeft := s.evm.gasLeft + min amount s.evm.stateGasSpilled
+            stateGasSpilled :=
+              s.evm.stateGasSpilled - min amount s.evm.stateGasSpilled
+            stateGasLeft :=
+              s.evm.stateGasLeft
+                + (amount - min amount s.evm.stateGasSpilled) } }) := by
+  simp only [credit_state_gas_refund, runR_bind, runR_getEvm]
+  exact runR_modifyEvm _ _
+
 end EvmSpecsVerify

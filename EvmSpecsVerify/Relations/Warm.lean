@@ -1,5 +1,6 @@
 import EvmSpecsVerify.Relations.State
 import EvmSpecsVerify.Representation.EvmMemory
+import EvmSpecsVerify.Representation.SpecRefLemmas
 import Batteries.Tactic.OpenPrivate
 
 /-!
@@ -21,6 +22,7 @@ proven here.
 -/
 
 open private assocGet assocPut from Evm.HostAxioms
+open private isWarmStorageKey from EvmAsm.Stateless.SpecRef.InstructionsCore
 
 set_option maxHeartbeats 1000000
 
@@ -121,6 +123,13 @@ structure WarmRel (sRef : Machine) (hs : Evm.HostState) : Prop where
       ↔ hs.warmEpoch
           ≤ (assocGet hs.warmSlots
               ({ addr := aV, slot := w } : Evm.Defs.StorageKey)).getD 0)
+
+/-- SpecRef's warm-set test is a pure read of the access set. Shared by
+SLOAD and SSTORE, which is why it lives with the relation. -/
+theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
+    runR (isWarmStorageKey key) s =
+      .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
+  simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
 
 /-! ## `assocGet` / `assocPut` characterization -/
 

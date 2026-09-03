@@ -32,7 +32,7 @@ Reachable outcomes: success (warm/cold) / stack underflow / out-of-gas
 (warm/cold; overflow unreachable for 1-in/1-out).
 -/
 
-open private pcAdd isWarmStorageKey warmStorageKey from
+open private pcAdd warmStorageKey from
   EvmAsm.Stateless.SpecRef.InstructionsCore
 open private writeListAt assocGet assocPut from Evm.HostAxioms
 
@@ -81,9 +81,7 @@ theorem sloadAgree_of_storageRel (sRef : Machine) (hs : Evm.HostState)
     fun ws => runS_k_sload_hit aV x e _ ss hrow, fun _ => rfl, fun _ => rfl,
     fun _ => rfl⟩
   rw [← haddr]
-  refine runTx_getStorage_tx_hit _ _ _ _ ?_
-  rw [← hsr.curr aV x hx, hrow]
-  rfl
+  exact runTx_getStorage_tx_hit _ _ _ _ (hsr.curr aV x hx e hrow)
 
 /-! ## Small warm-set helpers -/
 
@@ -99,11 +97,6 @@ private theorem hostState_set_stackFrames_warmEpoch (h : Evm.HostState)
   rfl
 
 /-! ## SpecRef run shapes -/
-
-theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
-    runR (isWarmStorageKey key) s =
-      .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
-  simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
 
 theorem runR_iSload_underflow (s : Machine) (hstack : s.evm.stack = []) :
     runR iSload s = .ok (.error .stackUnderflow, s) := by
