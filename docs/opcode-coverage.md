@@ -126,7 +126,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | LOG n | 0xa0–0xa4 | `iLogN` | `execute_log` | memory+logs | unstated |
 | DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | **full** ([`dupn_step_equiv`](../EvmSpecsVerify/Opcodes/Dupn.lean#L487) — success, invalid immediate, underflow, overflow, OOG, plus the MM-5 and MM-10 double faults. First opcode with an immediate-validity outcome: `decode_single_agree` proves SpecRef's `(x + 145) % 256` and the extraction's two-branch `x + 145` / `x - 111` are the same decoder, MM-10 records the `.invalidParameter`/`InvalidOpcode` kind split and the decode/charge order, and the ledgered `himm` ties the immediate byte across the MM-3 dispatch boundary) |
 | SWAPN | 0xe7 | `iSwapn` | `execute_swapn` | stack (fork-gated, immediate) | **full** ([`swapn_step_equiv`](../EvmSpecsVerify/Opcodes/Swapn.lean#L343) — success, invalid immediate, underflow, OOG, plus the MM-5 and MM-10 double faults; overflow unreachable (height-preserving, `opcode_stack_effect = (n+1, n+1)`). A harvest in both directions: the decoder from DUPN (`decode_single` is shared), the permutation from SWAP (`take_swap_writes`, `listSwap_mem`, `swapHost`) — `execute_swapn`'s tail is `execute_swap`'s) |
-| EXCHANGE | 0xe8 | `iExchange` | `execute_exchange` | stack (fork-gated, immediate) | unstated |
+| EXCHANGE | 0xe8 | `iExchange` | `execute_exchange` | stack (fork-gated, immediate) | **full** ([`exchange_step_equiv`](../EvmSpecsVerify/Opcodes/Exchange.lean#L463) — success, invalid immediate, underflow, OOG, plus the MM-5 and MM-10 double faults; overflow unreachable. The `decode_pair` bridge is two byte-exhaustive `decide`s over the nibble split (SpecRef divides/mods by 16, the extraction slices bits `[7:4]`/`[3:0]`), plus `exchangePair_lt` proving the decoder's second component is the larger — which is what makes SpecRef's `max n m` guard and the extraction's `higher` guard agree. Motivated generalizing `take_swap_writes` / `listSwap_getElem?` / `listSwap_mem` from `(0, n)` to arbitrary `(i, j)`) |
 
 ## System
 
@@ -147,7 +147,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 73 |
-| unstated | 14 |
+| full | 74 |
+| unstated | 13 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **88** |

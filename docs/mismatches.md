@@ -72,12 +72,12 @@ unreachable / ambiguity / needs investigation).
   SpecRef `.outOfGas` with the extraction's stack-fault kind on exactly these
   double-fault states. Single-fault states still align kind-for-kind.
   Discharging artifacts: `push_step_equiv`, `dup_step_equiv`,
-  `swap_step_equiv` / `swapn_step_equiv` (underflow only — a
-  height-preserving swap cannot overflow), the
+  `swap_step_equiv` / `swapn_step_equiv` / `exchange_step_equiv`
+  (underflow only — a height-preserving swap cannot overflow), the
   `envPush_step_equiv` family, the live-state pushers
   `pc_step_equiv` / `gas_step_equiv` / `msize_step_equiv` (overflow only —
-  0-in cannot underflow), and `dupn_step_equiv` / `swapn_step_equiv`
-  (valid-immediate case).
+  0-in cannot underflow), and `dupn_step_equiv` / `swapn_step_equiv` /
+  `exchange_step_equiv` (valid-immediate case).
   MM-10 adds a **third** admitted kind to the same constructor for the
   invalid-immediate double fault; the three are listed explicitly, never as
   `k ≠ OutOfGas`.
@@ -188,7 +188,8 @@ unreachable / ambiguity / needs investigation).
 
 ## MM-10: Immediate-validity diagnostics and decode/charge order (DUPN family)
 
-- **Area**: the EIP-663 deep-stack opcodes with a one-byte immediate —
+- **Area**: the deep-stack opcodes with a one-byte immediate (SpecRef's
+  docstrings call these EIP-663, the Sail model's call them EIP-8024) —
   DUPN (`0xe6`), SWAPN (`0xe7`), EXCHANGE (`0xe8`).
 - **SpecRef**: `iDupn` charges **first**, then reads the immediate out of
   its own code buffer and calls `decode_single` (Vm.lean:269), which
@@ -217,7 +218,7 @@ unreachable / ambiguity / needs investigation).
   extraction's choice is the more natural reading of "an instruction whose
   immediate cannot be decoded is not a valid instruction"; nothing
   distinguishes them at the frame boundary.
-- **Fork**: Amsterdam (EIP-663). **Reachability**: trivially reachable
+- **Fork**: Amsterdam. **Reachability**: trivially reachable
   from a crafted code buffer. **Severity**: none externally; a step-level
   diagnostic divergence only.
 - **Likely cause**: the extraction has no `InvalidParameter` halt kind — its
@@ -232,7 +233,10 @@ unreachable / ambiguity / needs investigation).
   a future kind cannot slip in silently. Machine-checked by
   `dupn_step_equiv` (Opcodes/Dupn.lean) and `swapn_step_equiv`
   (Opcodes/Swapn.lean) — both share `decode_single`, and the error string
-  names both opcodes. EXCHANGE remains open (`decode_pair`).
+  names both opcodes — and by `exchange_step_equiv` (Opcodes/Exchange.lean)
+  for the `decode_pair` half, whose message is the distinct
+  `"EXCHANGE immediate in forbidden range"` but whose constructor and
+  ordering are identical. All three deep-stack opcodes are now covered.
 
 ## MM-4: Step-boundary pc convention
 
@@ -322,8 +326,8 @@ unreachable / ambiguity / needs investigation).
 - **Verified 2026-09-02 (deep-stack immediates)**: `OPCODE_DUPN =
   OPCODE_SWAPN = 3 = G_verylow` (the extraction charges `G_verylow` in
   both handlers), machine-checked by `dupn_step_equiv` /
-  `swapn_step_equiv`. `OPCODE_EXCHANGE = 3` matches by inspection,
-  pending EXCHANGE's slice.
+  `swapn_step_equiv`; and `OPCODE_EXCHANGE = 3 = G_verylow`, machine-checked
+  by `exchange_step_equiv`.
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.
