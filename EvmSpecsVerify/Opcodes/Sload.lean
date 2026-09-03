@@ -1,5 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
-import EvmSpecsVerify.Relations.Warm
+import EvmSpecsVerify.Relations.Storage
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
@@ -63,6 +63,27 @@ def SloadAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     (∀ ws, (hostAfter ws).stackFrames = hs.stackFrames) ∧
     (∀ ws, (hostAfter ws).warmSlots = ws) ∧
     (∀ ws, (hostAfter ws).warmEpoch = hs.warmEpoch)
+
+/-- **`SloadAgree` on the transaction-overlay regime.** A slot the
+transaction has already written is a `storage_tx_get` hit, so `k_sload`
+returns the stored row without touching any state, and SpecRef's
+`getStorage` finds the same value in its first probe. Both misses (block
+overlay, witness trie) stay in the world tranche —
+see [`StorageRel`](../Relations/Storage.lean). -/
+theorem sloadAgree_of_storageRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (aV : Evm.Defs.address) (x : Nat) (hx : WordWf x)
+    (e : Evm.Defs.StorageValue) (hrow : hostStorageSlot hs aV x = some e)
+    (haddr : aV.toList = sRef.evm.message.currentTarget)
+    (hsr : StorageRel sRef.txState hs) :
+    SloadAgree sRef hs ss aV x := by
+  refine ⟨e.curr, specStorageReadOf sRef.txState aV.toList (toBeBytes32 x), e,
+    fun ws => { hs with warmSlots := ws }, hsr.wf aV x hx e hrow, rfl, ?_,
+    fun ws => runS_k_sload_hit aV x e _ ss hrow, fun _ => rfl, fun _ => rfl,
+    fun _ => rfl⟩
+  rw [← haddr]
+  refine runTx_getStorage_tx_hit _ _ _ _ ?_
+  rw [← hsr.curr aV x hx, hrow]
+  rfl
 
 /-! ## Small warm-set helpers -/
 
