@@ -72,10 +72,12 @@ unreachable / ambiguity / needs investigation).
   SpecRef `.outOfGas` with the extraction's stack-fault kind on exactly these
   double-fault states. Single-fault states still align kind-for-kind.
   Discharging artifacts: `push_step_equiv`, `dup_step_equiv`,
-  `swap_step_equiv` (underflow only — SWAP cannot overflow), the
+  `swap_step_equiv` / `swapn_step_equiv` (underflow only — a
+  height-preserving swap cannot overflow), the
   `envPush_step_equiv` family, the live-state pushers
   `pc_step_equiv` / `gas_step_equiv` / `msize_step_equiv` (overflow only —
-  0-in cannot underflow), and `dupn_step_equiv` (valid-immediate case).
+  0-in cannot underflow), and `dupn_step_equiv` / `swapn_step_equiv`
+  (valid-immediate case).
   MM-10 adds a **third** admitted kind to the same constructor for the
   invalid-immediate double fault; the three are listed explicitly, never as
   `k ≠ OutOfGas`.
@@ -228,7 +230,9 @@ unreachable / ambiguity / needs investigation).
   admits `InvalidOpcode` as its third kind alongside the two MM-5 stack
   faults. Both are listed **explicitly** rather than as `k ≠ OutOfGas`, so
   a future kind cannot slip in silently. Machine-checked by
-  `dupn_step_equiv` (Opcodes/Dupn.lean).
+  `dupn_step_equiv` (Opcodes/Dupn.lean) and `swapn_step_equiv`
+  (Opcodes/Swapn.lean) — both share `decode_single`, and the error string
+  names both opcodes. EXCHANGE remains open (`decode_pair`).
 
 ## MM-4: Step-boundary pc convention
 
@@ -315,6 +319,11 @@ unreachable / ambiguity / needs investigation).
   machine-checked by `blobhash_step_equiv`. `OPCODE_BLOBBASEFEE = 2 =
   G_base` is a constant match by inspection but not yet machine-checked —
   BLOBBASEFEE is blocked on the fake-exponential bridge.
+- **Verified 2026-09-02 (deep-stack immediates)**: `OPCODE_DUPN =
+  OPCODE_SWAPN = 3 = G_verylow` (the extraction charges `G_verylow` in
+  both handlers), machine-checked by `dupn_step_equiv` /
+  `swapn_step_equiv`. `OPCODE_EXCHANGE = 3` matches by inspection,
+  pending EXCHANGE's slice.
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.

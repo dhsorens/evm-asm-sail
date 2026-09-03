@@ -276,6 +276,9 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       `StepResultRel.haltedChargeFirst` now admits a third (explicitly
       listed) kind. SWAPN is a near-mirror harvest off this file; EXCHANGE
       needs the `decode_pair` analogue
+- [x] `Opcodes/Swapn.lean` — the immediate sibling of SWAP, harvested in
+      both directions (DUPN's decoder + SWAP's permutation bridge);
+      `execute_swapn`'s tail is `execute_swap`'s byte for byte
 - [x] Coverage-count guard: `scripts/refresh-proof-coverage-canvas.py` now
       recomputes the `docs/opcode-coverage.md` Counts table from its own
       rows and refuses to regenerate the site on a mismatch. The table had
