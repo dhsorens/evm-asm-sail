@@ -224,6 +224,27 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       codec; the tracker mark carried verbatim (`ancestorMark`); the
       aligned witness-deficient spec abort excluded by the ledgered,
       lookup-specific `BlockhashReady` premise
+- [x] `Opcodes/Extcodesize.lean` — EXTCODESIZE reuses `WarmAddrRel` and the
+      BALANCE account-access run shapes, proves Amsterdam's EIP-8038 second
+      warm-access charge (`200` warm / `3100` cold), and relates the external
+      code length through the ledgered `ExtcodesizeAgree` world/code-store
+      hypothesis
+- [x] `Opcodes/Extcodehash.lean` — EXTCODEHASH reuses the BALANCE warm/cold
+      account-access proof, including missing-account zero, and bridges the
+      kernel's 32-byte code hash through `hash_to_word` under the ledgered
+      `ExtcodehashAgree` world/account-store hypothesis
+- [x] `Relations/ReturnData.lean` + `Opcodes/Returndatasize.lean` +
+      `Opcodes/Returndatacopy.lean` — `ReturnDataRel` ties the extraction's
+      output-slice window to SpecRef's inline returndata; full size and copy
+      simulations cover zero/grow/in-window success, every charge failure,
+      and bounds failures after expansion (MM-7 diagnostic-kind abstraction)
+- [x] `Relations/ExternalCode.lean` + `Opcodes/Extcodecopy.lean` —
+      `ExternalCodeRel` gives byte-level arbitrary-account code correspondence
+      between SpecRef's journalled `getAccount`/`getCode` and the extraction's
+      cache/witness-backed `k_code_copy`, including its exact memory write and
+      preservation obligations; the full four-pop simulation covers warm/cold
+      account + EIP-8038 read gas, copy/expansion charges, all OOG stages, and
+      zero/grow/in-window success
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

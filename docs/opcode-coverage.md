@@ -79,11 +79,11 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | CODESIZE | 0x38 | `iCodesize` | `execute_codesize` | env | **full** ([`codesize_step_equiv`](../EvmSpecsVerify/Opcodes/Codesize.lean#L217) — success/overflow/OOG/MM-5 double fault; `CodeRel` supplies the `frame_code` register read + length tie (shared with CODECOPY), code-length wf hypothesized) |
 | CODECOPY | 0x39 | `iCodecopy` | `execute_codecopy` | memory | **full** ([`codecopy_step_equiv`](../EvmSpecsVerify/Opcodes/Codecopy.lean#L642) — success ×3 (zero size/grow/in-window)/underflow ×3/OOG ×3, the CALLDATACOPY harvest through SpecRef's shared `copyFromBuffer`; `MemoryRel` + MM-6 `MemGasSafe` + `CodeRel` hypotheses — code regions are immutable, so no `CalldataBelow` analogue) |
 | GASPRICE | 0x3a | `iGasprice` | `execute_gasprice` | env | **full** ([`gasprice_step_equiv`](../EvmSpecsVerify/Opcodes/Gasprice.lean#L216) — success/overflow/OOG/MM-5 double fault; `k_tx` register tie `hgp` (codec-free), envelope wf hypothesized) |
-| EXTCODESIZE | 0x3b | `iExtcodesize` | `execute_extcodesize` | env+world | unstated |
-| EXTCODECOPY | 0x3c | `iExtcodecopy` | `execute_extcodecopy` | memory+world | unstated |
-| RETURNDATASIZE | 0x3d | `iReturndatasize` | `execute_returndatasize` | env | unstated |
-| RETURNDATACOPY | 0x3e | `iReturndatacopy` | `execute_returndatacopy` | memory | unstated |
-| EXTCODEHASH | 0x3f | `iExtcodehash` | `execute_extcodehash` | env+world+crypto | unstated |
+| EXTCODESIZE | 0x3b | `iExtcodesize` | `execute_extcodesize` | env+world | **full** ([`extcodesize_step_equiv`](../EvmSpecsVerify/Opcodes/Extcodesize.lean#L416) — success warm/cold, underflow, OOG warm/cold; `WarmAddrRel` preserves address warmth, Amsterdam account/code-read gas is proven `200`/`3100`, and the ledgered `ExtcodesizeAgree` ties the account/code-store lookup and length) |
+| EXTCODECOPY | 0x3c | `iExtcodecopy` | `execute_extcodecopy` | memory+world | **full** ([`extcodecopy_step_equiv`](../EvmSpecsVerify/Opcodes/Extcodecopy.lean#L935) — underflow ×4, warm/cold access OOG, copy OOG, expansion OOG, and zero/grow/in-window success; `ExternalCodeRel` fixes the exact arbitrary-account bytes and lookup preservation, with `MemoryRel` + MM-6 `MemGasSafe` + `WarmAddrRel`) |
+| RETURNDATASIZE | 0x3d | `iReturndatasize` | `execute_returndatasize` | env | **full** ([`returndatasize_step_equiv`](../EvmSpecsVerify/Opcodes/Returndatasize.lean#L210) — success/overflow/OOG/MM-5 double fault; `ReturnDataRel` ties the output-slice length to SpecRef's inline returndata) |
+| RETURNDATACOPY | 0x3e | `iReturndatacopy` | `execute_returndatacopy` | memory | **full** ([`returndatacopy_step_equiv`](../EvmSpecsVerify/Opcodes/Returndatacopy.lean#L847) — success ×3/underflow ×3/OOG ×3/out-of-bounds after charging and expansion, including zero-size OOB; `MemoryRel` + MM-6 `MemGasSafe` + `ReturnDataRel`; MM-7 maps SpecRef `outOfBoundsRead` to Sail `InvalidOpcode`) |
+| EXTCODEHASH | 0x3f | `iExtcodehash` | `execute_extcodehash` | env+world+crypto | **full** ([`extcodehash_step_equiv`](../EvmSpecsVerify/Opcodes/Extcodehash.lean#L481) — warm/cold success and OOG plus underflow; `WarmAddrRel` proves account-access classification/gas, while ledgered `ExtcodehashAgree` ties missing-account zero and the 32-byte code-hash codec) |
 | BLOCKHASH | 0x40 | `iBlockhash` | `execute_blockhash` | env | **full** ([`blockhash_step_equiv`](../EvmSpecsVerify/Opcodes/Blockhash.lean#L363) — success ×2 (in-window hash/out-of-window zero)/underflow/OOG; `AncestorRel` ties the reversed-index witness windows, codec `hash_to_word_eq`; `BlockhashReady` excludes only a reached missing-depth outer abort, while admitting short but sufficient witnesses; see `Assumptions.lean`) |
 | COINBASE | 0x41 | `iCoinbase` | `execute_coinbase` | env | **full** ([`coinbase_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L127) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header fee-recipient tie, wf via `address_to_word`) |
 | TIMESTAMP | 0x42 | `iTimestamp` | `execute_timestamp` | env | **full** ([`timestamp_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L152) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header timestamp tie, u64 wf hypothesized) |
@@ -112,7 +112,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | PC | 0x58 | `iPc` | `execute_pc` | env | unstated |
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
 | GAS | 0x5a | `iGas` | `execute_gas` | env | unstated |
-| JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | unstated |
+| JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
 | TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated |
 | MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
@@ -143,7 +143,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 41 |
-| unstated | 48 |
+| full | 42 |
+| unstated | 47 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
