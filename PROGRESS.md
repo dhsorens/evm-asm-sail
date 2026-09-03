@@ -299,6 +299,20 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       rows and refuses to regenerate the site on a mismatch. The table had
       drifted silently (51/38/90 against an actual 71/16/88) because
       nothing recomputed it
+- [x] `Relations/Log.lean` + `Opcodes/Log.lean` — the log store, and the
+      first opcode whose post-state observation is an *append*. `LogRel`
+      relates SpecRef's per-frame `evm.logs` list to a suffix of the
+      host's transaction-lifetime `logs` array from a frame `base`;
+      `runS_k_log_memory` collapses the extraction's three-call emission
+      (`log_begin`, `log_add_topic`×n, `log_add_data`) to a single
+      `logAppend`, and `logRel_append` proves the relation survives it —
+      the `bounded` field is what carries earlier rows' payloads across
+      the shared byte arena's append. `log0_step_equiv` then proves LOG0
+      against `LogPost = MemPost ∧ LogRel`, and MM-11 (SpecRef checks
+      `isStatic` after charging, the extraction before) is discharged
+      through the new `ErrorRel.writeInStaticContext` plus
+      `WriteProtection` as a fourth explicitly listed
+      `haltedChargeFirst` kind
 
 Residual for the remaining `unstated` rows:
 
@@ -323,34 +337,19 @@ Residual for the remaining `unstated` rows:
   constructor pairing SpecRef `.writeInStaticContext` with the
   extraction's `WriteProtection` (`guard_static`, Execute.lean:108); both
   sides check static **before** popping or charging, so the kinds align.
-- **LOG0–LOG4** are the last *unblocked* family, and the largest single
-  slice left. What is already in place: RETURN's
-  `runS_active_memory_slice_zero`/`_le` cover the payload slice,
-  `memoryRel_read` (new with MCOPY) bridges the host's `memoryBytesOf`
-  read to SpecRef's `memory_read_bytes`, and the memory expansion is
-  RETURN's verbatim. What is missing is two things:
-  - ~~a `LogRel`~~ — **landed**: `Relations/Log.lean` has `LogRel` (suffix
-    from a frame `base`, since SpecRef's `evm.logs` is per-frame while the
-    host array is transaction-lifetime), `runS_k_log_memory` (the
-    three-call emission `log_begin` / topics / payload collapses to one
-    `logAppend`) and `logRel_append` (the relation survives it — the
-    `bounded` field is what carries earlier rows across the arena
-    append).
-  - the arity fan-out. `pop_log_topics` matches on `n` and SpecRef's
-    `(List.range n).mapM` unrolls per `n`, so each of the five arities has
-    its own outcome set: `n + 2` underflow heights, **four** extraction
-    charge stages (`G_log`, `G_logtopic * n`, `charge_word_scaled_gas
-    G_logdata size`, expansion) against SpecRef's single `charge_gas`, the
-    static halt, and three success cases. That is ~55 cases in total,
-    which is a *shape file* (`Shapes/Log.lean`) plus a slice, not one
-    slice — the log family is the last five-instance family without a
-    shape.
-  New MM-11 records what the comparison already found here: SpecRef
-  checks `isStatic` **after** charging while the extraction checks it
-  first, making LOG the only outlier among the four write-guarded
-  opcodes. Landing the slice will need a new `ErrorRel` constructor for
-  `.writeInStaticContext` ↔ `WriteProtection` and `WriteProtection` as a
-  fourth explicitly listed `haltedChargeFirst` kind.
+- **LOG1–LOG4** are what remains of the log family now that `LogRel` and
+  LOG0 have landed (above). Everything shared is done: the relation, the
+  emission collapse, the static/`WriteProtection` pairing, and
+  `runS_charge_log_gas_ok`/`_oog_base`/`_oog_topics`/`_oog_data` — all
+  four stated for a general `n`, so the higher arities add no new gas
+  reasoning. What each arity still carries is its own *outcome set*:
+  `pop_log_topics` matches on `n` and SpecRef's `(List.range n).mapM`
+  unrolls per `n`, so LOG`n` has `n + 2` underflow heights, a live topic
+  charge (dead at `n = 0`), the static halt and three success cases —
+  ~45 cases across the four. That fan-out is what a `Shapes/Log.lean`
+  parameterized by the popped topic list is for: it is a shape file plus
+  one thin slice per arity, and the log family is the last
+  five-instance family without a shape.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

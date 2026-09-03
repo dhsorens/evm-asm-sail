@@ -366,4 +366,31 @@ theorem logRel_append (L : List Log) (hs : Evm.HostState) (base : Nat)
       rw [hlast, logRow_logAppend_last, logAppend_logBytes_size]
       simp [logRowOf]
 
+/-- An emission touches neither memory frames nor memory bytes, so the
+memory relation survives it (LOG observes both stores at once). -/
+theorem memoryRel_logAppend (M : Bytes) (hs : Evm.HostState)
+    (off len : Nat) (a : Evm.Defs.address) (ts : List word)
+    (d : List byte) (hrel : MemoryRel M hs off len) :
+    MemoryRel M (logAppend hs a ts d) off len := by
+  obtain ⟨hframe, haligned, hbytes, htail⟩ := hrel
+  exact ⟨hframe, haligned, hbytes, htail⟩
+
+/-- A memory expansion touches neither the log store nor the arena, so the
+relation is preserved verbatim (LOG expands before emitting). -/
+theorem logRel_expandedHost (L : List Log) (hs : Evm.HostState)
+    (base off len req : Nat) (mfrest : List Evm.MemoryFrame)
+    (hrel : LogRel L hs base) :
+    LogRel L (expandedHost hs off len req mfrest) base := by
+  obtain ⟨hcount, haddr, htop, hdata, hbound⟩ := hrel
+  exact ⟨hcount, haddr, htop, hdata, hbound⟩
+
+/-! ## The success post for the LOG family -/
+
+/-- The memory-family post plus the log-store correspondence. LOG is the
+first opcode whose observation includes the log store, so its `Post` is
+`MemPost` conjoined with `LogRel` at the frame's base index. -/
+def LogPost (base : Nat) (sR' : Machine) (step : EvmStep)
+    (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
+  MemPost sR' step hs' ss' ∧ LogRel sR'.evm.logs hs' base
+
 end EvmSpecsVerify

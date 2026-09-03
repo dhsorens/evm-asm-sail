@@ -538,7 +538,7 @@ theorem exchange_step_equiv (b : BitVec 8)
     · rw [runR_iExchange_oog sRef hg,
         runS_execute_exchange_invalid b pc_in top g mem hs ss prof
           sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork hlim' hv']
-      exact StepResultRel.haltedChargeFirst (Or.inr (Or.inr rfl))
+      exact StepResultRel.haltedChargeFirst (Or.inr (Or.inr (Or.inl rfl)))
         (haltRegs_frame_status ss msg .InvalidOpcode)
     · push Not at hg
       rw [runR_iExchange_invalid sRef _ hdec hg,

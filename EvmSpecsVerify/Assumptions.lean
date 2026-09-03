@@ -194,6 +194,12 @@ EVM state can violate it, and whether it is eliminable by proving.
   what makes the relation stable under further emission (`logRel_append`).
   Established at frame entry with the rest of the frame relations (M3).
 
+* `hstatic` (`log0_step_equiv`) — the `message` register's `is_static`
+  flag equals SpecRef's `message.isStatic`. Another `MessageRel` fragment,
+  the same class as `haddr`/`hcaller`/`hvalue`; established at frame entry
+  (M3). It is load-bearing in both directions here, because the two sides
+  check it at different points (mismatch ledger MM-11).
+
 ## Witness sufficiency (BLOCKHASH)
 
 * `AncestorRel` (Opcodes/Blockhash.lean) — the extraction's parent-first

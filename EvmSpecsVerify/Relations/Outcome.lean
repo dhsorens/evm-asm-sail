@@ -43,6 +43,11 @@ inductive ErrorRel : EvmError → ExceptionKind → Prop
   as `InvalidOpcode`. Both are exceptional halts consuming the frame. -/
   | invalidParameter (why : String) :
       ErrorRel (.invalidParameter why) .InvalidOpcode
+  /-- Mismatch ledger MM-11: a write attempted in a static frame. The two
+  sides agree on the kind; only *when* the guard runs differs (see the
+  `haltedChargeFirst` note). -/
+  | writeInStaticContext :
+      ErrorRel .writeInStaticContext .WriteProtection
 
 /-- The value returned by the extraction's `execute`: the state-passing
 tuple (next pc, stack cursor, memory slice, remaining gas). -/
@@ -78,12 +83,19 @@ inductive StepResultRel
   stack fault. Both are exceptional halts with all gas consumed; the kind is
   not observable past the frame boundary, so the divergence is documented
   here rather than hidden behind a hypothesis. Only the double-fault states
-  of charge-first handlers may use this constructor. -/
+  of charge-first handlers may use this constructor.
+
+  MM-10 adds `InvalidOpcode` (a DUPN/SWAPN/EXCHANGE immediate that is
+  invalid *and* unaffordable) and MM-11 adds `WriteProtection` (a LOG in a
+  static frame that is *also* out of gas, since SpecRef checks static after
+  charging and the extraction before). The admitted kinds are listed
+  **explicitly** rather than as `k ≠ OutOfGas`: a blanket exclusion would
+  silently admit every kind added upstream in future. -/
   | haltedChargeFirst {k : ExceptionKind} {sR' : Machine}
       {pc' : Nat} {top' : StackTop} {mem' : EvmMemorySlice}
       {hs' : Evm.HostState} {ss' : SeqState}
       (hk : k = ExceptionKind.StackUnderflow ∨ k = ExceptionKind.StackOverflow
-        ∨ k = ExceptionKind.InvalidOpcode)
+        ∨ k = ExceptionKind.InvalidOpcode ∨ k = ExceptionKind.WriteProtection)
       (hstatus : ss'.regs.get? Evm.Defs.Register.frame_status =
         some (FrameStatus.Exceptional k)) :
       StepResultRel Post (.ok (.error .outOfGas, sR'))

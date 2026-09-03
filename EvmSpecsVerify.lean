@@ -16,6 +16,7 @@ import EvmSpecsVerify.Opcodes.Mul
 import EvmSpecsVerify.Opcodes.Sub
 import EvmSpecsVerify.Opcodes.Div
 import EvmSpecsVerify.Opcodes.Mod
+import EvmSpecsVerify.Opcodes.Log
 import EvmSpecsVerify.Opcodes.Lt
 import EvmSpecsVerify.Opcodes.Gt
 import EvmSpecsVerify.Opcodes.Eq
