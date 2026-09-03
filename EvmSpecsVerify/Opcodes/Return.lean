@@ -130,16 +130,9 @@ theorem runR_iReturn_success (s : Machine) (x y : U256) (rest : List U256)
 
 /-! ## `Evm` run shapes: expand/slice/output helpers -/
 
-theorem readArrayBytes_getD (b : Array byte) (base cnt i : Nat)
-    (hi : i < cnt) :
-    (readArrayBytes b base cnt).getD i 0 = b.getD (base + i) 0 := by
-  unfold readArrayBytes
-  simp [List.getD, hi]
-
-theorem readArrayBytes_length (b : Array byte) (base cnt : Nat) :
-    (readArrayBytes b base cnt).length = cnt := by
-  unfold readArrayBytes
-  simp
+-- `readArrayBytes_getD` / `readArrayBytes_length` now live in
+-- Representation/EvmMemory.lean, next to the other byte-array helpers
+-- (MCOPY's source read needs them too).
 
 open Evm.Functions in
 theorem runS_memory_expand_to_le (off len req : Nat)

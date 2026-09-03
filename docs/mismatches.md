@@ -84,7 +84,8 @@ unreachable / ambiguity / needs investigation).
 
 ## MM-6: u32 memory space — `memory_access` fatal-errors where SpecRef extends
 
-- **Area**: memory-family opcodes (MLOAD/MSTORE/MSTORE8/RETURN/REVERT/MSIZE/copies).
+- **Area**: memory-family opcodes
+  (MLOAD/MSTORE/MSTORE8/RETURN/REVERT/MSIZE/copies/MCOPY).
 - **SpecRef**: memory is an unbounded `Bytes`; any offset is reachable if the
   quadratic expansion charge is affordable.
 - **`Evm`**: memory offsets/lengths live in a u32 space; after the expansion
@@ -288,7 +289,10 @@ unreachable / ambiguity / needs investigation).
   257-bit-avoiding `memory_word_count_word`). Machine-checked by
   `calldatasize_step_equiv` / `codesize_step_equiv` / `calldatacopy_step_equiv` /
   `codecopy_step_equiv` (+ `runS_charge_copy_ok`/`_oog`,
-  `memory_word_count_word_eq`). Also `OPCODE_MSTORE8_BASE = 3 = G_verylow`
+  `memory_word_count_word_eq`), and `OPCODE_MCOPY_BASE = 3 = G_verylow`
+  with `OPCODE_COPY_PER_WORD = 3 = G_copy_word` by `mcopy_step_equiv`,
+  whose two extension ranges collapse to one by
+  `calc_extend_pair_eq_single`. Also `OPCODE_MSTORE8_BASE = 3 = G_verylow`
   (`mstore8_step_equiv`) and `OPCODE_GASPRICE = 2 = G_base`
   (`gasprice_step_equiv`).
 - **Verified 2026-08-19 (BLOCKHASH)**: `OPCODE_BLOCKHASH = 20` on both sides

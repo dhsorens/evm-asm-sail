@@ -286,6 +286,14 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       SpecRef's `max n m` underflow guard with the extraction's `higher`.
       Its two writes at arbitrary `(i, j)` are the second instance that
       justified generalizing the swap coordinate bridge
+- [x] `Opcodes/Mcopy.lean` — the last unblocked memory opcode and the only
+      one whose source is memory itself. `calc_extend_pair_eq_single`
+      proves SpecRef's two-range extension fold telescopes to the single
+      range at `max destination source`; `memoryRel_read` (the read
+      direction of `memoryRel_write`) plus `memoryRel_mcopy` prove the
+      copy agrees **including on overlap**, because both sides snapshot
+      the source before writing — so no disjointness hypothesis. The swap
+      generalization's counterpart at the memory layer
 - [x] Coverage-count guard: `scripts/refresh-proof-coverage-canvas.py` now
       recomputes the `docs/opcode-coverage.md` Counts table from its own
       rows and refuses to regenerate the site on a mismatch. The table had

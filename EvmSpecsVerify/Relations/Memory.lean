@@ -25,7 +25,7 @@ happily. Real gas budgets sit ~8 orders of magnitude below the bound; see
 the mismatch ledger and `Assumptions.lean`.
 -/
 
-open private writeArrayBytes bytesToWord wordBytes zeroMemoryRange
+open private writeArrayBytes readArrayBytes bytesToWord wordBytes zeroMemoryRange
   from Evm.HostAxioms
 
 set_option maxHeartbeats 1000000
@@ -209,6 +209,104 @@ theorem extend_cost_eq (M : Bytes) (off len start size : Nat)
       rw [hcmgc (start + size), hcmgcM]
 
 
+/-- `calculate_memory_gas_cost` is monotone (via the extraction's
+`mem_cost`, which is monotone in the word count). -/
+theorem calculate_memory_gas_cost_mono {a b : Nat} (h : a ≤ b) :
+    calculate_memory_gas_cost a ≤ calculate_memory_gas_cost b := by
+  rw [calculate_memory_gas_cost_eq, calculate_memory_gas_cost_eq]
+  exact mem_cost_mono (by
+    rw [memory_word_count_eq, memory_word_count_eq]
+    exact Nat.div_le_div_right (by omega))
+
+theorem ceil32_idem (n : Nat) : (ceil32 (ceil32 n) : Nat) = ceil32 n := by
+  have h : ∀ w : Nat, (32 * w + 31) / 32 = w := by intro w; omega
+  rw [ceil32_eq, ceil32_eq, memory_word_count_eq, memory_word_count_eq, h]
+
+theorem ceil32_mono {a b : Nat} (h : a ≤ b) :
+    (ceil32 a : Nat) ≤ ceil32 b := by
+  rw [ceil32_eq, ceil32_eq, memory_word_count_eq, memory_word_count_eq]
+  exact Nat.mul_le_mul_left 32 (Nat.div_le_div_right (by omega))
+
+theorem sub_add_sub_telescope {x y w : Nat} (h1 : x ≤ y) (h2 : y ≤ w) :
+    y - x + (w - y) = w - x := by omega
+/-- **Two extensions of the same size collapse to their upper range.**
+MCOPY is the only handler that requests two ranges
+(`[(source, len), (destination, len)]`), and the fold telescopes: the
+intermediate `current_size` cancels, so the pair is indistinguishable
+from the single extension at `max source destination`. This is what lets
+the MCOPY slice reuse `calc_extend_single` / `extend_cost_eq` unchanged. -/
+theorem calc_extend_pair_eq_single (msz a b z : Nat) :
+    calculate_gas_extend_memory msz [(a, z), (b, z)]
+      = calculate_gas_extend_memory msz [(max a b, z)] := by
+  by_cases h0 : (z == 0) = true
+  · rw [calc_extend_single, if_pos h0]
+    simp only [calculate_gas_extend_memory, Id.run, List.forIn_cons,
+      List.forIn_nil]
+    simp only [h0, if_true]
+    rfl
+  by_cases hA : (ceil32 (a + z) : Nat) ≤ ceil32 msz
+  · -- the source range is already covered; only the destination can extend
+    have hLHS : calculate_gas_extend_memory msz [(a, z), (b, z)]
+        = calculate_gas_extend_memory msz [(b, z)] := by
+      simp only [calculate_gas_extend_memory, Id.run, List.forIn_cons,
+        List.forIn_nil]
+      simp only [h0, Bool.false_eq_true, if_false]
+      rw [if_pos hA]
+      rfl
+    rw [hLHS, calc_extend_single, calc_extend_single]
+    simp only [h0, Bool.false_eq_true, if_false]
+    by_cases hB : (ceil32 (b + z) : Nat) ≤ ceil32 msz
+    · rw [if_pos hB,
+        if_pos (show (ceil32 (max a b + z) : Nat) ≤ ceil32 msz from by
+          rcases Nat.le_total a b with h | h
+          · rw [show max a b = b from by omega]; exact hB
+          · rw [show max a b = a from by omega]; exact hA)]
+    · have hab : max a b = b := by
+        by_contra hc
+        exact hB (le_trans (ceil32_mono (show b + z ≤ a + z by omega)) hA)
+      rw [hab, if_neg hB]
+  · rw [calc_extend_single]
+    simp only [calculate_gas_extend_memory, Id.run, List.forIn_cons,
+      List.forIn_nil]
+    simp only [h0, Bool.false_eq_true, if_false]
+    rw [if_neg hA]
+    simp only [pure_bind, bind_assoc]
+    rw [ceil32_idem]
+    by_cases hB : (ceil32 (b + z) : Nat) ≤ ceil32 (a + z)
+    · rw [if_pos hB]
+      have hmax : (ceil32 (max a b + z) : Nat) = ceil32 (a + z) := by
+        rcases Nat.le_total (a + z) (b + z) with h | h
+        · rw [show max a b + z = b + z from by omega]
+          exact Nat.le_antisymm hB (ceil32_mono h)
+        · rw [show max a b + z = a + z from by omega]
+      rw [hmax, if_neg hA]
+      simp only [pure_bind]
+      show (⟨_, _⟩ : ExtendMemory) = ⟨_, _⟩
+      congr 1 <;> show (_ : Nat) = _ <;> omega
+    · rw [if_neg hB]
+      have hmA : (ceil32 msz : Nat) < ceil32 (a + z) := Nat.lt_of_not_le hA
+      have hAB : (ceil32 (a + z) : Nat) < ceil32 (b + z) := Nat.lt_of_not_le hB
+      have halt : a < b := by
+        by_contra hc
+        exact hB (ceil32_mono (show b + z ≤ a + z by omega))
+      rw [show max a b + z = b + z from by omega,
+        if_neg (Nat.not_le.mpr (lt_trans hmA hAB))]
+      have hle : calculate_memory_gas_cost (ceil32 msz)
+          ≤ calculate_memory_gas_cost (ceil32 (a + z)) :=
+        calculate_memory_gas_cost_mono (Nat.le_of_lt hmA)
+      have hle2 : calculate_memory_gas_cost (ceil32 (a + z))
+          ≤ calculate_memory_gas_cost (ceil32 (b + z)) :=
+        calculate_memory_gas_cost_mono (Nat.le_of_lt hAB)
+      simp only [pure_bind]
+      show (⟨_, _⟩ : ExtendMemory) = ⟨_, _⟩
+      congr 1
+      · show 0 + _ + _ = _
+        rw [Nat.zero_add]
+        exact sub_add_sub_telescope hle hle2
+      · show 0 + _ + _ = _
+        rw [Nat.zero_add]
+        exact sub_add_sub_telescope (Nat.le_of_lt hmA) (Nat.le_of_lt hAB)
+
 theorem wc_mono {a b : Nat} (h : a ≤ b) :
     Evm.Functions.memory_word_count a ≤ Evm.Functions.memory_word_count b := by
   rw [memory_word_count_eq, memory_word_count_eq]
@@ -280,6 +378,37 @@ theorem memory_read_bytes_getElem (M : Bytes) (pos size i : Nat)
     (memory_read_bytes M pos size).getD i 0 = M.getD (pos + i) 0 := by
   simp only [memory_read_bytes, List.getD]
   rw [List.getElem?_take_of_lt hi, List.getElem?_drop]
+
+/-- Byte lists of equal length agreeing at every `getD` are equal. -/
+theorem list_eq_of_getD (l1 l2 : Bytes) (hlen : l1.length = l2.length)
+    (h : ∀ i, i < l1.length → l1.getD i 0 = l2.getD i 0) : l1 = l2 := by
+  apply List.ext_getElem hlen
+  intro i h1 h2
+  have hi := h i h1
+  simpa [List.getD_eq_getElem?_getD, List.getElem?_eq_getElem h1,
+    List.getElem?_eq_getElem h2] using hi
+
+open Evm.Functions in
+/-- **The bulk read agrees.** Inside the established window, the host's
+`readArrayBytes` off the shared array is SpecRef's `memory_read_bytes`.
+MCOPY is the first handler whose *source* is memory itself, so this is
+the read direction of `memoryRel_write`. -/
+theorem memoryRel_read (M : Bytes) (hs : Evm.HostState)
+    (off len src l : Nat)
+    (hrel : MemoryRel M hs off len) (hin : src + l ≤ len) :
+    readArrayBytes hs.memoryBytes (off + src) l = memory_read_bytes M src l := by
+  obtain ⟨-, haligned, hbytes, -⟩ := hrel
+  have hlenM : len ≤ M.length := by
+    have := le_32_wc len
+    omega
+  refine list_eq_of_getD _ _ ?_ ?_
+  · rw [readArrayBytes_length, memory_read_bytes_length M src l (by omega)]
+  · intro i hi
+    rw [readArrayBytes_length] at hi
+    rw [readArrayBytes_getD _ _ _ _ hi,
+      memory_read_bytes_getElem M src l i hi,
+      show off + src + i = off + (src + i) from by omega]
+    exact hbytes (src + i) (by omega)
 
 theorem memory_write_length (M val : Bytes) (pos : Nat)
     (h : pos + val.length ≤ M.length) :
