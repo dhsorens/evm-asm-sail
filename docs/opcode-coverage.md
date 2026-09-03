@@ -111,7 +111,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | JUMP | 0x56 | `iJump` | `execute_jump` | control | **full** ([`jump_step_equiv`](../EvmSpecsVerify/Opcodes/Jump.lean#L285) — taken jump/underflow/OOG/invalid destination; the JUMPI harvest through `do_jump` and `JumpdestRel`, sharing `ControlPost`; no fall-through branch, overflow unreachable for 1-in/0-out) |
 | JUMPI | 0x57 | `iJumpi` | `execute_jumpi` | control | **full** ([`jumpi_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpi.lean#L501) — fall/jump/underflow/OOG/invalid jump; `JumpdestRel` ties the valid-destination set to the frame jump table) |
 | PC | 0x58 | `iPc` | `execute_pc` | env (live-state pusher) | **full** ([`pc_step_equiv`](../EvmSpecsVerify/Opcodes/Pc.lean#L98) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. The extraction recovers the opcode position as `pc_in - 1` (`alu_sub_one`, no wrap since `pc_in ≥ 1`); domain restricted by `hwfpc : pc_in < 2^256` — see `Assumptions.lean`) |
-| MSIZE | 0x59 | `iMsize` | `execute_msize` | env | unstated |
+| MSIZE | 0x59 | `iMsize` | `execute_msize` | env (live-state pusher) + memory | **full** ([`msize_step_equiv`](../EvmSpecsVerify/Opcodes/Msize.lean#L247) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. SpecRef's raw `memory.length` and the extraction's `32 * memory_word_count (memory_high_water mem)` agree *exactly by* `MemoryRel.aligned` — this is where SpecRef's 32-alignment invariant earns its keep; `MemPost` + MM-6 `MemGasSafe`) |
 | GAS | 0x5a | `iGas` | `execute_gas` | env (live-state pusher) | **full** ([`gas_step_equiv`](../EvmSpecsVerify/Opcodes/Gas.lean#L114) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. Both sides push the *post-charge* gas (`gasLeft - 2`); domain restricted by `hwfg` for the new MM-8 `push_gas` modular reduction — see `Assumptions.lean`) |
 | JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
 | TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
@@ -144,7 +144,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 45 |
-| unstated | 44 |
+| full | 46 |
+| unstated | 43 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |

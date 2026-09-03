@@ -50,6 +50,7 @@ import EvmSpecsVerify.Opcodes.Jump
 import EvmSpecsVerify.Opcodes.Shapes.LivePusher
 import EvmSpecsVerify.Opcodes.Pc
 import EvmSpecsVerify.Opcodes.Gas
+import EvmSpecsVerify.Opcodes.Msize
 import EvmSpecsVerify.Representation.EvmMemory
 import EvmSpecsVerify.Relations.Memory
 import EvmSpecsVerify.Opcodes.Mload
