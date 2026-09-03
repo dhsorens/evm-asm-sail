@@ -329,6 +329,28 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       to `0…4`), and it is what justifies `hn` as the decoders' range
       rather than a proof convenience
 
+- [x] `Relations/Transient.lean` + `Opcodes/Tstore.lean` — the transient
+      store (EIP-1153), and the first opcode whose whole observable effect
+      is a world-ish **write**. `TransientRel` relates the two transient
+      maps *pointwise* — deliberately, because MM-13: SpecRef's
+      `setTransientStorage` deletes the row on a zero write where the
+      extraction's `transient_store` stores the zero, and nothing on
+      either side enumerates the map, so the two representations are
+      indistinguishable through every read. `transientRel_write` proves
+      the relation survives a write, its two branches being exactly those
+      two cases meeting at the same read.
+      New MM-14, the mirror of MM-11: SpecRef's static guard precedes its
+      pops while the extraction's follows the hoisted `validate_stack`,
+      so a static frame with an underflowing stack yields
+      `.writeInStaticContext` against `StackUnderflow` — encoded as
+      `StepResultRel.haltedStaticFirst`, which admits `StackUnderflow`
+      only (this class is all `n`-in/0-out).
+      **It also discharges an assumption**: `tloadAgree_of_transientRel`
+      proves TLOAD's ledgered `TloadAgree` from `TransientRel`, so
+      transient storage now carries no assumption at all. `SloadAgree` is
+      the remaining member of that class and needs the persistent-storage
+      relation instead.
+
 Residual for the remaining `unstated` rows:
 
 - **BLOBBASEFEE** needs a fake-exponential bridge. SpecRef's
@@ -343,15 +365,22 @@ Residual for the remaining `unstated` rows:
   are outer aborts, outside the `StepResultRel` boundary. Sizing: an
   EXP-shaped slice (compare `runS_alu_exp` ↔ `powMod` in
   `Opcodes/Exp.lean`), not a harvest.
-- **TSTORE** needs a transient-store relation in the success post.
-  `BasePost` observes only stack, gas and pc, so a
-  `StepResultRel BasePost` theorem for TSTORE would be green and
-  meaningless — it would not relate the write at all. The prerequisite is
-  the same one SSTORE has (the comparison-matrix "persistent storage" /
-  transient rows). Its static-context path also needs a new `ErrorRel`
-  constructor pairing SpecRef `.writeInStaticContext` with the
-  extraction's `WriteProtection` (`guard_static`, Execute.lean:108); both
-  sides check static **before** popping or charging, so the kinds align.
+- **SSTORE** is TSTORE with every hard part back. `TransientRel` shows the
+  *shape* of the post it needs but none of the content: the extraction's
+  `k_sstore` writes a `StorageValue {curr, orig}` row through the tx
+  cache, with the transaction-original value supplied by a **preceding**
+  `k_sload` (Execute.lean:1458), against SpecRef's separate
+  `getStorageOriginal` / `getStorage` reads. On top of the write relation
+  it needs: EIP-2929 warm/cold (`WarmRel` exists), the Amsterdam
+  `sstore_sentry_cost` vs SpecRef's `check_gas (max access_cost
+  (CALL_STIPEND + 1))`, the EIP-2200 refund counter's three branches, and
+  two-dimensional state gas with a `credit_state_gas_refund` leg. That is
+  the persistent-storage relation the `SloadAgree` row also waits on —
+  the largest single slice left. Its static-guard ordering is already
+  covered (MM-14, `haltedStaticFirst`).
+- **SELFDESTRUCT** needs account deletion, the balance transfer, and the
+  created-account set — the account side of the world relation, not the
+  storage side. MM-14 covers its guard ordering too.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

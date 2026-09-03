@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Transient
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
@@ -25,11 +26,11 @@ before charging, the extraction's body charges before popping, both behind
 
 Gas (MM-2): `GasCosts.OPCODE_TLOAD = 100 = G_warm_access = WARM_ACCESS`.
 
-TSTORE is deliberately **not** in this slice: its success path writes the
-transient store, and `BasePost` observes only stack/gas/pc, so a
-`StepResultRel BasePost` theorem for TSTORE would say nothing about the
-write. It needs a transient-store *relation* in the post — the same
-prerequisite SSTORE has. See `PROGRESS.md`.
+TSTORE lands separately ([`Tstore.lean`](Tstore.lean)), because its
+success path writes the store and `BasePost` observes only stack/gas/pc:
+it needs a transient-store *relation* in the post. That relation,
+`TransientRel`, also turns this slice's `TloadAgree` hypothesis into a
+theorem — see `tloadAgree_of_transientRel` below.
 -/
 
 open private pcAdd from EvmAsm.Stateless.SpecRef.InstructionsCore
@@ -52,6 +53,22 @@ def TloadAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
       (toBeBytes32 x)).run sRef.txState = .ok (v, ts') ∧
     runS (Evm.Functions.k_tload aV x) hs ss = .ok (v, hostAfter) ss ∧
     hostAfter.stackFrames = hs.stackFrames
+
+/-- **`TloadAgree` is not an axiom any more.** Once the transient store is
+related pointwise ([`TransientRel`](../Relations/Transient.lean), landed
+with TSTORE), the read agreement is a theorem: the two reads are the same
+function of related maps, `k_tload` leaves the host state alone, and the
+value's well-formedness is the relation's `wf` field. The slice keeps the
+`TloadAgree` interface so its step theorem is unchanged; what changes is
+that a caller can now *discharge* it instead of assuming it. -/
+theorem tloadAgree_of_transientRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (aV : Evm.Defs.address) (x : Nat) (hx : WordWf x)
+    (haddr : aV.toList = sRef.evm.message.currentTarget)
+    (htr : TransientRel sRef.txState hs) :
+    TloadAgree sRef hs ss aV x := by
+  refine ⟨hostTransientRead hs aV x, sRef.txState, hs, htr.wf aV x hx, ?_,
+    runS_k_tload aV x hs ss, rfl⟩
+  rw [← haddr, runTx_getTransientStorage, htr.rel aV x hx]
 
 /-! ## SpecRef run shapes -/
 

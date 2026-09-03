@@ -392,4 +392,41 @@ theorem runS_charge_log_gas_oog_data (g n size : Nat) (hs : HostState)
       (runS_exc_halt _ .OutOfGas hs ss prof sp msg hprof hsp hmsg hfork) ?_
     exact runS_pure _ _ _
 
+/-! ## The static-context guard -/
+
+open Evm.Functions in
+/-- The static-context guard halts with `WriteProtection`, carrying the
+frame's full gas into `exc_halt`. It is the first statement of every
+write handler on this side, which is where MM-11 (LOG) and MM-14
+(TSTORE/SSTORE/SELFDESTRUCT) come from. -/
+theorem runS_guard_static_halt (g : Nat) (hs : Evm.HostState)
+    (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hstatic : msg.is_static = true) :
+    runS (Evm.Functions.guard_static g) hs ss =
+      .ok ((true, GAS_ZERO), hs)
+        { ss with regs := haltRegs ss msg .WriteProtection } := by
+  simp only [Evm.Functions.guard_static, runS_bind,
+    runS_readReg _ _ _ _ hmsg]
+  rw [if_pos (by simpa using hstatic)]
+  simp only [runS_bind,
+    runS_exc_halt g .WriteProtection hs ss prof sp msg hprof hsp hmsg hfork,
+    runS_pure]
+
+open Evm.Functions in
+theorem runS_guard_static_ok (g : Nat) (hs : Evm.HostState) (ss : SeqState)
+    (msg : Evm.Defs.Message)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hstatic : msg.is_static = false) :
+    runS (Evm.Functions.guard_static g) hs ss = .ok ((false, g), hs) ss := by
+  simp only [Evm.Functions.guard_static, runS_bind,
+    runS_readReg _ _ _ _ hmsg]
+  rw [if_neg (by simpa using hstatic)]
+  exact runS_pure _ _ _
+
+
 end EvmSpecsVerify

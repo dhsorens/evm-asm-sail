@@ -60,14 +60,25 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
-* `TloadAgree` (Opcodes/Tload.lean) — the transient sibling of
-  `SloadAgree`: SpecRef's `getTransientStorage` on the executing account
-  and the extraction's `k_tload (self_addr ())` return the same word, and
-  the extraction's read leaves the operand stack alone. Simpler than
-  `SloadAgree` because EIP-1153 prices transient access flat — no
-  warm/cold split, so nothing is quantified over ambient stamps.
-  Eliminable by the world tranche's transient-store relation (the same one
-  TSTORE needs).
+* ~~`TloadAgree`~~ (Opcodes/Tload.lean) — **discharged**. It was the
+  transient sibling of `SloadAgree`: SpecRef's `getTransientStorage` on
+  the executing account and the extraction's `k_tload (self_addr ())`
+  return the same word, and the read leaves the operand stack alone.
+  `TransientRel` (Relations/Transient.lean, landed with TSTORE) relates
+  the two transient maps pointwise, and
+  `tloadAgree_of_transientRel` proves the hypothesis from it — so this
+  row is now a theorem, not an assumption. `tload_step_equiv` keeps the
+  `TloadAgree` interface; what changed is that a caller can supply it by
+  proof. `SloadAgree` above is the remaining member of this class, and
+  it needs the persistent-storage relation rather than the transient
+  one.
+
+* `TransientRel` (Relations/Transient.lean) — a *relation*, threaded on
+  `tstore_step_equiv` the way `LogRel` is on the LOG family, not an
+  agreement assumption: the step theorem both consumes and re-establishes
+  it. Its `wf` field (every stored value is a well-formed word) is the
+  transient analogue of `StackRel.wf`, established at frame entry and
+  preserved by every write, since both sides only ever store operands.
 
 ## Account/code read agreement + address warmth
 

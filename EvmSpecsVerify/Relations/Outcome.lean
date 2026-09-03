@@ -100,6 +100,22 @@ inductive StepResultRel
         some (FrameStatus.Exceptional k)) :
       StepResultRel Post (.ok (.error .outOfGas, sR'))
         (.ok ((pc', top', mem', 0), hs') ss')
+  /-- Mismatch ledger MM-14: the mirror image of MM-11. SpecRef's write
+  handlers that test `isStatic` **before** popping (`iTstore`, `iSstore`,
+  `iSelfdestruct`) report `.writeInStaticContext` on a state that is
+  simultaneously static-protected and stack-invalid, where the
+  extraction's hoisted `validate_stack` — which runs before
+  `execute_opcode` and therefore before `guard_static` — reports the
+  stack fault. Both are exceptional halts with all gas consumed. Only
+  `StackUnderflow` is admitted: every opcode in this class is
+  `n`-in/0-out, so overflow is unreachable. -/
+  | haltedStaticFirst {sR' : Machine}
+      {pc' : Nat} {top' : StackTop} {mem' : EvmMemorySlice}
+      {hs' : Evm.HostState} {ss' : SeqState}
+      (hstatus : ss'.regs.get? Evm.Defs.Register.frame_status =
+        some (FrameStatus.Exceptional ExceptionKind.StackUnderflow)) :
+      StepResultRel Post (.ok (.error .writeInStaticContext, sR'))
+        (.ok ((pc', top', mem', 0), hs') ss')
 
 /-! ## Reverts
 
