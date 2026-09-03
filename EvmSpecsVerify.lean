@@ -67,6 +67,7 @@ import EvmSpecsVerify.Opcodes.Mstore
 import EvmSpecsVerify.Opcodes.Return
 import EvmSpecsVerify.Opcodes.Revert
 import EvmSpecsVerify.Relations.Warm
+import EvmSpecsVerify.Relations.Storage
 import EvmSpecsVerify.Opcodes.Sload
 import EvmSpecsVerify.Opcodes.Tload
 import EvmSpecsVerify.Opcodes.Stop

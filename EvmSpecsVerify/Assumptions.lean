@@ -60,6 +60,17 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
+  **Reduced** (with `StorageRel`, Relations/Storage.lean):
+  `sloadAgree_of_storageRel` proves the hypothesis for any slot the
+  transaction has already written — that is a `storage_tx_get` hit, where
+  `k_sload` returns the stored row without touching state and SpecRef's
+  `getStorage` finds the same value in its first probe. What is left
+  assumed is the two miss regimes: the extraction's block overlay (which
+  doubles as its witness read-through cache) and the authenticated trie
+  walk below it, plus the `storageCleared` branch. So the row stays, but
+  it is now an assumption about the *base* storage layers rather than
+  about storage reads in general.
+
 * ~~`TloadAgree`~~ (Opcodes/Tload.lean) — **discharged**. It was the
   transient sibling of `SloadAgree`: SpecRef's `getTransientStorage` on
   the executing account and the extraction's `k_tload (self_addr ())`
@@ -72,6 +83,15 @@ EVM state can violate it, and whether it is eliminable by proving.
   proof. `SloadAgree` above is the remaining member of this class, and
   it needs the persistent-storage relation rather than the transient
   one.
+
+* `StorageRel` (Relations/Storage.lean) — a *relation*, not an agreement
+  assumption: SpecRef's transaction-layer `storageWrites` and the
+  extraction's `storageTx` overlay agree pointwise on presence and live
+  value, and the extraction's stored `orig` is the value SpecRef
+  recomputes with `getStorageOriginal`. `storageRel_write` preserves it
+  across one write, `storageRel_frame` across the read bookkeeping every
+  SpecRef probe performs. Its `wf` field plays the role
+  `TransientRel.wf` does. Consumed by `sloadAgree_of_storageRel` above.
 
 * `TransientRel` (Relations/Transient.lean) — a *relation*, threaded on
   `tstore_step_equiv` the way `LogRel` is on the LOG family, not an

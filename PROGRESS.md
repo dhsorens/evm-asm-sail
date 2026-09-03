@@ -377,15 +377,44 @@ each one.
       profile admits — stays open; `scripts/blob-fee-band.py` has the
       numbers.
 
+- [x] `Relations/Storage.lean` + `Representation/EvmSailME.lean` — the
+      persistent-storage relation, landed ahead of SSTORE because
+      `SloadAgree` waits on it too. `StorageRel` relates the
+      **transaction** overlay pointwise — `TransactionState.storageWrites`
+      (a nested address → slot dict) against `HostState.storageTx` (an
+      `assocPut` map of `StorageValue {curr, orig}` rows) — on presence
+      *and* live value, and ties the extraction's stored `orig` to the
+      value SpecRef recomputes with `getStorageOriginal` (`specOrig`),
+      since SpecRef stores no such field. `storageRel_write` preserves it
+      across a write; `storageRel_frame` across the read bookkeeping
+      (`storageReads` / `accountReads` / `preStateReads`) that every
+      SpecRef probe performs, which is what keeps the relation usable
+      through a multi-read handler like SSTORE's.
+      **It reduces an assumption**: `sloadAgree_of_storageRel` proves
+      `SloadAgree` for any slot the transaction has already written —
+      that branch of `k_sload` is a `storage_tx_get` hit, the only one
+      that touches no state (a miss records an EIP-7928 read). The block
+      overlay (which doubles as the extraction's witness read-through
+      cache) and the authenticated trie walk below it stay ledgered.
+      `Representation/EvmSailME.lean` is the run-shape layer this needed:
+      `k_sload` is the first `SailME.run` handler in scope — an
+      `ExceptT (Error ⊕ α)` early return whose `Sum.inr` is a deliberate
+      value, not an error — and `simp` diverges on its `liftM`/`ExceptT`
+      unfolding, so it gets fused lemmas (`runE_bind_ok`,
+      `runE_bind_throw`, `runS_sailME_throw`) in the `EvmMonad.lean`
+      style. `execute_sstore` is the second such handler.
+
 Residual for the remaining `unstated` rows:
 
-- **SSTORE** is TSTORE with every hard part back. `TransientRel` shows the
-  *shape* of the post it needs but none of the content: the extraction's
+- **SSTORE** is TSTORE with every hard part back. `StorageRel` (landed,
+  above) supplies the write relation and the `orig` correspondence; the
+  rest is still open: the extraction's
   `k_sstore` writes a `StorageValue {curr, orig}` row through the tx
   cache, with the transaction-original value supplied by a **preceding**
   `k_sload` (Execute.lean:1458), against SpecRef's separate
-  `getStorageOriginal` / `getStorage` reads. On top of the write relation
-  it needs: EIP-2929 warm/cold (`WarmRel` exists), the Amsterdam
+  `getStorageOriginal` / `getStorage` reads — so on a tx-overlay miss the
+  step still depends on the base layers `SloadAgree` covers. On top of
+  the write relation it needs: EIP-2929 warm/cold (`WarmRel` exists), the Amsterdam
   `sstore_sentry_cost` vs SpecRef's `check_gas (max access_cost
   (CALL_STIPEND + 1))`, the EIP-2200 refund counter's three branches, and
   two-dimensional state gas with a `credit_state_gas_refund` leg. That is
