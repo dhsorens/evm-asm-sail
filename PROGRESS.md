@@ -313,6 +313,21 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       through the new `ErrorRel.writeInStaticContext` plus
       `WriteProtection` as a fourth explicitly listed
       `haltedChargeFirst` kind
+- [x] `Opcodes/Log.lean` extended from LOG0 to the **whole family** in one
+      theorem, `logn_step_equiv (n) (hn : n ≤ 4)`. The arity never becomes
+      a case split: `runR_mapM_topics_ok` discharges SpecRef's
+      `(List.range n).mapM` by induction on the operand list,
+      `runS_pop_log_topics` the extraction's five-way match on the arity,
+      and `topicWords_logTopicsOf` collapses the resulting `LogTopics`
+      constructor back to the same list — after which the two sides differ
+      only in a number. `cursorDrop` (Representation/EvmStack.lean) names
+      the `n`-pop cursor chain, and `runR_iLogN_underflow` collapses the
+      `n + 2` underflow heights into one existential, which is sound
+      because a halt discards the machine. New MM-12 records that the
+      extraction's `pop_log_topics` catch-all pops *nothing* at `n ≥ 5`
+      while SpecRef pops `n` — unreachable (both decoders bound the arity
+      to `0…4`), and it is what justifies `hn` as the decoders' range
+      rather than a proof convenience
 
 Residual for the remaining `unstated` rows:
 
@@ -337,19 +352,6 @@ Residual for the remaining `unstated` rows:
   constructor pairing SpecRef `.writeInStaticContext` with the
   extraction's `WriteProtection` (`guard_static`, Execute.lean:108); both
   sides check static **before** popping or charging, so the kinds align.
-- **LOG1–LOG4** are what remains of the log family now that `LogRel` and
-  LOG0 have landed (above). Everything shared is done: the relation, the
-  emission collapse, the static/`WriteProtection` pairing, and
-  `runS_charge_log_gas_ok`/`_oog_base`/`_oog_topics`/`_oog_data` — all
-  four stated for a general `n`, so the higher arities add no new gas
-  reasoning. What each arity still carries is its own *outcome set*:
-  `pop_log_topics` matches on `n` and SpecRef's `(List.range n).mapM`
-  unrolls per `n`, so LOG`n` has `n + 2` underflow heights, a live topic
-  charge (dead at `n = 0`), the static halt and three success cases —
-  ~45 cases across the four. That fan-out is what a `Shapes/Log.lean`
-  parameterized by the popped topic list is for: it is a shape file plus
-  one thin slice per arity, and the log family is the last
-  five-instance family without a shape.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the
