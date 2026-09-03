@@ -75,6 +75,7 @@ import EvmSpecsVerify.Opcodes.Caller
 import EvmSpecsVerify.Opcodes.Callvalue
 import EvmSpecsVerify.Relations.Calldata
 import EvmSpecsVerify.Opcodes.Calldataload
+import EvmSpecsVerify.Opcodes.Blobhash
 import EvmSpecsVerify.Opcodes.Calldatasize
 import EvmSpecsVerify.Opcodes.Codesize
 import EvmSpecsVerify.Opcodes.Calldatacopy

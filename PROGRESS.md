@@ -245,6 +245,47 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       preservation obligations; the full four-pop simulation covers warm/cold
       account + EIP-8038 read gas, copy/expansion charges, all OOG stages, and
       zero/grow/in-window success
+- [x] Control flow completed: `Opcodes/Jumpdest.lean`, `Opcodes/Jump.lean`
+      (the JUMPI harvest through `do_jump` + `JumpdestRel`, sharing the
+      renamed `ControlPost`)
+- [x] `Opcodes/Shapes/LivePusher.lean` + `Opcodes/Pc.lean` /
+      `Opcodes/Gas.lean` / `Opcodes/Msize.lean` — the 0-in/1-out pushers
+      whose word comes from the live step state, read *after* the charge.
+      PC makes the MM-4 pc convention concrete (`alu_sub pc_in WORD_ONE`),
+      GAS surfaces MM-8 (`push_gas`'s modular reduction), and MSIZE is
+      where SpecRef's 32-alignment memory invariant becomes load-bearing
+- [x] `Opcodes/Swap.lean` — the SWAP1–SWAP16 family; `take_swap_writes`
+      bridges SpecRef's head-indexed `listSwap` to the extraction's two
+      cursor-slot writes, and `replaceListAt_eq_set` lifts the host's list
+      helpers to `List.set` for downstream slices
+- [x] `Opcodes/Selfbalance.lean` — the own-account read, with no warm/cold
+      component on either side
+- [x] `Relations/Outcome.lean` `RevertResultRel` + `Opcodes/Revert.lean` —
+      the first outcome that is neither success nor exceptional halt; MM-9
+      records that the extraction folds SpecRef's teardown state-gas refill
+      into the handler, with `runR_refill` proving the two refills identical
+- [x] `Opcodes/Blobhash.lean` — the transaction-envelope reader, zero-padded
+      on both sides so one success case covers every index
+
+Residual for the remaining `unstated` rows:
+
+- **BLOBBASEFEE** needs a fake-exponential bridge. SpecRef's
+  `taylor_exponential` (fuelled `taylorAux`, `Gas.lean:114`) and the
+  extraction's `fake_exponential_word` (`whileFuelM`, `Gas.lean:107`) are
+  the **same recurrence** — `output += acc; acc := acc * num / (den * i)`,
+  starting `acc = factor * den` with `BLOB_MIN_GASPRICE = 1`, terminating
+  at `acc = 0`, dividing by `den` at the end — but they differ in fuel and
+  in guard behavior: SpecRef throws a `SpecError` on fuel exhaustion, the
+  extraction `fatal_error NumericOverflow`s past `den * 2^256`, and it also
+  aborts unless `excess_blob_gas ≤ profile.excess_blob_gas_limit`. All three
+  are outer aborts, outside the `StepResultRel` boundary. Sizing: an
+  EXP-shaped slice (compare `runS_alu_exp` ↔ `powMod` in
+  `Opcodes/Exp.lean`), not a harvest.
+- **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
+  `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
+  `partial mutual` block, so it is blocked by MM-3 exactly like the
+  CALL/CREATE family — there is no `def` to target. Its row should become
+  `n/a (MM-3)` rather than `unstated` once that is confirmed with upstream.
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 
