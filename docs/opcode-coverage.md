@@ -119,7 +119,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
 | PUSH (n, w) | 0x5f–0x7f | `iPushN` | `execute_push` | stack (immediate via fetch) | **full** ([`push_step_equiv`](../EvmSpecsVerify/Opcodes/Push.lean#L253) — success/overflow/OOG, underflow unreachable; decode-fidelity hypothesis for the fetched immediate (MM-3 scope); MM-5 on double faults) |
 | DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | **full** ([`dup_step_equiv`](../EvmSpecsVerify/Opcodes/Dup.lean#L240) — success/underflow/overflow/OOG; MM-5 on double faults) |
-| SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | unstated |
+| SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | **full** ([`swap_step_equiv`](../EvmSpecsVerify/Opcodes/Swap.lean#L338) — success/underflow/OOG/MM-5 double fault; overflow unreachable since the height is unchanged. `take_swap_writes` bridges SpecRef's head-indexed `listSwap S 0 n` to the extraction's two `stack_set` writes at cursor slots 0 and n; index conventions already agree (`iSwapN (op - 0x8F)`)) |
 | LOG n | 0xa0–0xa4 | `iLogN` | `execute_log` | memory+logs | unstated |
 | DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | unstated |
 | SWAPN | 0xe7 | `iSwapn` | `execute_swapn` | stack (fork-gated, immediate) | unstated |
@@ -144,7 +144,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 46 |
-| unstated | 43 |
+| full | 47 |
+| unstated | 42 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
