@@ -135,9 +135,13 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 ## Gas vocabularies (MM-2)
 
 - SpecRef uses `GasCosts.OPCODE_*`; `Evm` uses classic `G_*` plus Amsterdam
-  `G_amsterdam_*`. ALU constants verified equal for the current tranche.
-- Storage / account schedules are **not** yet verified equal once both gas
-  dimensions are summed — investigate before claiming SLOAD/SSTORE equivalence.
+  `G_amsterdam_*`. ALU, storage (SLOAD/SSTORE, both dimensions) and
+  account-read schedules are machine-checked equal; the CALL/CREATE-family
+  account writes are the remaining open subset.
+- Where the extraction computes a whole **cost record** (`amsterdam_sstore_costs`)
+  and SpecRef inlines the same quantities, prove one record equality field by
+  field (`sstoreCst_eq`) and state everything downstream once — do not carry
+  four parallel constant lemmas through the step proof.
 
 ## Assumptions and trust
 
@@ -171,6 +175,19 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   local `have hofNat : ∀ n : Nat, Int.ofNat n = (n : Int) := fun _ => rfl`
   to the simp set first; see `word_bit_length_eq`
   (`Representation/BitwiseWord.lean`).
+- **A projection of a `def`-wrapped record literal is not closed by `rw`'s
+  trailing `rfl`.** Trigger: `have h : (myRec a b).field = X := by rw [hEq]`
+  where `hEq : myRec a b = { field := X, … }` — the rewrite fires and leaves
+  `({ field := X, … }).field = X`, which `rw` cannot finish because its
+  closing `rfl` runs at *reducible* transparency and the wrapper is a plain
+  `def`. Right move: `by rw [hEq]; rfl`. Same cause as the `unfold`-leaves-`have`
+  trap below.
+- **`unfold` on a def written with `let`s leaves `have`-bound bodies that
+  `omega` treats as one atom.** Trigger: `unfold sstoreGasOut; omega` on a
+  goal about `(sstoreGasOut …).2.2` — the counterexample dump names the whole
+  `have back := …; …` block as a single variable. Right move: `show` the
+  projected expression in full (defeq, no tactic needed) and *then* `omega`;
+  see `sstoreGasOut_spill_le` (`Opcodes/Sstore.lean`).
 - **`omega` won't reduce tuple projections in `StepResultRel` post-state goals.**
   Trigger: after `refine StepResultRel.success ?_`, `BasePost`/`StateRel` goals
   mention the step tuple's projections (`(pc_in, top', mem, g').2.1.toNat`),

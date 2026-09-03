@@ -370,7 +370,8 @@ unreachable / ambiguity / needs investigation).
   `.writeInStaticContext` with the extraction's `StackUnderflow`. It
   admits **only** `StackUnderflow` — every opcode in this class is
   `n`-in/0-out, so overflow is unreachable. Machine-checked by
-  `tstore_step_equiv`.
+  `tstore_step_equiv` and, for SSTORE, by `sstore_step_equiv`
+  (2026-09-03); SELFDESTRUCT is the remaining member of the class.
 
 ## MM-15: The blob base fee overflows a word inside the extraction's own permitted range
 
@@ -635,10 +636,26 @@ all and SpecRef produces a stack entry that is not a word.
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.
   `OPCODE_TSTORE = 100` matches by inspection, pending TSTORE's slice. This closes the own-account
-  case of the open account subset; SSTORE and the CALL/CREATE-family
-  account writes remain.
+  case of the open account subset; the CALL/CREATE-family account writes
+  remain.
+- **Verified 2026-09-03 (SSTORE — the whole two-dimensional schedule)**:
+  the extraction computes all four prices in one record and SpecRef inlines
+  them; `sstoreCst_eq` (Opcodes/Sstore.lean) proves the record equal field
+  by field at Amsterdam — `execution` = access (`3000`/`100`) plus
+  `G_amsterdam_storage_write = 10000 = STORAGE_WRITE` on a clean write,
+  `refund` = SpecRef's three conditional `refundCounter` updates composed
+  (`R_amsterdam_storage_clear = 12480 = REFUND_STORAGE_CLEAR`),
+  `state_charge` and `state_credit` = `StateGasCosts.STORAGE_SET`
+  (`64 · 1530 = 97920`) under the same three-way conditions. The EIP-2200
+  sentry agrees too: `G_sstore_sentry = 2301 = CALL_STIPEND + 1` dominates
+  the warm access cost, so `sstore_sentry_cost` is SpecRef's
+  `max access_cost (CALL_STIPEND + 1)` (`sstore_sentry_cost_eq`).
+  Machine-checked end to end by `sstore_step_equiv`, whose gas triple is
+  the shared closed form `sstoreGasOut`. **The storage half of the open
+  subset is closed; only the CALL/CREATE-family account writes remain.**
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
-- **Disposition**: *needs investigation* (SSTORE/account subset only).
+- **Disposition**: *needs investigation* (CALL/CREATE account-write subset
+  only; ALU, storage and account-read schedules are machine-checked).
 
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 
