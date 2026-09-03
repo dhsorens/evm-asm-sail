@@ -106,6 +106,23 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   handler in one `simp`.
 - Heartbeats: large step theorems may need `set_option maxHeartbeats …`
   (see `Opcodes/Add.lean`). Raise deliberately; do not hide nontermination.
+- **`SailME.run do …` handlers** (`k_sload`, `execute_sstore`) are an
+  `ExceptT (Sail.Error ⊕ α)` early return: a `Sum.inr` is a deliberate
+  *value*, a `Sum.inl` a real error. Handing that to `simp` loops on the
+  `liftM`/`ExceptT`/`bindCont` unfolding (maxRecDepth). Use
+  `Representation/EvmSailME.lean` (`runE_bind_ok` / `runE_bind_throw` /
+  `runE_lift` / `runS_sailME_ok`/`_throw`); an arm that throws is reached
+  as `runE_bind_ok … (runE_bind_throw (runE_throw …))`, because the
+  statement-position `match` is bound and its continuation dropped.
+- When a fused run-shape lemma's own proof needs its hypothesis, `refine
+  runS_bind_ok h ?_` beats `rw [runS_bind, h]`: after a `show`, the goal's
+  `runE`-style **abbrev is already unfolded**, so `rw` cannot find the
+  pattern, while `refine`/`exact` unify up to `whnf` (this also
+  zeta-reduces the do-elaborator's `have key := …` / `__do_jp` prelude).
+- SpecRef's `TxM` is `StateT _ (Except _)`: after the `StateT.run_*` lemmas
+  the base bind reads `Except.ok a >>= f`, which `pure_bind` does **not**
+  match. Add a one-line `rfl` bridge (`except_ok_bind`,
+  `Relations/Storage.lean`) rather than fighting simp.
 
 ## Dispatch and scope (MM-3)
 
