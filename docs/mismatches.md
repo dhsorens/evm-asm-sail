@@ -239,6 +239,49 @@ unreachable / ambiguity / needs investigation).
   `"EXCHANGE immediate in forbidden range"` but whose constructor and
   ordering are identical. All three deep-stack opcodes are now covered.
 
+## MM-11: LOG checks the static-context guard on the far side of the charge
+
+- **Area**: `LOG0` … `LOG4` (`0xa0`–`0xa4`).
+- **SpecRef**: `iLogN` (InstructionsCore.lean:404) pops offset, size and
+  the `n` topics, charges
+  `LOG_BASE + LOG_DATA_PER_BYTE * size + LOG_TOPIC * n + extend.cost`,
+  extends memory, and **only then** tests `message.isStatic` and throws
+  `.writeInStaticContext`.
+- **`Evm`**: `execute_log` (Execute.lean:1693) calls `guard_static`
+  **first** — before the pops, before any charge, before expansion — and
+  halts `WriteProtection`.
+- **Trigger**: a `LOG` in a static frame (inside `STATICCALL`) whose gas
+  cannot cover the log charge. SpecRef reports `outOfGas`; the extraction
+  reports `WriteProtection`. With sufficient gas the two agree on the
+  kind (`.writeInStaticContext` ↔ `WriteProtection`), and both are
+  exceptional halts consuming all frame gas, so the divergence is a step
+  diagnostic rather than a chain observation — the same class as MM-5 and
+  MM-10.
+- **The interesting part is that LOG is the *only* outlier.** Every other
+  write-guarded opcode checks static *first on both sides*: `iSstore`
+  (InstructionsCore.lean:456), `iTstore` (:504) and `iSelfdestruct`
+  (Interpreter.lean:283) all lead with
+  `if (← EvmM.getEvm).message.isStatic then throw .writeInStaticContext`,
+  matching `execute_sstore` / `execute_tstore` / `execute_selfdestruct`,
+  which all lead with `guard_static`. So this is not a systematic
+  layering decision — it is one handler out of four.
+- **Expected EVM behavior**: SpecRef matches upstream. EELS'
+  `instructions/log.py` charges, extends memory, and *then* raises
+  `WriteInStaticContext`, so the ordering SpecRef mirrors is the
+  execution-specs ordering; the extraction hoists the guard for
+  uniformity with its other write opcodes.
+- **Fork**: all (static calls since Byzantium). **Reachability**:
+  trivially reachable. **Severity**: none at the chain observation
+  boundary; a step-level diagnostic divergence.
+- **Likely cause**: intentional uniformity in the Sail model (`guard_static`
+  is the first statement of every write handler), against SpecRef's
+  statement-order fidelity to the Python.
+- **Disposition**: *intentional abstraction*, to be encoded the way MM-5 and
+  MM-10 were when the LOG slice lands: a new `ErrorRel` constructor pairing
+  `.writeInStaticContext` with `WriteProtection`, plus `WriteProtection` as a
+  fourth explicitly listed kind of `StepResultRel.haltedChargeFirst`. Not yet
+  machine-checked — see the LOG residual in `PROGRESS.md`.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.
@@ -332,6 +375,16 @@ unreachable / ambiguity / needs investigation).
   both handlers), machine-checked by `dupn_step_equiv` /
   `swapn_step_equiv`; and `OPCODE_EXCHANGE = 3 = G_verylow`, machine-checked
   by `exchange_step_equiv`.
+- **Verified 2026-09-02 (LOG family, by inspection)**: `OPCODE_LOG_BASE =
+  375 = G_log`, `OPCODE_LOG_TOPIC = 375 = G_logtopic` and
+  `OPCODE_LOG_DATA_PER_BYTE = 8 = G_logdata`. The extraction's data
+  component goes through `charge_word_scaled_gas g G_logdata size`, whose
+  name suggests per-*word* pricing; it is not — `units` is passed as the
+  byte count, so the charge is `8 * size` on both sides. Its two guards
+  (`units ≤b g`, then `exact_cost ≤b g`) exist only to avoid materializing
+  an overflowing cost, and both fall through to `exc_halt OutOfGas`, which
+  is sound because `8 * size ≥ size`. Not yet machine-checked (LOG is
+  `unstated`), so this is inspection, not proof.
 - **Verified 2026-09-02 (TLOAD)**: `OPCODE_TLOAD = 100 = G_warm_access =
   WARM_ACCESS`, with **no** warm/cold component on either side (EIP-1153
   prices transient access flat). Machine-checked by `tload_step_equiv`.

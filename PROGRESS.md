@@ -323,6 +323,33 @@ Residual for the remaining `unstated` rows:
   constructor pairing SpecRef `.writeInStaticContext` with the
   extraction's `WriteProtection` (`guard_static`, Execute.lean:108); both
   sides check static **before** popping or charging, so the kinds align.
+- **LOG0–LOG4** are the last *unblocked* family, and the largest single
+  slice left. What is already in place: RETURN's
+  `runS_active_memory_slice_zero`/`_le` cover the payload slice,
+  `memoryRel_read` (new with MCOPY) bridges the host's `memoryBytesOf`
+  read to SpecRef's `memory_read_bytes`, and the memory expansion is
+  RETURN's verbatim. What is missing is two things:
+  - a `LogRel` in a new `Relations/Log.lean`. The host log store is
+    tractable — `logs : Array LogRecordRow` with `topics : List word`
+    inline and the payload in a shared `logBytes` arena addressed by
+    `(dataOffset, dataLength)` (HostAxioms.lean:1080, :2467) — but the
+    relation needs a base index, because SpecRef's `evm.logs` is
+    per-frame while the host array is transaction-lifetime.
+  - the arity fan-out. `pop_log_topics` matches on `n` and SpecRef's
+    `(List.range n).mapM` unrolls per `n`, so each of the five arities has
+    its own outcome set: `n + 2` underflow heights, **four** extraction
+    charge stages (`G_log`, `G_logtopic * n`, `charge_word_scaled_gas
+    G_logdata size`, expansion) against SpecRef's single `charge_gas`, the
+    static halt, and three success cases. That is ~55 cases in total,
+    which is a *shape file* (`Shapes/Log.lean`) plus a slice, not one
+    slice — the log family is the last five-instance family without a
+    shape.
+  New MM-11 records what the comparison already found here: SpecRef
+  checks `isStatic` **after** charging while the extraction checks it
+  first, making LOG the only outlier among the four write-guarded
+  opcodes. Landing the slice will need a new `ErrorRel` constructor for
+  `.writeInStaticContext` ↔ `WriteProtection` and `WriteProtection` as a
+  fourth explicitly listed `haltedChargeFirst` kind.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the
