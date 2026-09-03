@@ -329,12 +329,13 @@ Residual for the remaining `unstated` rows:
   `memoryRel_read` (new with MCOPY) bridges the host's `memoryBytesOf`
   read to SpecRef's `memory_read_bytes`, and the memory expansion is
   RETURN's verbatim. What is missing is two things:
-  - a `LogRel` in a new `Relations/Log.lean`. The host log store is
-    tractable — `logs : Array LogRecordRow` with `topics : List word`
-    inline and the payload in a shared `logBytes` arena addressed by
-    `(dataOffset, dataLength)` (HostAxioms.lean:1080, :2467) — but the
-    relation needs a base index, because SpecRef's `evm.logs` is
-    per-frame while the host array is transaction-lifetime.
+  - ~~a `LogRel`~~ — **landed**: `Relations/Log.lean` has `LogRel` (suffix
+    from a frame `base`, since SpecRef's `evm.logs` is per-frame while the
+    host array is transaction-lifetime), `runS_k_log_memory` (the
+    three-call emission `log_begin` / topics / payload collapses to one
+    `logAppend`) and `logRel_append` (the relation survives it — the
+    `bounded` field is what carries earlier rows across the arena
+    append).
   - the arity fan-out. `pop_log_topics` matches on `n` and SpecRef's
     `(List.range n).mapM` unrolls per `n`, so each of the five arities has
     its own outcome set: `n + 2` underflow heights, **four** extraction

@@ -125,8 +125,7 @@ theorem readArrayBytes_length (a : Array byte) (base l : Nat) :
 
 theorem readArrayBytes_getD (a : Array byte) (base l i : Nat) (hi : i < l) :
     (readArrayBytes a base l).getD i 0 = a.getD (base + i) 0 := by
-  simp only [readArrayBytes, List.getD, List.getElem?_map,
-    List.getElem?_range' ]
+  simp only [readArrayBytes, List.getD, List.getElem?_map]
   rw [List.getElem?_eq_getElem (by simpa using hi)]
   simp
 
