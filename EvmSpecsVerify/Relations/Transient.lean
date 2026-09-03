@@ -245,7 +245,7 @@ private theorem transientReadOf_write_ne (ts : TransactionState)
     dsimp only
     rw [find?_dictSet_ne _ _ _ _ h]
 
-/-! ## The write preserves the relation -//-! ## The write preserves the relation -/
+/-! ## The write preserves the relation -/
 
 /-- **`TransientRel` is stable under one TSTORE.** The two writers differ
 on the zero case (SpecRef deletes, the extraction stores — MM-13), which
