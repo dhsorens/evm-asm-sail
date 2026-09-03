@@ -225,6 +225,12 @@ unreachable / ambiguity / needs investigation).
   Machine-checked by `jumpdest_step_equiv`, `jump_step_equiv`,
   `pc_step_equiv`, `gas_step_equiv` and `msize_step_equiv`; and
   `OPCODE_SWAP = 3 = G_verylow` by `swap_step_equiv`.
+- **Verified 2026-09-02 (SELFBALANCE)**: SpecRef charges the tier constant
+  `FAST_STEP = 5` (there is no `OPCODE_SELFBALANCE`) against the
+  extraction's `G_low = 5`, with **no** warm/cold component on either side.
+  Machine-checked by `selfbalance_step_equiv`. This closes the own-account
+  case of the open account subset; SSTORE and the CALL/CREATE-family
+  account writes remain.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 

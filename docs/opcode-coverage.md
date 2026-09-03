@@ -92,7 +92,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | PREVRANDAO | 0x44 | `iPrevrandao` | `execute_prevrandao` | env | **full** ([`prevrandao_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L194) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; randao word ↔ 32-byte decode tie, wf hypothesized) |
 | GASLIMIT | 0x45 | `iGaslimit` | `execute_gaslimit` | env | **full** ([`gaslimit_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L217) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header gas-limit tie, wf hypothesized) |
 | CHAINID | 0x46 | `iChainid` | `execute_chainid` | env | **full** ([`chainid_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L238) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; `k_chain_id` register tie, u64 wf hypothesized) |
-| SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | unstated |
+| SELFBALANCE | 0x47 | `iSelfbalance` | `execute_selfbalance` | env+world | **full** ([`selfbalance_step_equiv`](../EvmSpecsVerify/Opcodes/Selfbalance.lean#L248) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. No warm/cold split: the own account is a flat `5` on both sides, so `SelfBalanceAgree` needs no warm-stamp quantification unlike `BalanceAgree` — see `Assumptions.lean`) |
 | BASEFEE | 0x48 | `iBasefee` | `execute_basefee` | env (fork-gated) | **full** ([`basefee_step_equiv`](../EvmSpecsVerify/Opcodes/BlockEnv.lean#L258) — success/overflow/OOG/MM-5 double fault via `envPush_step_equiv`; header base-fee tie, wf hypothesized) |
 | BLOBHASH | 0x49 | `iBlobhash` | `execute_blobhash` | env (fork-gated) | unstated |
 | BLOBBASEFEE | 0x4a | `iBlobbasefee` | `execute_blobbasefee` | env (fork-gated) | unstated |
@@ -144,7 +144,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 47 |
-| unstated | 42 |
+| full | 48 |
+| unstated | 41 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
