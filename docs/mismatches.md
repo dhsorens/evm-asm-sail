@@ -79,7 +79,7 @@ unreachable / ambiguity / needs investigation).
 
 ## MM-6: u32 memory space — `memory_access` fatal-errors where SpecRef extends
 
-- **Area**: memory-family opcodes (MLOAD/MSTORE/MSTORE8/RETURN/REVERT/copies).
+- **Area**: memory-family opcodes (MLOAD/MSTORE/MSTORE8/RETURN/REVERT/MSIZE/copies).
 - **SpecRef**: memory is an unbounded `Bytes`; any offset is reachable if the
   quadratic expansion charge is affordable.
 - **`Evm`**: memory offsets/lengths live in a u32 space; after the expansion
@@ -147,6 +147,39 @@ unreachable / ambiguity / needs investigation).
   and ledgered in `Assumptions.lean`; `runS_push_gas` is where the
   reduction is discharged. Eliminable by bounding frame gas globally, the
   same frame-entry invariant MM-6's `MemGasSafe` wants.
+
+## MM-9: Where the frame's state-gas refill happens on the revert path
+
+- **Area**: REVERT (and, later, every propagated revert in the CALL family).
+- **SpecRef**: `iRevert` charges the expansion, sets `output`, and
+  `throw .revert`. The refill runs at **frame teardown** —
+  `process_message`'s `tryCatch` calls `refill_frame_state_gas`
+  (Interpreter.lean:490) on *every* error, revert included, restoring
+  `stateGasLeft` from `message.stateGasReservoir`, zeroing
+  `stateGasSpilled`, and adding the spill back to `gasLeft`.
+- **`Evm`**: `execute_revert` calls `refill_frame_state_gas` **inside the
+  handler** (Execute.lean:1798), before freezing the output. Its returned
+  live gas is therefore already `g1 + spilled` and its two state-gas
+  registers already show the refilled values.
+- **Not an asymmetry bug**: `execute_return` performs no refill, and
+  SpecRef's RETURN path raises no error, so RETURN needs none. The
+  extraction's return/revert asymmetry mirrors SpecRef's control-flow
+  asymmetry exactly.
+- **Trigger**: any REVERT from a frame with a non-zero state-gas spill.
+- **Expected EVM behavior**: a reverted frame's state changes are rolled
+  back, so the state gas borrowed against execution gas must be returned.
+  Both models do that; only the layer differs.
+- **Fork**: Amsterdam (state gas). **Reachability**: trivially reachable.
+  **Severity**: none at the frame boundary; visible only to a step-level
+  comparison.
+- **Likely cause**: intentional — the extraction has no separate teardown
+  layer to hang the refill on, so it is hoisted into the handler (the same
+  hoisting as MM-1/MM-5).
+- **Disposition**: *intentional abstraction* — `refilled` (Opcodes/Revert.lean)
+  names SpecRef's own teardown transformation and `runR_refill` proves it
+  **is** SpecRef's `refill_frame_state_gas`, so `RevertPost` compares the
+  extraction's registers against a genuine SpecRef state rather than an
+  invented one. Machine-checked by `revert_step_equiv`.
 
 ## MM-4: Step-boundary pc convention
 

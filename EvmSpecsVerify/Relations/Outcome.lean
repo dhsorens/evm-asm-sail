@@ -83,4 +83,40 @@ inductive StepResultRel
       StepResultRel Post (.ok (.error .outOfGas, sR'))
         (.ok ((pc', top', mem', 0), hs') ss')
 
+/-! ## Reverts
+
+A revert is neither of `StepResultRel`'s outcomes. SpecRef throws
+`.revert`, whose `EvmError.isHalt` is **false**: the frame teardown keeps
+the remaining gas and the `output` bytes instead of discarding them, so
+the `halted` constructor's "all gas consumed" clause is simply wrong for
+it. The extraction likewise writes `Halted (HaltRevert …)` — a *normal*
+halt kind carrying an output slice — rather than `Exceptional …`.
+
+`RevertResultRel` is therefore an additive wrapper rather than a new
+constructor on `StepResultRel`, which would have re-typed every existing
+step theorem. Its `exceptional` case reuses `StepResultRel` at
+[`NoSuccess`](#NoSuccess), which additionally records that the ordinary
+success branch is unreachable for a revert-only handler.
+-/
+
+/-- The `Post` of a handler with no ordinary success outcome: REVERT's
+only non-failure result is the revert itself, so instantiating
+`StepResultRel` here makes the `success` constructor uninhabited. -/
+def NoSuccess : Machine → EvmStep → Evm.HostState → SeqState → Prop :=
+  fun _ _ _ _ => False
+
+/-- One-step outcome correspondence for handlers that can revert
+(REVERT now; the CALL family's propagated reverts later). -/
+inductive RevertResultRel
+    (Post : Machine → EvmStep → Evm.HostState → SeqState → Prop) :
+    SpecStepResult → EvmStepResult → Prop
+  /-- Exceptional halts and (vacuously) ordinary success, via
+  `StepResultRel`. -/
+  | exceptional {r : SpecStepResult} {s : EvmStepResult}
+      (h : StepResultRel NoSuccess r s) : RevertResultRel Post r s
+  /-- The revert itself: gas and output survive on both sides. -/
+  | reverted {sR' : Machine} {step : EvmStep} {hs' : Evm.HostState}
+      {ss' : SeqState} (hpost : Post sR' step hs' ss') :
+      RevertResultRel Post (.ok (.error .revert, sR')) (.ok (step, hs') ss')
+
 end EvmSpecsVerify
