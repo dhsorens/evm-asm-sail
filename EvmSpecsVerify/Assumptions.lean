@@ -60,6 +60,15 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
+* `TloadAgree` (Opcodes/Tload.lean) — the transient sibling of
+  `SloadAgree`: SpecRef's `getTransientStorage` on the executing account
+  and the extraction's `k_tload (self_addr ())` return the same word, and
+  the extraction's read leaves the operand stack alone. Simpler than
+  `SloadAgree` because EIP-1153 prices transient access flat — no
+  warm/cold split, so nothing is quantified over ambient stamps.
+  Eliminable by the world tranche's transient-store relation (the same one
+  TSTORE needs).
+
 ## Account/code read agreement + address warmth
 
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for

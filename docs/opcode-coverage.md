@@ -115,8 +115,8 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | MSIZE | 0x59 | `iMsize` | `execute_msize` | env (live-state pusher) + memory | **full** ([`msize_step_equiv`](../EvmSpecsVerify/Opcodes/Msize.lean#L247) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. SpecRef's raw `memory.length` and the extraction's `32 * memory_word_count (memory_high_water mem)` agree *exactly by* `MemoryRel.aligned` — this is where SpecRef's 32-alignment invariant earns its keep; `MemPost` + MM-6 `MemGasSafe`) |
 | GAS | 0x5a | `iGas` | `execute_gas` | env (live-state pusher) | **full** ([`gas_step_equiv`](../EvmSpecsVerify/Opcodes/Gas.lean#L114) — success/overflow/OOG/MM-5 double fault; underflow unreachable for 0-in. Both sides push the *post-charge* gas (`gasLeft - 2`); domain restricted by `hwfg` for the new MM-8 `push_gas` modular reduction — see `Assumptions.lean`) |
 | JUMPDEST | 0x5b | `iJumpdest` | `execute_jumpdest` | control | **full** ([`jumpdest_step_equiv`](../EvmSpecsVerify/Opcodes/Jumpdest.lean#L127) — success/OOG; stack faults unreachable for 0-in/0-out) |
-| TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | unstated |
-| TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated |
+| TLOAD | 0x5c | `iTload` | `execute_tload` | storage (transient) | **full** ([`tload_step_equiv`](../EvmSpecsVerify/Opcodes/Tload.lean#L246) — success/underflow/OOG; overflow unreachable for 1-in/1-out. EIP-1153 prices transient access flat on both sides, so `TloadAgree` needs no warm-stamp quantification unlike `SloadAgree`; the read value is behind that ledgered hypothesis — see `Assumptions.lean`) |
+| TSTORE | 0x5d | `iTstore` | `execute_tstore` | storage (transient) | unstated (needs a transient-store relation in the post: `BasePost` observes only stack/gas/pc, so a `StepResultRel BasePost` theorem would say nothing about the write — the same prerequisite SSTORE has. Its `writeInStaticContext` ↔ `WriteProtection` path also needs a new `ErrorRel` constructor) |
 | MCOPY | 0x5e | `iMcopy` | `execute_mcopy` | memory | unstated |
 | PUSH (n, w) | 0x5f–0x7f | `iPushN` | `execute_push` | stack (immediate via fetch) | **full** ([`push_step_equiv`](../EvmSpecsVerify/Opcodes/Push.lean#L253) — success/overflow/OOG, underflow unreachable; decode-fidelity hypothesis for the fetched immediate (MM-3 scope); MM-5 on double faults) |
 | DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | **full** ([`dup_step_equiv`](../EvmSpecsVerify/Opcodes/Dup.lean#L240) — success/underflow/overflow/OOG; MM-5 on double faults) |
@@ -145,7 +145,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 
 | status | count |
 |---|---|
-| full | 50 |
-| unstated | 39 |
+| full | 51 |
+| unstated | 38 |
 | n/a (opaque keccak) | 1 |
 | **total ast constructors** | **90** |
