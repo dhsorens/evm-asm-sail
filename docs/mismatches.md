@@ -187,6 +187,10 @@ unreachable / ambiguity / needs investigation).
   charge is followed by `3 * memory_word_count size` and the identical memory
   expansion cost. `extcodecopy_step_equiv` proves the three-stage extraction
   charge equivalent to SpecRef's single total charge for warm and cold targets.
+- **Verified 2026-09-02 (control family)**: `OPCODE_JUMPDEST = 1 = G_jumpdest`
+  and `OPCODE_JUMP = 8 = G_mid` (`OPCODE_JUMPI = 10 = G_high` was already
+  covered by `jumpi_step_equiv`). Machine-checked by `jumpdest_step_equiv`
+  and `jump_step_equiv`.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
 - **Disposition**: *needs investigation* (SSTORE/account subset only).
 
