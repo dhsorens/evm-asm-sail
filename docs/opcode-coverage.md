@@ -1,9 +1,11 @@
 # Opcode coverage matrix
 
 One row per constructor of the `Evm` extraction's instruction AST
-(`Evm.Defs.ast`, Defs.lean:2672 — 90 constructors), cross-referenced with SpecRef's
-handlers. Machine-checked counts live in `EvmSpecsVerify/Coverage/Registry.lean` and must
-match this table.
+(`Evm.Defs.ast`, Defs.lean:2672 — 88 constructors), cross-referenced with SpecRef's
+handlers. The Counts section below is checked against these rows by
+`scripts/refresh-proof-coverage-canvas.py`, which refuses to regenerate the site if
+they disagree; the planned `EvmSpecsVerify/Coverage/Registry.lean` will make the
+same counts machine-checked against the AST itself.
 
 Statuses: `unstated` · `stated` (theorem exists, may cite pending lemmas) ·
 `success-proven` (success path only — not acceptable as final) ·
@@ -122,7 +124,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | DUP n | 0x80–0x8f | `iDupN` | `execute_dup` | stack | **full** ([`dup_step_equiv`](../EvmSpecsVerify/Opcodes/Dup.lean#L240) — success/underflow/overflow/OOG; MM-5 on double faults) |
 | SWAP n | 0x90–0x9f | `iSwapN` | `execute_swap` | stack | **full** ([`swap_step_equiv`](../EvmSpecsVerify/Opcodes/Swap.lean#L338) — success/underflow/OOG/MM-5 double fault; overflow unreachable since the height is unchanged. `take_swap_writes` bridges SpecRef's head-indexed `listSwap S 0 n` to the extraction's two `stack_set` writes at cursor slots 0 and n; index conventions already agree (`iSwapN (op - 0x8F)`)) |
 | LOG n | 0xa0–0xa4 | `iLogN` | `execute_log` | memory+logs | unstated |
-| DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | unstated |
+| DUPN | 0xe6 | `iDupn` | `execute_dupn` | stack (fork-gated, immediate) | **full** ([`dupn_step_equiv`](../EvmSpecsVerify/Opcodes/Dupn.lean#L487) — success, invalid immediate, underflow, overflow, OOG, plus the MM-5 and MM-10 double faults. First opcode with an immediate-validity outcome: `decode_single_agree` proves SpecRef's `(x + 145) % 256` and the extraction's two-branch `x + 145` / `x - 111` are the same decoder, MM-10 records the `.invalidParameter`/`InvalidOpcode` kind split and the decode/charge order, and the ledgered `himm` ties the immediate byte across the MM-3 dispatch boundary) |
 | SWAPN | 0xe7 | `iSwapn` | `execute_swapn` | stack (fork-gated, immediate) | unstated |
 | EXCHANGE | 0xe8 | `iExchange` | `execute_exchange` | stack (fork-gated, immediate) | unstated |
 
@@ -141,11 +143,11 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | INVALID | 0xfe | (dispatch throws `.invalidOpcode`) | `execute_invalid` | system | unstated |
 | SELFDESTRUCT | 0xff | `iSelfdestruct` | `execute_selfdestruct` | system+world | unstated |
 
-## Counts (must match `EvmSpecsVerify/Coverage/Registry.lean`)
+## Counts (checked against the rows above by the refresh script)
 
 | status | count |
 |---|---|
-| full | 51 |
-| unstated | 38 |
+| full | 72 |
+| unstated | 15 |
 | n/a (opaque keccak) | 1 |
-| **total ast constructors** | **90** |
+| **total ast constructors** | **88** |

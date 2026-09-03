@@ -38,6 +38,11 @@ inductive ErrorRel : EvmError → ExceptionKind → Prop
   | outOfGas : ErrorRel .outOfGas .OutOfGas
   | invalidJumpDest : ErrorRel .invalidJumpDest .InvalidJump
   | outOfBoundsRead : ErrorRel .outOfBoundsRead .InvalidOpcode
+  /-- Mismatch ledger MM-10: SpecRef reports an invalid deep-stack
+  immediate as `.invalidParameter` (a diagnostic string), the extraction
+  as `InvalidOpcode`. Both are exceptional halts consuming the frame. -/
+  | invalidParameter (why : String) :
+      ErrorRel (.invalidParameter why) .InvalidOpcode
 
 /-- The value returned by the extraction's `execute`: the state-passing
 tuple (next pc, stack cursor, memory slice, remaining gas). -/
@@ -77,7 +82,8 @@ inductive StepResultRel
   | haltedChargeFirst {k : ExceptionKind} {sR' : Machine}
       {pc' : Nat} {top' : StackTop} {mem' : EvmMemorySlice}
       {hs' : Evm.HostState} {ss' : SeqState}
-      (hk : k = ExceptionKind.StackUnderflow ∨ k = ExceptionKind.StackOverflow)
+      (hk : k = ExceptionKind.StackUnderflow ∨ k = ExceptionKind.StackOverflow
+        ∨ k = ExceptionKind.InvalidOpcode)
       (hstatus : ss'.regs.get? Evm.Defs.Register.frame_status =
         some (FrameStatus.Exceptional k)) :
       StepResultRel Post (.ok (.error .outOfGas, sR'))

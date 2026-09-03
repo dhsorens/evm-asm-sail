@@ -266,7 +266,7 @@ theorem push_step_equiv (n v : Nat) (hn32 : n ≤ 32)
     by_cases hov : sRef.evm.stack.length = 1024
     · rw [runS_execute_push_overflow n v pc_in top g mem hs ss prof
         sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)]
-      exact StepResultRel.haltedChargeFirst (Or.inr rfl)
+      exact StepResultRel.haltedChargeFirst (Or.inr (Or.inl rfl))
         (haltRegs_frame_status ss msg .StackOverflow)
     · rw [runS_execute_push_oog n v pc_in top g mem hs ss prof
         sRef.evm.stateGasSpilled msg hprof hsp hmsg hfork (by omega)
