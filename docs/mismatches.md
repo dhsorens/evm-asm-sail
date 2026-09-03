@@ -372,6 +372,79 @@ unreachable / ambiguity / needs investigation).
   `n`-in/0-out, so overflow is unreachable. Machine-checked by
   `tstore_step_equiv`.
 
+## MM-15: The blob base fee overflows a word inside the extraction's own permitted range
+
+This is the sharpest divergence in the ledger so far: there is a band of
+**reachable** header states in which the extraction refuses to execute at
+all and SpecRef produces a stack entry that is not a word.
+
+- **Area**: `BLOBBASEFEE` (`0x4a`), and the blob-fee computation generally
+  (`calculate_blob_gas_price` / `blob_base_fee`).
+- **The two computations agree.** SpecRef's `taylor_exponential`
+  (`taylorAux`, Gas.lean:114) and the extraction's
+  `fake_exponential_word` (`whileFuelM`, Gas.lean:107) are the same
+  recurrence — `output += acc; acc := acc * numerator / (denominator * i)`
+  from `acc = factor * denominator`, `BLOB_MIN_GASPRICE = 1`, terminating
+  at `acc = 0`, dividing by `denominator` at the end. Amsterdam selects
+  the bpo2 schedule on both sides: `denominator = 11684671`
+  (`bpo2_blob_fee_update_fraction` = `BLOB_BASE_FEE_UPDATE_FRACTION`).
+- **The guards do not.** `fake_exponential_word` carries
+  `scaled_limit = denominator * 2^256` and `fatal_error NumericOverflow`s
+  as soon as either the accumulator or the running sum reaches it.
+  SpecRef has no such guard: it returns the sum divided by the
+  denominator as a plain `Nat` (`U256 := Nat`, Types.lean:27), and
+  `iBlobbasefee` hands it to `stackPush` (Vm.lean:263), **which does not
+  reduce modulo 2^256** — unlike every other handler, which wraps
+  explicitly.
+- **The band.** The pre-division sum is `denominator · e^(excess/denominator)`,
+  so the extraction's guard trips at `excess/denominator ≈ 256 · ln 2 ≈
+  177.45`, not at 256. Concretely (bpo2 constants):
+
+  | quantity | value |
+  |---|---|
+  | first overflowing `excess_blob_gas` | **2 073 394 371** (= 177.4457 · den) |
+  | `profile.excess_blob_gas_limit` | **2 992 193 280** (= 256 · den + 7 · 2^17) |
+  | width of the divergent band | 918 798 909 |
+  | SpecRef price at the threshold | 257 bits (≥ 2^256) |
+  | SpecRef price at the limit | 370 bits |
+
+  `scripts/blob-fee-band.py` reproduces every number above.
+
+  Inside that band `blob_base_fee`'s own precondition
+  (`fork ≥ Cancun && excess_blob_gas ≤ limit`, Gas.lean:268) is
+  **satisfied**, so the fatal error is not the configuration guard firing
+  — it is the recurrence overflowing a bound the profile claims is safe.
+- **Likely cause**: `blob_fee_word_exponent_limit = 256` (Defs.lean:132)
+  is used as if `e^x ≤ 2^256 ⟺ x ≤ 256`. The correct exponent bound for a
+  `scaled_limit` of `denominator · 2^256` is `256 · ln 2 ≈ 177.45`, so the
+  profile's ceiling is too generous by a factor of `ln 2`. Either the
+  constant wants to be ~177, or the guard wants to be on the *price*
+  (`sum / denominator < 2^256`) rather than on the pre-division sum.
+- **Fork**: Cancun onward (every fork with blobs); the numbers above are
+  Amsterdam/bpo2. **Reachability**: reachable in principle. Excess blob
+  gas grows by at most `(maximum − target) · GAS_PER_BLOB = 7 · 2^17 =
+  917 504` per block, so the threshold is ~2 260 consecutive
+  maximum-blob blocks (~7.5 hours) from zero. Economically absurd — the
+  blob price there is ~2^256 wei — but nothing in either specification
+  prevents the header state.
+- **Severity**: **the highest so far.** This is not a diagnostic-kind
+  divergence like MM-5/MM-10/MM-11/MM-14: inside the band the extraction
+  `fatal_error`s (the model cannot validate the block at all) while
+  SpecRef continues with a stack entry ≥ 2^256, breaking the word
+  invariant that `StackRel.wf` and every other handler maintain. The two
+  specifications disagree about whether the block is even executable.
+- **Worth confirming upstream**: execution-specs pushes
+  `U256(blob_base_fee)`, and its typed integers raise on out-of-range
+  construction, which would make *neither* side's behaviour the Python's —
+  SpecRef would be the one that diverges. `Nat`-typed `U256`/`Uint`
+  aliases mean SpecRef cannot express that check, so this is a modelling
+  gap rather than a coding slip.
+- **Disposition**: *needs investigation* (the only entry in that class).
+  Until it is resolved, a `blobbasefee_step_equiv` can only be stated on
+  the agreement regime — `excess_blob_gas < 2 073 394 371`, equivalently
+  the price fitting a word — carried as an explicit ledgered bound. The
+  coverage row stays `unstated` until that slice lands; see `PROGRESS.md`.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.
