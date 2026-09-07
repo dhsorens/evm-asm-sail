@@ -627,32 +627,37 @@ Residual for the remaining `unstated` rows:
   lemmas (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
   `accountRel_write`), `transfer_equiv` for the balance transfer and the
   EIP-7708 log, and `Relations/Selfdestruct.lean` for the schedule, the
-  predicate and the lifecycle flags, plus SpecRef's three pre-read
-  outcomes. What is left, in order:
-  1. SpecRef's remaining three outcomes — the shared prefix through the
-     liveness and balance reads and both charges, then success /
-     charge-OOG / state-gas-OOG. The prefix's shape is known (the
-     handler reads `getEvm` *after* the warm mark, so `originator` comes
-     off `sdWarmedEvm`, whose `message` is unchanged) and all three of
-     its guards fit `runR_guard_step`.
-  2. The extraction's side, a `SailME` early-return chain with two
+  predicate and the lifecycle flags. **SpecRef's side is now complete**
+  (`runR_iSelfdestruct_static`, `_underflow`, `_sentry_oog`,
+  `_charge_oog`, `_state_oog`, `_success`), factored through
+  `runR_iSelfdestruct_prefix` — the static test, the pop, the warm test,
+  the sentry, the cold marking and both reads, shared by every
+  non-static, non-underflowing, sentry-affordable outcome — and the tail
+  `sdChargeTail`. All three of its guards (the cold marking, the EIP-7708
+  log, the EIP-6780 mark) went through `runR_guard_step`. What is left,
+  in order:
+  1. The extraction's side, a `SailME` early-return chain with two
      `SailME.throw`s; every primitive already has a run shape
      (`runS_guard_static_ok`/`_halt`, `runS_pop`,
      `runS_check_execution_gas_*`, `runS_charge_*`,
      `runS_k_account_is_warm`/`_mark_warm`, `runS_k_get_balance_hit`,
      `runS_k_was_created_hit`, `runS_k_selfdestruct_hit`,
      `runS_k_transfer`/`_noop`).
-  3. The composition. The success case splits four ways on the transfer
+  2. The composition. The success case splits four ways on the transfer
      (nonzero-and-distinct, self, zero, zero-with-collapse — one
      `transfer_equiv*` each) and two ways on the EIP-6780 mark; the halt
      is the STOP/RETURN normal-halt pairing (`running := false` ↔
      `Halted HaltSelfDestruct`), not a new `StepResultRel` case.
-  One re-association is needed for (3): SpecRef's handler inlines the
-  transfer's two statements with the *rest of the handler* duplicated
-  into the log guard's branches, so `runR (specTransfer …) s` has to be
-  stepped over rather than rewritten — either a
-  `runR_specTransfer_inline` lemma or by splitting each
-  `transfer_equiv*`'s bundled existential into its run and post halves.
+  The re-association that step (1) was expected to need did not arise:
+  rather than stepping over `specTransfer` as a unit, `sdChargeTail`
+  steps `moveEther` with a plain bind and the log with
+  `runR_sd_log_guard`, so the composition can consume each
+  `transfer_equiv*`'s run and post halves separately without a
+  `runR_specTransfer_inline` lemma. Step (2)'s remaining question is the
+  *order* of the two tracker reads (the extraction reads the
+  originator's balance before the beneficiary's emptiness, SpecRef the
+  other way round) — both record into a read set, so they commute, and
+  the audit is in `Opcodes/Selfdestruct.lean`'s docstring.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the
