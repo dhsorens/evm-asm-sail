@@ -54,6 +54,28 @@ def chargeStateEvm (e : Evm) (amount : Uint) : Evm :=
           e.stateGasSpilled + (amount - e.stateGasLeft) }
 
 open EvmAsm.Stateless.SpecRef in
+/-- The three gas quantities `chargeStateEvm` leaves, in closed form —
+one statement covering both legs. Stated over a *variable* frame and
+amount on purpose: projecting the concrete composition instead makes
+`rfl` whnf a full record literal per field, which blows the recursion
+depth. -/
+theorem chargeStateEvm_proj (e : Evm) (amount : Uint) :
+    ((chargeStateEvm e amount).gasLeft
+        = e.gasLeft - (amount - min amount e.stateGasLeft)
+      ∧ (chargeStateEvm e amount).stateGasLeft
+        = e.stateGasLeft - min amount e.stateGasLeft)
+      ∧ (chargeStateEvm e amount).stateGasSpilled
+        = e.stateGasSpilled + (amount - min amount e.stateGasLeft) := by
+  unfold chargeStateEvm
+  split
+  · rename_i h
+    rw [Nat.min_eq_left h]
+    exact ⟨⟨by simp, rfl⟩, by simp⟩
+  · rename_i h
+    rw [Nat.min_eq_right (Nat.le_of_lt (Nat.lt_of_not_le h))]
+    exact ⟨⟨rfl, by simp⟩, rfl⟩
+
+open EvmAsm.Stateless.SpecRef in
 /-- `credit_state_gas_refund`, LIFO: execution gas up to the recorded
 spill, then the reservoir. Guarded, since every caller so far applies it
 conditionally. -/
