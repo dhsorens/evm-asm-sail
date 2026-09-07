@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
@@ -63,6 +64,31 @@ def BalanceAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     (∀ ws, (hostAfter ws).stackFrames = hs.stackFrames) ∧
     (∀ ws, (hostAfter ws).warmAddresses = ws) ∧
     (∀ ws, (hostAfter ws).warmEpoch = hs.warmEpoch)
+
+/-- **`BalanceAgree` on the transaction-overlay regime.** An account the
+transaction has already written is an `acct_tx_get` hit, so `k_aload`
+returns the stored row without touching any state, and SpecRef's
+`getAccount` finds the same tuple in its first probe. The two miss
+regimes (the block overlay, the authenticated trie walk) stay in the
+world tranche — see [`AccountRel`](../Relations/Account.lean). -/
+theorem balanceAgree_of_accountRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (x : Nat) (v : Evm.Defs.AcctValue)
+    (hrow : hostAcctRow hs (Evm.Functions.word_to_address x) = some v)
+    (hrel : AccountRel sRef.txState hs) :
+    BalanceAgree sRef hs ss x := by
+  have hbal := accountRel_balance hrel _ v hrow
+  refine ⟨(hostAcctView v.curr).getD EMPTY_ACCOUNT,
+    specAccountReadOf sRef.txState (to_address_masked x),
+    fun ws => { hs with warmAddresses := ws }, ?_, ?_, ?_,
+    fun _ => rfl, fun _ => rfl, fun _ => rfl⟩
+  · rw [hbal]
+    exact hrel.wf _ v hrow
+  · refine runTx_getAccount_hit _ _ _ ?_
+    rw [← word_to_address_toList]
+    exact hrel.curr _ v hrow
+  · intro ws
+    rw [hbal]
+    exact runS_k_get_balance_hit _ v _ ss hrow
 
 /-- Record-update projections (whnf-safe `rfl` mini-lemmas). -/
 private theorem hostState_frames_warmAddresses (h : Evm.HostState)

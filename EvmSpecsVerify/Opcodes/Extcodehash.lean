@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
@@ -68,6 +69,68 @@ def ExtcodehashAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     (∀ ws, (hostAfter ws).stackFrames = hs.stackFrames) ∧
     (∀ ws, (hostAfter ws).warmAddresses = ws) ∧
     (∀ ws, (hostAfter ws).warmEpoch = hs.warmEpoch)
+
+/-- SpecRef's word for the codeless account. -/
+theorem extcodehashWord_empty : extcodehashWord EMPTY_ACCOUNT = 0 := by
+  unfold extcodehashWord
+  rw [beq_self_eq_true]
+  rfl
+
+/-- The two sides' EIP-1052 words agree on a related row: SpecRef reports
+`0` for `EMPTY_ACCOUNT`, the extraction reports the zero *hash* for an
+absent row, and `hash_to_word ZERO_HASH = 0`. On a present row the
+relation's `presentNonEmpty` field is what rules out SpecRef's
+`EMPTY_ACCOUNT` branch — a present-but-EIP-161-empty row would push the
+hash on one side and `0` on the other. -/
+theorem accountRel_codehash {ts : TransactionState} {hs : Evm.HostState}
+    (hrel : AccountRel ts hs) (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue) (hrow : hostAcctRow hs aV = some v) :
+    Evm.Functions.hash_to_word
+        (if v.curr.present then v.curr.info.code_hash
+          else Evm.Functions.ZERO_HASH)
+      = extcodehashWord ((hostAcctView v.curr).getD EMPTY_ACCOUNT) := by
+  have halive := accountRel_alive hrel aV v hrow
+  by_cases hp : v.curr.present = true
+  · have hview : (hostAcctView v.curr).getD EMPTY_ACCOUNT
+        = { nonce := v.curr.info.nonce, balance := v.curr.info.balance,
+            codeHash := v.curr.info.code_hash.toList } := by
+      unfold hostAcctView
+      rw [if_pos hp]
+      rfl
+    have hne : (hostAcctView v.curr).getD EMPTY_ACCOUNT ≠ EMPTY_ACCOUNT :=
+      bne_iff_ne.mp (halive.trans hp)
+    rw [hview] at hne
+    rw [hview, if_pos hp, extcodehashWord, if_neg (by simpa using hne),
+      hash_to_word_eq]
+  · have hview : (hostAcctView v.curr).getD EMPTY_ACCOUNT = EMPTY_ACCOUNT := by
+      unfold hostAcctView
+      rw [if_neg hp]
+      rfl
+    rw [hview, if_neg hp, extcodehashWord_empty, hash_to_word_zero]
+
+/-- **`ExtcodehashAgree` on the transaction-overlay regime**, the
+code-hash form of [`balanceAgree_of_accountRel`](Balance.lean). Needs one
+constant identity beyond the relation — `EMPTY_CODE_HASH =
+KECCAK_EMPTY` (`empty_code_hash_eq`, checked by the kernel) — which is
+what makes the two sides' "codeless account" agree. -/
+theorem extcodehashAgree_of_accountRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (x : Nat) (v : Evm.Defs.AcctValue)
+    (hrow : hostAcctRow hs (Evm.Functions.word_to_address x) = some v)
+    (hrel : AccountRel sRef.txState hs) :
+    ExtcodehashAgree sRef hs ss x := by
+  have hhash := accountRel_codehash hrel _ v hrow
+  refine ⟨(hostAcctView v.curr).getD EMPTY_ACCOUNT,
+    specAccountReadOf sRef.txState (to_address_masked x),
+    (if v.curr.present then v.curr.info.code_hash
+      else Evm.Functions.ZERO_HASH),
+    fun ws => { hs with warmAddresses := ws }, ?_, ?_,
+    fun ws => runS_k_get_codehash_hit _ v _ ss hrow, hhash,
+    fun _ => rfl, fun _ => rfl, fun _ => rfl⟩
+  · rw [← hhash]
+    exact hash_to_word_wf _
+  · refine runTx_getAccount_hit _ _ _ ?_
+    rw [← word_to_address_toList]
+    exact hrel.curr _ v hrow
 
 /-- Record-update projections (whnf-safe `rfl` mini-lemmas). -/
 private theorem hostState_frames_warmAddresses (h : Evm.HostState)

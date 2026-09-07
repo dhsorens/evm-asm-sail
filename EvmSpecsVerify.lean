@@ -75,6 +75,7 @@ import EvmSpecsVerify.Representation.AddressWord
 import EvmSpecsVerify.Opcodes.Address
 import EvmSpecsVerify.Opcodes.Origin
 import EvmSpecsVerify.Relations.WarmAddr
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Opcodes.Balance
 import EvmSpecsVerify.Opcodes.Selfbalance
 import EvmSpecsVerify.Opcodes.Extcodesize

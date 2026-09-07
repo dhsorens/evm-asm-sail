@@ -434,11 +434,56 @@ residual notes at the end of this section scope each one.
       transaction-overlay regime plus SpecRef's account-existence check,
       which `k_sstore` has no counterpart for.
 
+- [x] `Relations/Account.lean` — the account relation, landed ahead of
+      SELFDESTRUCT the way `StorageRel` landed ahead of SSTORE (and for the
+      same reason: three ledgered read hypotheses wait on it).
+      `AccountRel` relates the **transaction** overlay pointwise —
+      SpecRef's `accountWrites : List (Address × Option Account)`, where
+      the `Option` *is* existence, against `HostState.accountTx`, whose
+      `curr` is a whole `Evm.Defs.Account` (the same three trie fields plus
+      a `storage_root` and four lifecycle flags). Existence being a flag on
+      one side and the shape of the entry on the other is the whole
+      difficulty: the relation compares SpecRef's entry against the row's
+      **EIP-161 view** and carries the host's collapse discipline as two
+      fields (`absentEmpty`, `presentNonEmpty`). Those are load-bearing,
+      not decorative — the extraction's readers return `info` fields
+      straight out of the row where SpecRef substitutes `EMPTY_ACCOUNT`, so
+      an absent row with a stale balance, or a present row that is
+      EIP-161-empty, would make `BALANCE` and `EXTCODEHASH` disagree. A
+      future `accountRel_write` has to re-establish both, which is exactly
+      where a host that broke the discipline gets caught — and they *are*
+      re-establishable: `accountRel_isEmpty` proves SpecRef's
+      `accountExistsAndIsEmpty` (which `modifyState` runs after every
+      account write, `moveEther`/`createEther`/`setAccountBalance`/
+      `incrementNonce` included) and the extraction's inline
+      `account_info_empty` are the same three conditions on a related row,
+      so both sides' collapse fires together. Both also clear storage as
+      part of it (`destroyAccount` → `destroyStorage` vs
+      `store_account_info` → `storage_tx_clear`), which is the open thread
+      `Relations/Storage.lean` already records rather than a new one.
+      **It reduces three assumptions**: `balanceAgree_of_accountRel`,
+      `selfBalanceAgree_of_accountRel` and `extcodehashAgree_of_accountRel`
+      prove `BalanceAgree` / `SelfBalanceAgree` / `ExtcodehashAgree` for
+      any account the transaction has already written — an `acct_tx_get`
+      hit, the one `k_aload` branch that touches no state. The block
+      overlay and the trie walk below it stay ledgered.
+      One constant fell out on the way: `empty_code_hash_eq` proves
+      SpecRef's *computed* `keccak256 []` equals the extraction's
+      `KECCAK_EMPTY` literal, `decide`-checked by the kernel — so the two
+      sides' "codeless account" is a theorem, not a trust assumption.
+
 Residual for the remaining `unstated` rows:
 
-- **SELFDESTRUCT** needs account deletion, the balance transfer, and the
-  created-account set — the account side of the world relation, not the
-  storage side. MM-14 covers its guard ordering too.
+- **SELFDESTRUCT** now has its relation (`AccountRel`, above) and its
+  read shapes (`runS_k_get_balance_hit`, `runS_k_account_exists_hit`,
+  `runTx_isAccountAlive_hit`). What is still open is the *writes* and the
+  step's shape: `moveEther` vs the extraction's transfer, the EIP-7708
+  transfer log (`emit_transfer_log` — `LogRel` exists), the
+  `accountsToDelete` / `created` correspondence for EIP-6780, the
+  `NEW_ACCOUNT` state-gas + `ACCOUNT_WRITE` charge for a dead beneficiary,
+  and the fact that the handler *halts* by setting `running := false`
+  rather than throwing — a success-shaped step with a stopped frame, which
+  no existing `StepResultRel` case covers. MM-14 covers its guard ordering.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

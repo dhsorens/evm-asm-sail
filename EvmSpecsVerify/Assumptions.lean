@@ -142,10 +142,36 @@ EVM state can violate it, and whether it is eliminable by proving.
 
 ## Account/code read agreement + address warmth
 
+* `AccountRel` (Relations/Account.lean) — a *relation*, not an agreement
+  assumption, and the account sibling of `StorageRel`: every row the
+  extraction's `accountTx` overlay holds, SpecRef's `accountWrites` holds
+  as the row's **EIP-161 view** (`hostAcctView`: the three trie fields, or
+  `none` when the row is not `present`). Two of its four fields are the
+  host's EIP-161 discipline and are load-bearing, not cosmetic — an absent
+  row carries the empty tuple (`absentEmpty`) and a present row does not
+  (`presentNonEmpty`) — because the extraction's readers return `info`
+  fields straight out of the row where SpecRef substitutes `EMPTY_ACCOUNT`
+  for a deleted entry. They are also *preservable*: `accountRel_isEmpty`
+  proves SpecRef's `accountExistsAndIsEmpty` test — which `modifyState`
+  runs after every account write — and the extraction's inline
+  `account_info_empty` are the same three conditions on a related row, so
+  the two sides' EIP-161 collapse fires together.
+  `accountRel_frame`/`accountRel_hostFrame` carry the relation across the
+  read bookkeeping on either side. It **reduces the three
+  account-read hypotheses below** on the transaction-overlay regime, and
+  is the account-side prerequisite SELFDESTRUCT waits on.
+
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
   account reads: SpecRef's journalled `getAccount` and the kernel's
   `k_get_balance` return the same balance, quantified over the ambient
   address stamps. Eliminable by the world tranche's account relation.
+
+  **Reduced** (with `AccountRel`): `balanceAgree_of_accountRel` proves it
+  for any account the transaction has already written — an `acct_tx_get`
+  hit, where `k_aload` returns the stored row without touching state. What
+  stays assumed is the two miss regimes: the block overlay (which doubles
+  as the extraction's witness read-through cache) and the authenticated
+  trie walk below it.
 * `SelfBalanceAgree` (Opcodes/Selfbalance.lean) — the own-account form of
   `BalanceAgree`: SpecRef's journalled `getAccount message.currentTarget`
   and the extraction's `k_get_balance (self_addr ())` return the same
@@ -153,6 +179,9 @@ EVM state can violate it, and whether it is eliminable by proving.
   Strictly weaker than `BalanceAgree` — SELFBALANCE consults no access set,
   so nothing is quantified over ambient warm stamps. Eliminable by the
   world tranche's account relation.
+
+  **Reduced** (with `AccountRel`): `selfBalanceAgree_of_accountRel`, the
+  own-account form of the above.
 * `ExtcodesizeAgree` (Opcodes/Extcodesize.lean) — the external-code sibling:
   SpecRef's `getAccount` + `getCode` and the extraction's
   `k_get_code_size` return the same code length, quantified over ambient
@@ -162,6 +191,15 @@ EVM state can violate it, and whether it is eliminable by proving.
   missing-account-zero / account-code-hash result to the extraction's
   `k_get_codehash` plus `hash_to_word`, quantified over ambient address
   stamps. Eliminable by the world tranche's account/code-store relation.
+
+  **Reduced** (with `AccountRel`): `extcodehashAgree_of_accountRel`, via
+  `accountRel_codehash`. This one needs a constant identity beyond the
+  relation — SpecRef *computes* `keccak256 []` while the extraction
+  carries the digest as a literal — and that identity is a **theorem**
+  (`empty_code_hash_eq`, `decide`-checked by the kernel), not a trust
+  assumption: the `nativeAccelerateBytes` opacity below covers keccak on
+  general input, but the empty digest is evaluated. Without it the two
+  sides' notion of "codeless account" would not be comparable at all.
 * `ExternalCodeRel` (Relations/ExternalCode.lean) — the byte-level external
   code sibling used by `extcodecopy_step_equiv`: SpecRef's journalled
   `getAccount`/`getCode` result is the exact zero-padded byte source written by
