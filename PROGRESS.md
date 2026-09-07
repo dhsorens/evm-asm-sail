@@ -636,19 +636,34 @@ Residual for the remaining `unstated` rows:
   `sdChargeTail`. All three of its guards (the cold marking, the EIP-7708
   log, the EIP-6780 mark) went through `runR_guard_step`. What is left,
   in order:
-  1. The extraction's side, a `SailME` early-return chain with two
-     `SailME.throw`s; every primitive already has a run shape
-     (`runS_guard_static_ok`/`_halt`, `runS_pop`,
-     `runS_check_execution_gas_*`, `runS_charge_*`,
-     `runS_k_account_is_warm`/`_mark_warm`, `runS_k_get_balance_hit`,
-     `runS_k_was_created_hit`, `runS_k_selfdestruct_hit`,
-     `runS_k_transfer`/`_noop`).
+  1. ~~The extraction's side~~ — **done**:
+     `runS_selfdestruct_body_static`, `_sentry_oog`, `_charge_oog`,
+     `_state_oog`, `_ok`, carried through the dispatch by
+     `runS_execute_selfdestruct_of_body`, plus
+     `runS_execute_selfdestruct_underflow` for the stack check `execute`
+     hoists out of `execute_opcode`. Only one outcome takes the
+     `SailME.throw` (the state charge); the rest fall out of the
+     surrounding `if`s. The guarded state charge is stepped over by
+     `runE_sd_state_charge`, whose `hafford`/`hroom` are conditional on
+     `creates_account` so a charge that never runs cannot narrow the
+     domain, and the lifecycle mark by `runE_cond_val`.
+     `runS_k_selfdestruct_hit` was strengthened to quantify the register
+     file *inside* its existential, since callers reach it after the
+     state charge has moved the registers.
   2. The composition. The success case splits four ways on the transfer
      (nonzero-and-distinct, self, zero, zero-with-collapse — one
      `transfer_equiv*` each) and two ways on the EIP-6780 mark; the halt
      is the STOP/RETURN normal-halt pairing (`running := false` ↔
      `Halted HaltSelfDestruct`), not a new `StepResultRel` case.
-  The re-association that step (1) was expected to need did not arise:
+  The remaining shape question for (2) is the transfer, which
+  `runS_selfdestruct_body_ok` takes as a hypothesis (quantified over the
+  register file the state charge left) rather than a run shape — the
+  four `transfer_equiv*` results are what discharge it, and
+  `runS_k_transfer`/`_noop` will need the same register-file
+  generalization `runS_k_selfdestruct_hit` just got.
+
+  The re-association that the SpecRef step was expected to need did not
+  arise:
   rather than stepping over `specTransfer` as a unit, `sdChargeTail`
   steps `moveEther` with a plain bind and the log with
   `runR_sd_log_guard`, so the composition can consume each

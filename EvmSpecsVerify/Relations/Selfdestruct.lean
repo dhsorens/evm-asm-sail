@@ -275,14 +275,18 @@ theorem runS_k_is_selfdestructed_hit (aV : Evm.Defs.address)
   exact runS_pure _ _ _
 
 /-- **`k_selfdestruct` marks the row.** Both branches leave the same row:
-the guard only avoids a redundant `assocPut`. -/
+the guard only avoids a redundant `assocPut`. The register file is
+quantified *inside* the existential because the row it installs does not
+depend on it, and callers reach this after a state charge has already
+moved the registers. -/
 theorem runS_k_selfdestruct_hit (aV : Evm.Defs.address)
-    (v : Evm.Defs.AcctValue) (hs : Evm.HostState) (ss : SeqState)
+    (v : Evm.Defs.AcctValue) (hs : Evm.HostState)
     (h : hostAcctRow hs aV = some v) :
-    ∃ hs', runS (Evm.Functions.k_selfdestruct aV) hs ss = .ok ((), hs') ss
+    ∃ hs', (∀ ss : SeqState,
+        runS (Evm.Functions.k_selfdestruct aV) hs ss = .ok ((), hs') ss)
       ∧ HostAcctWritten hs hs' aV { v with curr := acctRowDeleted v.curr } := by
   by_cases hd : v.curr.selfdestructed = true
-  · refine ⟨hs, ?_, ?_⟩
+  · refine ⟨hs, fun ss => ?_, ?_⟩
     · unfold Evm.Functions.k_selfdestruct
       refine runS_bind_ok (runS_k_aload_hit aV v hs ss h) ?_
       show runS (if (!v.curr.selfdestructed) = true then
@@ -292,7 +296,7 @@ theorem runS_k_selfdestruct_hit (aV : Evm.Defs.address)
       exact runS_pure _ _ _
     · rw [acctRowDeleted_idem v.curr hd]
       simpa using hostAcctWritten_refl hs aV v h
-  · refine ⟨hostAcctWrite hs aV v (acctRowDeleted v.curr), ?_,
+  · refine ⟨hostAcctWrite hs aV v (acctRowDeleted v.curr), fun ss => ?_,
       hostAcctWritten_write hs aV v (acctRowDeleted v.curr)⟩
     unfold Evm.Functions.k_selfdestruct
     refine runS_bind_ok (runS_k_aload_hit aV v hs ss h) ?_

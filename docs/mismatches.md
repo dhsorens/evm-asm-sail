@@ -371,7 +371,16 @@ unreachable / ambiguity / needs investigation).
   admits **only** `StackUnderflow` — every opcode in this class is
   `n`-in/0-out, so overflow is unreachable. Machine-checked by
   `tstore_step_equiv` and, for SSTORE, by `sstore_step_equiv`
-  (2026-09-03); SELFDESTRUCT is the remaining member of the class.
+  (2026-09-03). SELFDESTRUCT is the remaining member of the class, and
+  both of its halves are now in: `runR_iSelfdestruct_static` and
+  `runS_execute_selfdestruct_underflow` (2026-09-07) are the two shapes
+  the constructor has to pair once `selfdestruct_step_equiv` is stated.
+  Worth recording because an earlier draft of
+  `Opcodes/Selfdestruct.lean`'s docstring claimed the crossing did *not*
+  reach SELFDESTRUCT, reasoning from `guard_static` preceding `pop`
+  *inside* `execute_selfdestruct` — which misses that `validate_stack`
+  is hoisted into `execute`, one level up. The Area line above was right
+  and the docstring was wrong; it has been corrected.
 
 ## MM-15: The blob base fee overflows a word inside the extraction's own permitted range
 

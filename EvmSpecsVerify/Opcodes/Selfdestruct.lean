@@ -22,11 +22,18 @@ Amsterdam schedule, the `creates_account` predicate and
 
 ## Shape
 
-Both sides test the static flag **before** popping (SpecRef's
-`if isStatic then throw` precedes `stackPop`; the extraction's
-`guard_static` precedes `pop`), so MM-14's mirror-image does *not* apply
-here even though MM-14's Area lists `iSelfdestruct`: the two agree, and
-the `halted` constructor suffices for the static outcome.
+**MM-14 does apply here** — an earlier draft of this docstring said it
+did not, on the grounds that both handlers test the static flag before
+their own pop (SpecRef's `if isStatic then throw` precedes `stackPop`;
+`execute_selfdestruct`'s `guard_static` precedes `pop`). That misses
+where the extraction's stack check actually sits: `execute` hoists
+`validate_stack` *outside* `execute_opcode`, so it runs before
+`execute_selfdestruct` is even entered. An empty stack in a static frame
+therefore halts as `.writeInStaticContext` on SpecRef and as
+`StackUnderflow` on the extraction, exactly as MM-14's Area line says.
+Both are exceptional halts consuming the frame's gas, so the `halted`
+constructor still pairs them; `runS_execute_selfdestruct_underflow` and
+`runR_iSelfdestruct_static` are the two shapes involved.
 
 The gas comes in two stages on both sides, for the same reason: the
 account-write surcharge depends on the beneficiary, which must not be
@@ -530,5 +537,580 @@ theorem runR_iSelfdestruct_success (s : Machine) (x : U256)
   refine runR_sd_mark_guard _ _ _ ?_
   simp only [sdSuccessOut, sdHaltEvm]
   exact runR_modifyEvm _ _
+
+/-! ## The extraction's side
+
+`execute_selfdestruct` is a `SailME` chain: the outcomes before the state
+charge fall out of the surrounding `if`s, and only the state-gas failure
+takes the early return (`SailME.throw`). The Amsterdam branch is the one
+in scope; the legacy branch below it is a different schedule and out of
+scope for a fixed-fork comparison, exactly as with SSTORE. -/
+
+open Evm.Functions in
+/-- The dispatch equation for SELFDESTRUCT. -/
+theorem selfdestruct_dispatch (pc_in : Nat) (top : StackTop)
+    (mem : EvmMemorySlice) (g : Nat) :
+    Evm.Functions.execute_opcode (.SELFDESTRUCT ()) pc_in top mem g =
+      Evm.Functions.execute_selfdestruct top g >>= fun p =>
+        pure (pc_in, p.1, mem, p.2) := rfl
+
+open Evm.Functions in
+/-- `SELFDESTRUCT` takes one operand and returns none. -/
+theorem selfdestruct_stack_effect :
+    Evm.Functions.opcode_stack_effect (.SELFDESTRUCT ())
+      = (pure (1, 0) : Evm.SailM (Nat × Nat)) := rfl
+
+open Evm.Functions in
+/-- **The static outcome.** `guard_static` halts before the pop, so the
+cursor is unmoved — the mirror image of `runR_iSelfdestruct_static`, and
+the reason MM-14's guard-ordering note does not bite here. -/
+theorem runS_selfdestruct_body_static (top : StackTop) (g : Nat)
+    (hs : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hstatic : msg.is_static = true) :
+    runS (Evm.Functions.execute_selfdestruct top g) hs ss
+      = .ok ((top, GAS_ZERO), hs)
+          { ss with regs := haltRegs ss msg .WriteProtection } := by
+  obtain ⟨fork, t, mx, dn, cl, il, ptl, prl, tbl, rd, bl, ttl, trl, epf⟩ := prof
+  simp only at hfork
+  simp only [Evm.Functions.execute_selfdestruct]
+  refine runS_sailME_ok ?_
+  refine runE_bind_ok (runE_lift (runS_readReg _ _ _ _ hprof)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_guard_static_halt g hs ss _ sp msg hprof hsp hmsg
+      hfork hstatic)) ?_
+  rw [if_pos rfl]
+  exact runE_pure _ _ _
+
+open Evm.Functions in
+/-- **The sentry outcome.** The access cost is unaffordable: the pop
+stands, the beneficiary is *not* marked warm, and no account row is read
+— matching `runR_iSelfdestruct_sentry_oog`. -/
+theorem runS_selfdestruct_body_sentry_oog (top : StackTop) (g : Nat)
+    (hs : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)
+    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
+    (pid : Evm.Defs.address → PrecompileId) (warm : Bool)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hframe : hs.stackFrames = l :: frest)
+    (hpfx : l.take top.toNat = (x :: rest).reverse)
+    (htop : top.toNat = (x :: rest).length)
+    (hstatic : msg.is_static = false)
+    (hpid : runS (Evm.Functions.precompile_id_for_address
+        (Evm.Functions.word_to_address x)) hs ss
+      = .ok (pid (Evm.Functions.word_to_address x), hs) ss)
+    (hwarm : warm = (if (pid (Evm.Functions.word_to_address x)
+          != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch
+          ≤ (assocGet hs.warmAddresses
+              (Evm.Functions.word_to_address x)).getD 0)))
+    (hoog : g < selfdestructAccessCost (!warm)) :
+    runS (Evm.Functions.execute_selfdestruct top g) hs ss
+      = .ok ((cursorDrop top 1, GAS_ZERO), hs)
+          { ss with regs := haltRegs ss msg .OutOfGas } := by
+  have hwarmrun : runS (Evm.Functions.k_account_is_warm
+      (Evm.Functions.word_to_address x)) hs ss = .ok (warm, hs) ss := by
+    rw [hwarm]
+    exact runS_k_account_is_warm pid _ hs ss hpid
+  obtain ⟨fork, t, mx, dn, cl, il, ptl, prl, tbl, rd, bl, ttl, trl, epf⟩ := prof
+  simp only at hfork
+  simp only [Evm.Functions.execute_selfdestruct]
+  refine runS_sailME_ok ?_
+  refine runE_bind_ok (runE_lift (runS_readReg _ _ _ _ hprof)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_guard_static_ok g hs ss msg hmsg hstatic)) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_ok
+    (runE_lift (runS_pop top hs ss l frest x rest hframe hpfx htop)) ?_
+  refine runE_bind_ok (runE_lift (runS_self_addr msg hs ss hmsg)) ?_
+  simp only [ProtocolProfileFields.fork, decide_eq_true_eq]
+  rw [if_pos (by simpa using hfork)]
+  refine runE_bind_ok (runE_lift hwarmrun) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_check_execution_gas_oog g
+      ((0 + G_selfdestruct)
+        + (if warm then G_zero else G_amsterdam_cold_account_access))
+      hs ss _ sp msg hprof hsp hmsg hfork (by
+        rw [extractionAccessCost_eq warm]
+        exact hoog))) ?_
+  rw [if_pos (by simp)]
+  exact runE_pure _ _ _
+
+/-! ### The extraction's amounts and its post-sentry host state -/
+
+open Evm.Functions in
+/-- `access_cost`, as `execute_selfdestruct` spells it. -/
+def sdAccessRaw (warm : Bool) : Nat :=
+  (0 + G_selfdestruct)
+    + (if warm then G_zero else G_amsterdam_cold_account_access)
+
+open Evm.Functions in
+/-- `execution_cost`, as `execute_selfdestruct` spells it. -/
+def sdExecRaw (warm creates : Bool) : Nat :=
+  if creates then sdAccessRaw warm + G_amsterdam_account_write
+  else sdAccessRaw warm
+
+theorem sdAccessRaw_eq (warm : Bool) :
+    sdAccessRaw warm = selfdestructAccessCost (!warm) :=
+  extractionAccessCost_eq warm
+
+theorem sdExecRaw_eq (warm creates : Bool) :
+    sdExecRaw warm creates = selfdestructCost (!warm) creates := by
+  unfold sdExecRaw
+  rw [sdAccessRaw_eq]
+  exact extractionExecutionCost_eq warm creates
+
+open Evm.Functions in
+/-- `creates_account`, as `execute_selfdestruct` spells it: the
+originator's balance is nonzero and the beneficiary is EIP-161 empty.
+[`originatorHasBalance_eq`](../Relations/Selfdestruct.lean) and
+[`beneficiaryDead_eq`](../Relations/Selfdestruct.lean) identify the two
+operands with SpecRef's, in the opposite order. -/
+def sdCreatesS (ov bv : Evm.Defs.AcctValue) : Bool :=
+  word_nonzero ov.curr.info.balance && account_info_empty bv.curr.info
+
+/-- The host state after the beneficiary is marked warm — where both
+account rows are read. -/
+def sdHostWarm (pid : Evm.Defs.address → PrecompileId)
+    (bV : Evm.Defs.address) (hs : Evm.HostState) : Evm.HostState :=
+  { hs with warmAddresses := wsAfterMark pid bV hs }
+
+open Evm.Functions in
+/-- **The regular charge runs out.** The pop and the warm mark stand; no
+row is written. -/
+theorem runS_selfdestruct_body_charge_oog (top : StackTop) (g : Nat)
+    (hs : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)
+    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
+    (pid : Evm.Defs.address → PrecompileId) (warm : Bool)
+    (ov bv : Evm.Defs.AcctValue)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hframe : hs.stackFrames = l :: frest)
+    (hpfx : l.take top.toNat = (x :: rest).reverse)
+    (htop : top.toNat = (x :: rest).length)
+    (hstatic : msg.is_static = false)
+    (hpid : runS (precompile_id_for_address (word_to_address x)) hs ss
+      = .ok (pid (word_to_address x), hs) ss)
+    (hwarm : warm = (if (pid (word_to_address x)
+          != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch
+          ≤ (assocGet hs.warmAddresses (word_to_address x)).getD 0)))
+    (hsentry : selfdestructAccessCost (!warm) ≤ g)
+    (horow : hostAcctRow (sdHostWarm pid (word_to_address x) hs) msg.address
+      = some ov)
+    (hbrow : hostAcctRow (sdHostWarm pid (word_to_address x) hs)
+        (word_to_address x) = some bv)
+    (hoog : g < selfdestructCost (!warm) (sdCreatesS ov bv)) :
+    runS (Evm.Functions.execute_selfdestruct top g) hs ss
+      = .ok ((cursorDrop top 1, GAS_ZERO),
+          sdHostWarm pid (word_to_address x) hs)
+          { ss with regs := haltRegs ss msg .OutOfGas } := by
+  have hwarmrun : runS (k_account_is_warm (word_to_address x)) hs ss
+      = .ok (warm, hs) ss := by
+    rw [hwarm]
+    exact runS_k_account_is_warm pid _ hs ss hpid
+  obtain ⟨fork, t, mx, dn, cl, il, ptl, prl, tbl, rd, bl, ttl, trl, epf⟩ := prof
+  simp only at hfork
+  simp only [Evm.Functions.execute_selfdestruct]
+  refine runS_sailME_ok ?_
+  refine runE_bind_ok (runE_lift (runS_readReg _ _ _ _ hprof)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_guard_static_ok g hs ss msg hmsg hstatic)) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_ok
+    (runE_lift (runS_pop top hs ss l frest x rest hframe hpfx htop)) ?_
+  refine runE_bind_ok (runE_lift (runS_self_addr msg hs ss hmsg)) ?_
+  simp only [ProtocolProfileFields.fork, decide_eq_true_eq]
+  rw [if_pos (by simpa using hfork)]
+  refine runE_bind_ok (runE_lift hwarmrun) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_check_execution_gas_ok g (sdAccessRaw warm) hs ss
+      (by rw [sdAccessRaw_eq]; exact hsentry))) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_ok
+    (runE_lift (runS_k_account_mark_warm pid _ hs ss hpid)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_k_get_balance_hit _ ov _ ss horow)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_k_account_is_empty_hit _ bv _ ss hbrow)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_charge_oog g (sdExecRaw warm (sdCreatesS ov bv)) _ ss
+      _ sp msg hprof hsp hmsg hfork
+      (by rw [sdExecRaw_eq]; exact hoog))) ?_
+  rw [if_pos (by simp)]
+  exact runE_pure _ _ _
+
+open Evm.Functions in
+/-- **The state charge runs out.** Only reachable when
+`creates_account` — the state charge is guarded by it — so the regular
+charge has already gone through and the reservoir plus what it left of
+the execution gas still does not cover `NEW_ACCOUNT`. Nothing is
+written; the pop and the warm mark stand. -/
+theorem runS_selfdestruct_body_state_oog (top : StackTop) (g : Nat)
+    (hs : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (res sp : Nat) (msg : Evm.Defs.Message)
+    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
+    (pid : Evm.Defs.address → PrecompileId) (warm : Bool)
+    (ov bv : Evm.Defs.AcctValue)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hres : ss.regs.get? Register.state_gas_remaining = some res)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hframe : hs.stackFrames = l :: frest)
+    (hpfx : l.take top.toNat = (x :: rest).reverse)
+    (htop : top.toNat = (x :: rest).length)
+    (hstatic : msg.is_static = false)
+    (hpid : runS (precompile_id_for_address (word_to_address x)) hs ss
+      = .ok (pid (word_to_address x), hs) ss)
+    (hwarm : warm = (if (pid (word_to_address x)
+          != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch
+          ≤ (assocGet hs.warmAddresses (word_to_address x)).getD 0)))
+    (hsentry : selfdestructAccessCost (!warm) ≤ g)
+    (horow : hostAcctRow (sdHostWarm pid (word_to_address x) hs) msg.address
+      = some ov)
+    (hbrow : hostAcctRow (sdHostWarm pid (word_to_address x) hs)
+        (word_to_address x) = some bv)
+    (hcreates : sdCreatesS ov bv = true)
+    (hcharge : selfdestructCost (!warm) true ≤ g)
+    (hshort : res < StateGasCosts.NEW_ACCOUNT)
+    (hoog : g - selfdestructCost (!warm) true
+      < StateGasCosts.NEW_ACCOUNT - res) :
+    runS (Evm.Functions.execute_selfdestruct top g) hs ss
+      = .ok ((cursorDrop top 1, GAS_ZERO),
+          sdHostWarm pid (word_to_address x) hs)
+          { ss with regs := haltRegs ss msg .OutOfGas } := by
+  have hwarmrun : runS (k_account_is_warm (word_to_address x)) hs ss
+      = .ok (warm, hs) ss := by
+    rw [hwarm]
+    exact runS_k_account_is_warm pid _ hs ss hpid
+  have hc' : (word_nonzero ov.curr.info.balance
+      && account_info_empty bv.curr.info) = true := hcreates
+  obtain ⟨fork, t, mx, dn, cl, il, ptl, prl, tbl, rd, bl, ttl, trl, epf⟩ := prof
+  simp only at hfork
+  simp only [Evm.Functions.execute_selfdestruct]
+  refine runS_sailME_throw ?_
+  refine runE_bind_ok (runE_lift (runS_readReg _ _ _ _ hprof)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_guard_static_ok g hs ss msg hmsg hstatic)) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_ok
+    (runE_lift (runS_pop top hs ss l frest x rest hframe hpfx htop)) ?_
+  refine runE_bind_ok (runE_lift (runS_self_addr msg hs ss hmsg)) ?_
+  simp only [ProtocolProfileFields.fork, decide_eq_true_eq]
+  rw [if_pos (by simpa using hfork)]
+  refine runE_bind_ok (runE_lift hwarmrun) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_check_execution_gas_ok g (sdAccessRaw warm) hs ss
+      (by rw [sdAccessRaw_eq]; exact hsentry))) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_ok
+    (runE_lift (runS_k_account_mark_warm pid _ hs ss hpid)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_k_get_balance_hit _ ov _ ss horow)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_k_account_is_empty_hit _ bv _ ss hbrow)) ?_
+  refine runE_bind_ok
+    (runE_lift (runS_charge_ok g (sdExecRaw warm (sdCreatesS ov bv)) _ ss
+      (by rw [sdExecRaw_eq, hcreates]; exact hcharge))) ?_
+  rw [if_neg (by simp)]
+  refine runE_bind_throw ?_
+  rw [if_pos hc']
+  refine runE_bind_ok
+    (runE_lift (runS_charge_state_gas_oog _ G_amsterdam_state_new_account
+      _ ss res _ sp msg hprof hsp hmsg hres hfork (by decide)
+      (by rw [newAccount_eq]; exact hshort)
+      (by rw [newAccount_eq, sdExecRaw_eq, hcreates]; exact hoog))) ?_
+  rw [if_pos (by simp)]
+  exact runE_bind_throw (runE_throw _ _ _)
+
+/-! ### The success path
+
+The state charge is guarded by `creates_account`, so it is stepped over
+by `runE_sd_state_charge` and its three closed forms rather than split at
+the call site; the lifecycle mark is a lifted guard, which
+`runE_cond_val` steps. -/
+
+/-- The live execution gas after the (guarded) state charge. -/
+def sdGasOut (g1 res : Nat) (creates : Bool) : Nat :=
+  if creates then
+    g1 - (StateGasCosts.NEW_ACCOUNT - min StateGasCosts.NEW_ACCOUNT res)
+  else g1
+
+/-- The state-gas reservoir after it. -/
+def sdResOut (res : Nat) (creates : Bool) : Nat :=
+  if creates then res - min StateGasCosts.NEW_ACCOUNT res else res
+
+/-- The recorded spill after it. -/
+def sdSpillOut (res sp : Nat) (creates : Bool) : Nat :=
+  if creates then
+    sp + (StateGasCosts.NEW_ACCOUNT - min StateGasCosts.NEW_ACCOUNT res)
+  else sp
+
+open Evm.Functions in
+/-- **The guarded state charge, stepped over.** Both legs leave
+`sdGasOut`, and the register file is `sdResOut`/`sdSpillOut` with
+everything else untouched — so the continuation gets the frame condition
+it needs to carry `hprof`/`hmsg` across the charge. This is the
+affordable leg only; the other one is
+`runS_selfdestruct_body_state_oog`, which is why `hafford`/`hroom` are
+conditional on `creates`: an unaffordable state charge that never runs
+must not narrow the theorem's domain.
+
+The register file is handed back through an existential rather than a
+continuation so that a caller whose own conclusion is `∃ ss'` can name
+its witness before stepping into the chain. -/
+theorem runE_sd_state_charge (creates : Bool) (g1 : Nat)
+    (hs : Evm.HostState) (ss : SeqState) (res sp : Nat) (top1 : StackTop)
+    (hres : ss.regs.get? Register.state_gas_remaining = some res)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hafford : creates = true →
+      StateGasCosts.NEW_ACCOUNT - min StateGasCosts.NEW_ACCOUNT res ≤ g1)
+    (hroom : creates = true →
+      sp + (StateGasCosts.NEW_ACCOUNT
+        - min StateGasCosts.NEW_ACCOUNT res) ≤ 2 ^ 24) :
+    ∃ ssC : SeqState,
+      (∀ (k : Nat → Evm.SailME (StackTop × Nat) (StackTop × Nat))
+          (r : EStateM.Result SailError SeqState
+            (Except (SailError ⊕ (StackTop × Nat)) (StackTop × Nat)
+              × Evm.HostState)),
+        runE (k (sdGasOut g1 res creates)) hs ssC = r →
+        runE ((if creates = true then do
+            let y ← liftM (charge_state_gas g1 G_amsterdam_state_new_account)
+            if (!y.1) = true then do
+                Evm.SailME.throw ((top1, y.2) : StackTop × Nat)
+                pure y.2
+              else do
+                pure ()
+                pure y.2
+          else pure g1) >>= k) hs ss = r)
+      ∧ ssC.regs.get? Register.state_gas_remaining
+          = some (sdResOut res creates)
+      ∧ ssC.regs.get? Register.state_gas_spilled
+          = some (sdSpillOut res sp creates)
+      ∧ (∀ rg : Register, rg ≠ Register.state_gas_remaining →
+          rg ≠ Register.state_gas_spilled →
+          ssC.regs.get? rg = ss.regs.get? rg) := by
+  cases creates
+  · refine ⟨ss, fun k r hk => ?_, hres, hsp, fun _ _ _ => rfl⟩
+    rw [if_neg (by simp)]
+    exact runE_bind_ok (runE_pure _ _ _) hk
+  · obtain ⟨ssC, hC, hCres, hCsp, hCframe⟩ :=
+      runS_charge_state_closed g1 G_amsterdam_state_new_account hs ss res sp
+        hres hsp (by rw [newAccount_eq]; exact hafford rfl)
+        (by rw [newAccount_eq]; exact hroom rfl)
+    refine ⟨ssC, fun k r hk => ?_, hCres, hCsp, hCframe⟩
+    rw [if_pos rfl]
+    refine runE_bind_ok
+      (b := g1 - (G_amsterdam_state_new_account
+        - min G_amsterdam_state_new_account res))
+      (hs' := hs) (ss' := ssC) ?_ hk
+    refine runE_bind_ok (runE_lift hC) ?_
+    rw [if_neg (by simp)]
+    exact runE_bind_ok (runE_pure _ _ _) (runE_pure _ _ _)
+
+/-- The row install `k_selfdestruct` performs, when
+`k_was_created` says so — and otherwise nothing. -/
+def SdMarkWritten (created : Bool) (hs hs' : Evm.HostState)
+    (aV : Evm.Defs.address) (v : Evm.Defs.AcctValue) : Prop :=
+  if created then
+    HostAcctWritten hs hs' aV { v with curr := acctRowDeleted v.curr }
+  else hs' = hs
+
+open Evm.Functions in
+/-- **Success.** Both charges are afforded, the balance moves, the
+EIP-6780 mark fires if the originator was created this transaction, and
+the frame halts with `HaltSelfDestruct`.
+
+The transfer is a hypothesis rather than a run shape: it is the piece
+[`transfer_equiv`](../Relations/Transfer.lean) and its three degenerate
+siblings settle, and it is reached at the register file the state charge
+left, so the hypothesis is quantified over that. -/
+theorem runS_selfdestruct_body_ok (top : StackTop) (g : Nat)
+    (hs hsT : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (res sp : Nat) (msg : Evm.Defs.Message)
+    (l : List word) (frest : List (List word)) (x : word) (rest : List word)
+    (pid : Evm.Defs.address → PrecompileId) (warm : Bool)
+    (ov bv ovT : Evm.Defs.AcctValue)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hres : ss.regs.get? Register.state_gas_remaining = some res)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hframe : hs.stackFrames = l :: frest)
+    (hpfx : l.take top.toNat = (x :: rest).reverse)
+    (htop : top.toNat = (x :: rest).length)
+    (hstatic : msg.is_static = false)
+    (hpid : runS (precompile_id_for_address (word_to_address x)) hs ss
+      = .ok (pid (word_to_address x), hs) ss)
+    (hwarm : warm = (if (pid (word_to_address x)
+          != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch
+          ≤ (assocGet hs.warmAddresses (word_to_address x)).getD 0)))
+    (hsentry : selfdestructAccessCost (!warm) ≤ g)
+    (horow : hostAcctRow (sdHostWarm pid (word_to_address x) hs) msg.address
+      = some ov)
+    (hbrow : hostAcctRow (sdHostWarm pid (word_to_address x) hs)
+        (word_to_address x) = some bv)
+    (hcharge : selfdestructCost (!warm) (sdCreatesS ov bv) ≤ g)
+    (hafford : sdCreatesS ov bv = true →
+      StateGasCosts.NEW_ACCOUNT - min StateGasCosts.NEW_ACCOUNT res
+        ≤ g - selfdestructCost (!warm) (sdCreatesS ov bv))
+    (hroom : sdCreatesS ov bv = true →
+      sp + (StateGasCosts.NEW_ACCOUNT
+        - min StateGasCosts.NEW_ACCOUNT res) ≤ 2 ^ 24)
+    (htrans : ∀ ss₀ : SeqState,
+      ss₀.regs.get? Register.k_execution_profile = some prof →
+      runS (k_transfer msg.address (word_to_address x) ov.curr.info.balance)
+          (sdHostWarm pid (word_to_address x) hs) ss₀ = .ok ((), hsT) ss₀)
+    (hoT : hostAcctRow hsT msg.address = some ovT) :
+    ∃ (hsOut : Evm.HostState) (ss' : SeqState),
+      runS (Evm.Functions.execute_selfdestruct top g) hs ss
+          = .ok ((cursorDrop top 1,
+              sdGasOut (g - selfdestructCost (!warm) (sdCreatesS ov bv)) res
+                (sdCreatesS ov bv)), hsOut) ss'
+      ∧ SdMarkWritten ovT.curr.created hsT hsOut msg.address ovT
+      ∧ ss'.regs.get? Register.state_gas_remaining
+          = some (sdResOut res (sdCreatesS ov bv))
+      ∧ ss'.regs.get? Register.state_gas_spilled
+          = some (sdSpillOut res sp (sdCreatesS ov bv))
+      ∧ ss'.regs.get? Register.frame_status
+          = some (FrameStatus.Halted (HaltKind.HaltSelfDestruct ()))
+      ∧ ss'.regs.get? Register.k_execution_profile = some prof
+      ∧ ss'.regs.get? Register.message = some msg := by
+  have hwarmrun : runS (k_account_is_warm (word_to_address x)) hs ss
+      = .ok (warm, hs) ss := by
+    rw [hwarm]
+    exact runS_k_account_is_warm pid _ hs ss hpid
+  obtain ⟨hsD, hmark, hwritten⟩ :=
+    runS_k_selfdestruct_hit msg.address ovT hsT hoT
+  obtain ⟨ssC, hstep, hCres, hCsp, hCframe⟩ :=
+    runE_sd_state_charge (sdCreatesS ov bv)
+      (g - selfdestructCost (!warm) (sdCreatesS ov bv))
+      (sdHostWarm pid (word_to_address x) hs) ss res sp
+      (cursorDrop top 1) hres hsp hafford hroom
+  refine ⟨if ovT.curr.created then hsD else hsT,
+    { ssC with
+        regs := ssC.regs.insert Register.frame_status
+          (FrameStatus.Halted (HaltKind.HaltSelfDestruct ())) },
+    ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · obtain ⟨fork, t, mx, dn, cl, il, ptl, prl, tbl, rd, bl, ttl, trl, epf⟩ :=
+      prof
+    simp only at hfork
+    simp only [Evm.Functions.execute_selfdestruct]
+    refine runS_sailME_ok ?_
+    refine runE_bind_ok (runE_lift (runS_readReg _ _ _ _ hprof)) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_guard_static_ok g hs ss msg hmsg hstatic)) ?_
+    rw [if_neg (by simp)]
+    refine runE_bind_ok
+      (runE_lift (runS_pop top hs ss l frest x rest hframe hpfx htop)) ?_
+    refine runE_bind_ok (runE_lift (runS_self_addr msg hs ss hmsg)) ?_
+    simp only [ProtocolProfileFields.fork, decide_eq_true_eq]
+    rw [if_pos (by simpa using hfork)]
+    refine runE_bind_ok (runE_lift hwarmrun) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_check_execution_gas_ok g (sdAccessRaw warm) hs ss
+        (by rw [sdAccessRaw_eq]; exact hsentry))) ?_
+    rw [if_neg (by simp)]
+    refine runE_bind_ok
+      (runE_lift (runS_k_account_mark_warm pid _ hs ss hpid)) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_k_get_balance_hit _ ov _ ss horow)) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_k_account_is_empty_hit _ bv _ ss hbrow)) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_charge_ok g (sdExecRaw warm (sdCreatesS ov bv)) _ ss
+        (by rw [sdExecRaw_eq]; exact hcharge))) ?_
+    rw [if_neg (by simp), sdExecRaw_eq]
+    refine hstep _ _ ?_
+    refine runE_bind_ok
+      (runE_lift (htrans ssC ((hCframe _ (by decide) (by decide)).trans
+        (by simpa using hprof)))) ?_
+    refine runE_bind_ok
+      (runE_lift (runS_k_was_created_hit msg.address ovT hsT ssC hoT)) ?_
+    refine runE_cond_val ovT.curr.created _ () () _ (hmark ssC) ?_
+    rw [ite_self]
+    refine runE_bind_ok (runE_lift (runS_writeReg _ _ _ _)) ?_
+    exact runE_pure _ _ _
+  · unfold SdMarkWritten
+    cases ovT.curr.created
+    · rfl
+    · exact hwritten
+  · rw [regs_get?_insert_ne _ _ (by decide)]
+    exact hCres
+  · rw [regs_get?_insert_ne _ _ (by decide)]
+    exact hCsp
+  · simp only [Std.ExtDHashMap.get?_insert]
+    simp
+  · rw [regs_get?_insert_ne _ _ (by decide)]
+    exact (hCframe _ (by decide) (by decide)).trans hprof
+  · rw [regs_get?_insert_ne _ _ (by decide)]
+    exact (hCframe _ (by decide) (by decide)).trans hmsg
+
+/-! ### The `execute` wrappers
+
+`execute` runs the Yellow Paper stack-validity predicate before any gas
+or side effect, then dispatches. `SELFDESTRUCT` takes one operand and
+returns none, so the only new outcome at this level is the underflow —
+every other one just carries a body shape through the dispatch. -/
+
+open Evm.Functions in
+/-- **Underflow.** `validate_stack` fails before `execute_selfdestruct`
+is entered, so this shape holds whatever `msg.is_static` is — which is
+MM-14 (see the module docstring): in a static frame with an empty stack
+SpecRef reports `.writeInStaticContext` where this reports
+`StackUnderflow`. Both consume the frame's gas, so the pairing is settled
+by the `halted` constructor at `StepResultRel`. -/
+theorem runS_execute_selfdestruct_underflow (pc_in : Nat) (top : StackTop)
+    (g : Nat) (mem : EvmMemorySlice) (hs : Evm.HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hunder : top.toNat < 1) :
+    runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss
+      = .ok ((pc_in, top, mem, GAS_ZERO), hs)
+          { ss with regs := haltRegs ss msg .StackUnderflow } := by
+  simp only [Evm.Functions.execute, selfdestruct_stack_effect]
+  refine runS_bind_ok (runS_pure _ _ _) ?_
+  refine runS_bind_ok
+    (runS_validate_stack_underflow g top 1 0 hs ss prof sp msg hprof hsp hmsg
+      hfork hunder) ?_
+  rw [dif_neg (by simp)]
+  exact runS_pure _ _ _
+
+open Evm.Functions in
+/-- The stack-validity predicate passes, so `execute` is the body plus
+the pass-through of `pc_in` and the memory. Stated once, over an
+arbitrary body outcome, so each of the five outcomes below is one line. -/
+theorem runS_execute_selfdestruct_of_body (pc_in : Nat) (top : StackTop)
+    (g : Nat) (mem : EvmMemorySlice) (hs hs' : Evm.HostState)
+    (ss ss' : SeqState) (top' : StackTop) (g' : Nat)
+    (hin : 1 ≤ top.toNat) (hlim : top.toNat ≤ 1024)
+    (hbody : runS (Evm.Functions.execute_selfdestruct top g) hs ss
+      = .ok ((top', g'), hs') ss') :
+    runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss
+      = .ok ((pc_in, top', mem, g'), hs') ss' := by
+  simp only [Evm.Functions.execute, selfdestruct_stack_effect]
+  refine runS_bind_ok (runS_pure _ _ _) ?_
+  refine runS_bind_ok
+    (runS_validate_stack_ok g top 1 0 hs ss hin
+      (by have h : top.toNat - 1 + 0 ≤ 1024 := by omega
+          simpa [Evm.Functions.STACK_LIMIT] using h)) ?_
+  rw [dif_pos rfl, selfdestruct_dispatch]
+  exact runS_bind_ok hbody (runS_pure _ _ _)
 
 end EvmSpecsVerify

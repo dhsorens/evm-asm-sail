@@ -243,6 +243,16 @@ theorem runS_k_account_exists_hit (aV : Evm.Defs.address)
   refine runS_bind_ok (runS_k_aload_hit aV v hs ss h) ?_
   exact runS_pure _ _ _
 
+/-- EIP-161 emptiness of the row's `info`. `beneficiaryDead_eq` is what
+identifies it with SpecRef's `EMPTY_ACCOUNT` test. -/
+theorem runS_k_account_is_empty_hit (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue) (hs : Evm.HostState) (ss : SeqState)
+    (h : hostAcctRow hs aV = some v) :
+    runS (Evm.Functions.k_account_is_empty aV) hs ss
+      = .ok (Evm.Functions.account_info_empty v.curr.info, hs) ss := by
+  refine runS_bind_ok (runS_k_aload_hit aV v hs ss h) ?_
+  exact runS_pure _ _ _
+
 /-- `k_get_codehash` reports the zero hash for an absent account, where
 SpecRef reports `0` for `EMPTY_ACCOUNT` — see `accountRel_codehash`. -/
 theorem runS_k_get_codehash_hit (aV : Evm.Defs.address)

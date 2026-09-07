@@ -132,6 +132,24 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   match. Add a one-line `rfl` bridge (`except_ok_bind`,
   `Relations/Storage.lean`) rather than fighting simp.
 
+## Reading the extraction
+
+- **Read `extraction/evm-sail/extractions/lean/src/`, never
+  `extractions/lean/.build/`.** The Lake `evm` require points at `src`
+  (`lakefile.toml`); `.build` is a stale generated tree that can be forks
+  behind. Symptom of getting it wrong: the handler you read charges
+  constants that no `Evm.Functions.*` lemma in the repo mentions
+  (e.g. a `G_newaccount` where the real source has
+  `G_amsterdam_state_new_account`), or it calls functions with no
+  counterpart at all. If a handler looks like it diverges wildly from
+  SpecRef, re-check the path *before* writing a mismatch entry.
+- **`execute` hoists `validate_stack` outside `execute_opcode`.** A
+  handler body's own first statement is *not* the first thing that runs.
+  This is what MM-14 is about, and it is easy to talk yourself out of
+  MM-14 by reading only the body (SELFDESTRUCT: `guard_static` does
+  precede `pop` inside `execute_selfdestruct`, and the crossing still
+  applies, because `validate_stack` is a level up).
+
 ## Dispatch and scope (MM-3)
 
 - SpecRef `opImplementation` / interpreter loop is `partial` — no equation
@@ -367,6 +385,35 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `Vector.toList_replicate` + `List.replicate` reduces the whole builder's
   `toList` to a literal list in milliseconds
   (`Representation/AddressWord.lean`).
+
+- **`rw` fails on a tuple projection whose `if` branches were
+  type-ascribed** (`(if c then (A, B) else ((0 : Uint), (0 : Uint))).2`
+  prints identically to the goal but will not match). Don't hunt the
+  ascription. Name the handler's *raw* expression as a `def` spelled
+  exactly as the handler spells it, and hand it to the next lemma by
+  `exact` (delta) instead of rewriting; prove a separate `_eq` lemma
+  putting it in closed form for the arithmetic
+  (`sdChargeRaw`/`sdChargeRaw_eq`, `sdExecRaw`/`sdExecRaw_eq` in
+  `Opcodes/Selfdestruct.lean`).
+- **`refine runE_bind_ok ?_ ?_` (or `runS_`/`runR_`) can fail with "don't
+  know how to synthesize implicit argument"** — the intermediate value
+  and states are only determined by the *first* subgoal, which Lean has
+  not run yet. Pass them by name: `refine runE_bind_ok (b := …)
+  (hs' := …) (ss' := …) ?_ ?_`.
+- **A continuation-style step lemma (`… (hk : … → runE (k v) hs ssC = r)
+  → runE (m >>= k) hs ss = r`) cannot serve a caller whose conclusion is
+  `∃ ss', …`**: the caller must name its witness before entering the
+  chain, and the witness is what the lemma hides. Turn the lemma around —
+  hand the state back through an existential and curry the step
+  (`∃ ssC, (∀ k r, runE (k v) hs ssC = r → runE (m >>= k) hs ss = r) ∧ …`,
+  see `runE_sd_state_charge`).
+- **Affordability hypotheses for a *guarded* charge must be conditional
+  on the guard** (`hafford : creates = true → …`, not `hafford : …`).
+  Unconditional ones silently narrow the theorem's domain to states where
+  a charge that never runs would have succeeded — the theorem still
+  compiles and still looks complete. Same discipline as the unused-hyp
+  rule: an assumption the proof does not need on some branch is a claim
+  you did not mean to make.
 
 ## Anti-patterns (stop and record)
 
