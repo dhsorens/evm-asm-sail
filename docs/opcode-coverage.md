@@ -141,7 +141,7 @@ ALU step skeletons live in [`EvmSpecsVerify/Opcodes/Shapes/`](../EvmSpecsVerify/
 | STATICCALL | 0xfa | `iStaticcall` *(partial)* | `execute_staticcall` | system | unstated |
 | REVERT | 0xfd | `iRevert` | `execute_revert` | system | **full** ([`revert_step_equiv`](../EvmSpecsVerify/Opcodes/Revert.lean#L521) — revert with output correspondence (`RevertPost`), zero/grow/in-window reads, underflow ×2, expansion OOG. Targets [`RevertResultRel`](../EvmSpecsVerify/Relations/Outcome.lean#L144), not `StepResultRel`: `.revert` is not an exceptional halt, so the gas survives. New MM-9 records the state-gas refill's layer, proven equal to SpecRef's own `refill_frame_state_gas` via `runR_refill`) |
 | INVALID | 0xfe | (dispatch throws `.invalidOpcode`) | `execute_invalid` | system | unstated |
-| SELFDESTRUCT | 0xff | `iSelfdestruct` | `execute_selfdestruct` | system+world | unstated (needs the account side of the world relation: deletion, balance transfer, created-account set. MM-14 covers its guard ordering) |
+| SELFDESTRUCT | 0xff | `iSelfdestruct` | `execute_selfdestruct` | system+world | unstated (prerequisites landing: [`AccountRel`](../EvmSpecsVerify/Relations/Account.lean) relates the account overlay and [`transfer_equiv`](../EvmSpecsVerify/Relations/Transfer.lean) proves the balance transfer + EIP-7708 log. What is left: the four gas constants (MM-2's account-write subset), the `accountsToDelete`/`createdAccounts` ↔ `created`/`selfdestructed` correspondence (EIP-6780), the deletion itself (a *collapsing* account write, so it waits on the storage-clear correspondence), and the halt shape. MM-14 covers its guard ordering) |
 
 ## Counts (checked against the rows above by the refresh script)
 

@@ -309,6 +309,38 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   definitional equality" — `#print <Type>.instBEq….beq` first, then state it
   over **constructor applications** and `cases a; cases b` before rewriting
   (`account_beq_eq`, Relations/Account.lean).
+- **A `rfl` for `(bigStateUpdate …).field = hs.field` can hang when the
+  update's *arguments* are concrete constants.** Trigger: passing
+  `(show (logAppend hs2 EIP7708_SYSTEM_ADDRESS (topicWords …)
+  (toBeBytes32 v)).accountTx = hs2.accountTx from rfl)` to a frame lemma —
+  2 minutes and a heartbeat timeout, while the identical statement over
+  *variables* is instant. Cause: `isDefEq` on two projections of the same
+  field tries the **congruence route first** (`logAppend hs2 A B C =?= hs2`),
+  which fails, and while failing it whnfs the arguments at `all`
+  transparency — here `address_from_bits 0x…#256` and a keccak literal.
+  Right move: prove the field lemma **once, over variables**, next to the
+  state-update `def` (`logAppend_accountTx`, `Relations/Log.lean`) and apply
+  it; never leave the projection to `rfl` at a call site with concrete
+  constants in it.
+- **`String.toUTF8.toList` is opaque to `decide`.** Trigger: verifying a
+  SpecRef keccak constant (`TRANSFER_TOPIC = keccak256 "Transfer(…)"`)
+  against an extraction literal — `decide` reports "reduction got stuck"
+  on the constant itself. `keccak256`, `String.toUTF8` and
+  `ByteArray.data.toList` all reduce fine; `ByteArray.toList` is a
+  well-founded loop and does not. Right move: rewrite it to
+  `.data.toList` first (`byteArray_toList`, `Relations/Transfer.lean`) and
+  then `decide`. **Never** reach for `native_decide` — it adds
+  `Lean.ofReduceBool` to the axiom set. Check with `#print axioms`.
+- **Higher-order args to a run-shape lemma defeat `rw`/`simp`.** Trigger:
+  `runTx_modifyState_nonEmpty ts a ?f r h hne` where the do-elaborator
+  spelled `?f` as a full record literal — `?f` is solved from the
+  *hypothesis* by first-order approximation (`fun _ => …`), so the rewrite
+  no longer matches, and spelling the literal out hits the multi-line
+  record-literal parse trap. Right move: a fused-bind lemma in the
+  relevant monad (`runTx_bind_ok`, `Relations/Transfer.lean`, mirroring
+  `runR_bind_ok`) and `refine` — the conclusion is unified with the goal
+  first, so `?f` comes from the goal and the hypothesis only has to be
+  *defeq*, not syntactically equal.
 - **Never `rfl`/whnf through a chain of `Vector.set!`s** (extraction
   builders like `word_to_address`): 20 sets time out at any heartbeat
   budget. Right move: the simp set `vector_set!_eq` (a local

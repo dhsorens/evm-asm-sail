@@ -504,16 +504,56 @@ residual notes at the end of this section scope each one.
       codeless account cannot be executing; the entry says so and says
       what would make it reachable.
 
+- [x] `Relations/Transfer.lean` — the value transfer, where the two
+      specifications cut the work differently. SpecRef's `moveEther` is
+      pure state-tracker work (reject on insufficient balance, then two
+      `modifyState`s) and each *caller* emits the EIP-7708 log behind its
+      own `!=` guard; the extraction's `k_transfer` does all three and
+      carries the guard inside `k_emit_transfer_log`. `specTransfer` is
+      the composite both SpecRef call sites spell, and `transfer_equiv`
+      pairs it with `k_transfer`, preserving `AccountRel` and `LogRel`
+      together — the first theorem in the tree that moves two relations
+      at once.
+      Three constants had to meet first, and all three are **theorems**:
+      `transferLogAddress_eq` (SpecRef's `SYSTEM_ADDRESS` is the
+      extraction's `EIP7708_SYSTEM_ADDRESS`), `transferTopic_eq`
+      (`keccak256 "Transfer(address,address,uint256)"` is the literal
+      `0xddf252ad…`, kernel-computed) and
+      `toBeBytes32_address_to_word` (SpecRef pads twelve zero bytes by
+      hand where the extraction round-trips through a word). The topic
+      needed one bridge nobody had: `String.toUTF8.toList` goes through
+      `ByteArray.toList`, a well-founded loop and so opaque to `decide`,
+      so `byteArray_toList` rewrites it to the reducible
+      `.data.toList`. On the way, `natToBytesBE_bytesBEtoNat` and
+      `natToBytesBE_pad` filled in the missing half of the fixed-width
+      byte codec.
+      **One finding disproven, one recorded.** The suspected self-transfer
+      log divergence is *not* one: SpecRef checks `beneficiary !=
+      originator` in the caller (Interpreter.lean:304, :382) and the
+      extraction checks `src == dst` in the emitter, and the two agree —
+      MM-18's log clause is now closed by proof, leaving only the account
+      row. What is new is **MM-19**: SpecRef credits a balance with
+      unbounded `Nat` addition where the extraction reduces modulo
+      `2^256`, so the two agree only below the wrap. Unreachable in a
+      well-formed chain (a transfer preserves the balance sum, and the
+      ether supply is far below `2^256`) but the witness is
+      caller-supplied, so `transfer_equiv` carries `hsum` and the ledger
+      says why.
+      Excluded and ledgered rather than proven: `k_transfer`'s two
+      early-return branches (self-transfer, zero value — MM-18, and the
+      zero-value half is independently reachable through a zero-balance
+      `SELFDESTRUCT`) and SpecRef's EIP-161 collapse, which destroys
+      storage and so waits on the same correspondence the collapsing
+      account write does.
+
 Residual for the remaining `unstated` rows:
 
 - **SELFDESTRUCT** now has its relation (`AccountRel`), its read shapes
   (`runS_k_get_balance_hit`, `runS_k_account_exists_hit`,
-  `runTx_isAccountAlive_hit`) and its write lemmas
+  `runTx_isAccountAlive_hit`), its write lemmas
   (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
-  `accountRel_write`). What is still open: composing them into the
-  transfer (SpecRef's `moveEther` — two `modifyState`s and the
-  insufficient-balance rejection — against the extraction's `k_transfer`,
-  which also emits the EIP-7708 log, so `LogRel` joins in), the
+  `accountRel_write`) and now its transfer (`transfer_equiv`, which also
+  settles the EIP-7708 log). What is still open: the
   `accountsToDelete` / `created` + `selfdestructed` correspondence for
   EIP-6780, the four constants (`OPCODE_SELFDESTRUCT_BASE`/`G_selfdestruct`,
   `COLD_ACCOUNT_ACCESS`, `ACCOUNT_WRITE`, `StateGasCosts.NEW_ACCOUNT` —

@@ -167,6 +167,38 @@ EVM state can violate it, and whether it is eliminable by proving.
   account-read hypotheses below** on the transaction-overlay regime, and
   is the account-side prerequisite SELFDESTRUCT waits on.
 
+## The value transfer
+
+* `hsum` (`transfer_equiv`, Relations/Transfer.lean) — the destination's
+  post-transfer balance fits a word. Mismatch ledger MM-19: the
+  extraction credits with `alu_add` (`(l + r) % 2^256`), SpecRef with
+  unbounded `Nat` addition, so above the modulus they store different
+  balances — and SpecRef's is not a word, breaking `AccountRel.wf`. The
+  same class as `hwfg` (MM-8) and `hword` (MM-15): a modelling gap in
+  SpecRef's `U256 := Nat` alias rather than a coding slip. Unreachable in
+  a well-formed chain (the total ether supply is far below `2^256` and a
+  transfer is balance-preserving), but the witness is caller-supplied, so
+  nothing local rules the pre-state out. Eliminable only by a supply
+  invariant on the witness.
+* `hne` / `hv` (`transfer_equiv`) — the two branches of `k_transfer`'s
+  early return: a self-transfer and a zero-value transfer, where the
+  extraction writes nothing and SpecRef runs both `modifyState`s
+  (mismatch ledger MM-18). Both are **reachable**, and both are excluded
+  rather than proven, because SpecRef's second `modifyState` can hit the
+  EIP-161 collapse branch — which also destroys storage, and so waits on
+  the same `destroyStorage` ↔ `storage_tx_cleared` correspondence as the
+  collapsing account write. MM-18 records the block-access-list argument
+  for why the account half is unobservable anyway.
+* `hsne` / `hdne` (`transfer_equiv`) — neither write collapses. Not an
+  invariant: it is the `accountRel_write` scope restriction, stated on
+  the extraction's `account_info_empty` and transported to SpecRef's test
+  by `specAcctEmpty_eq`, so one hypothesis serves both sides. Both of
+  SELFDESTRUCT's writes and a value-carrying CALL's satisfy it.
+* The EIP-7708 constants are **not** assumptions: `transferLogAddress_eq`
+  and `transferTopic_eq` are kernel computations, the second going
+  through `byteArray_toList` because `String.toUTF8.toList` is
+  well-founded and so opaque to `decide`.
+
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
   account reads: SpecRef's journalled `getAccount` and the kernel's
   `k_get_balance` return the same balance, quantified over the ambient

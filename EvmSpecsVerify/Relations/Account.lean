@@ -161,6 +161,15 @@ def hostAcctView (a : Evm.Defs.Account) :
         codeHash := a.info.code_hash.toList }
   else none
 
+/-- The SpecRef account a row's tuple projects to: the three trie fields,
+named because a multi-line record literal does not parse inside a
+structure-instance field or a tactic argument. -/
+def specAcctOfInfo (info : Evm.Defs.AccountInfo) :
+    EvmAsm.Stateless.SpecRef.Account :=
+  { nonce := info.nonce
+    balance := info.balance
+    codeHash := info.code_hash.toList }
+
 /-! ## SpecRef run shapes -/
 
 /-- A transaction-overlay hit: the entry comes back and the only state
@@ -432,33 +441,56 @@ theorem runS_acct_tx_set_code_hash_hit (aV : Evm.Defs.address)
   exact runS_modify _ _ _
 
 /-- The row-level facts a write leaves behind, as an `∃`: the written row,
-every other row, and the host fields an opcode needs untouched. -/
+every other row, and — since every account writer is one `accountTx`
+update — that **nothing else in the host state moved**. The last clause
+subsumes the individual field-preservation facts an opcode needs
+(`hostAcctWritten_frame`) and is what carries the log store, the warm
+stamps and the storage overlay across a write. -/
 def HostAcctWritten (hs hs' : Evm.HostState) (aV : Evm.Defs.address)
     (r : Evm.Defs.AcctValue) : Prop :=
   hostAcctRow hs' aV = some r
     ∧ (∀ bV, bV ≠ aV → hostAcctRow hs' bV = hostAcctRow hs bV)
-    ∧ (hs'.stackFrames = hs.stackFrames ∧ hs'.warmAddresses = hs.warmAddresses)
-    ∧ (hs'.warmEpoch = hs.warmEpoch ∧ hs'.storageTx = hs.storageTx)
+    ∧ hs' = { hs with accountTx := hs'.accountTx }
+
+/-- Every host field but `accountTx` reads back unchanged. -/
+theorem hostAcctWritten_frame {hs hs' : Evm.HostState}
+    {aV : Evm.Defs.address} {r : Evm.Defs.AcctValue}
+    (h : HostAcctWritten hs hs' aV r) :
+    hs'.stackFrames = hs.stackFrames ∧ hs'.warmAddresses = hs.warmAddresses
+      ∧ hs'.warmEpoch = hs.warmEpoch ∧ hs'.storageTx = hs.storageTx
+      ∧ hs'.logs = hs.logs ∧ hs'.logBytes = hs.logBytes
+      ∧ hs'.memoryFrames = hs.memoryFrames
+      ∧ hs'.memoryBytes = hs.memoryBytes := by
+  rw [h.2.2]
+  exact ⟨rfl, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 theorem hostAcctWritten_write (hs : Evm.HostState) (aV : Evm.Defs.address)
     (v : Evm.Defs.AcctValue) (c : Evm.Defs.Account) :
     HostAcctWritten hs (hostAcctWrite hs aV v c) aV { v with curr := c } :=
   ⟨hostAcctWrite_row hs aV v c,
-    fun bV hbV => hostAcctWrite_row_ne hs aV bV v c hbV,
-    ⟨rfl, rfl⟩, ⟨rfl, rfl⟩⟩
+    fun bV hbV => hostAcctWrite_row_ne hs aV bV v c hbV, rfl⟩
 
 theorem hostAcctWritten_refl (hs : Evm.HostState) (aV : Evm.Defs.address)
     (r : Evm.Defs.AcctValue) (h : hostAcctRow hs aV = some r) :
     HostAcctWritten hs hs aV r :=
-  ⟨h, fun _ _ => rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl⟩⟩
+  ⟨h, fun _ _ => rfl, rfl⟩
 
 theorem hostAcctWritten_trans {hs hs' hs'' : Evm.HostState}
     {aV : Evm.Defs.address} {r r' : Evm.Defs.AcctValue}
     (h1 : HostAcctWritten hs hs' aV r) (h2 : HostAcctWritten hs' hs'' aV r') :
     HostAcctWritten hs hs'' aV r' :=
   ⟨h2.1, fun bV hbV => (h2.2.1 bV hbV).trans (h1.2.1 bV hbV),
-    ⟨h2.2.2.1.1.trans h1.2.2.1.1, h2.2.2.1.2.trans h1.2.2.1.2⟩,
-    ⟨h2.2.2.2.1.trans h1.2.2.2.1, h2.2.2.2.2.trans h1.2.2.2.2⟩⟩
+    by rw [h2.2.2, h1.2.2]⟩
+
+/-- A write at one address, seen from another: the second address'
+`HostAcctWritten` facts survive it. What lets the transfer's two writes
+compose even though each is reported at its own address. -/
+theorem hostAcctWritten_of_ne {hs hs' : Evm.HostState}
+    {aV bV : Evm.Defs.address} {r : Evm.Defs.AcctValue}
+    (h : HostAcctWritten hs hs' aV r) (hb : bV ≠ aV)
+    (r' : Evm.Defs.AcctValue) (hrow : hostAcctRow hs bV = some r') :
+    hostAcctRow hs' bV = some r' := by
+  rw [h.2.1 bV hb]; exact hrow
 
 /-- One of `store_account_info`'s optional scalar sets. The result state
 is existentially bound (an all-fields-unchanged run performs **no**
@@ -664,6 +696,24 @@ theorem accountRel_balance {ts : TransactionState} {hs : Evm.HostState}
   · rw [if_neg hp]
     exact ((hrel.absentEmpty aV v hrow (by simpa using hp)).1).symm
 
+/-- **The whole tuple SpecRef reads is the row's `info`.** Strengthens
+`accountRel_balance` to all three trie fields, and holds on absent rows
+too: there the view is `none`, SpecRef falls back to `EMPTY_ACCOUNT`, and
+`absentEmpty` says the row's tuple is exactly that. This is what lets a
+SpecRef `modifyState`'s field update be read off the extraction's
+`info`. -/
+theorem accountRel_view_eq {ts : TransactionState} {hs : Evm.HostState}
+    (hrel : AccountRel ts hs) (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue) (hrow : hostAcctRow hs aV = some v) :
+    (hostAcctView v.curr).getD EMPTY_ACCOUNT = specAcctOfInfo v.curr.info := by
+  unfold hostAcctView specAcctOfInfo
+  by_cases hp : v.curr.present = true
+  · rw [if_pos hp]
+    rfl
+  · obtain ⟨hb, hn, hh⟩ := hrel.absentEmpty aV v hrow (by simpa using hp)
+    rw [if_neg hp, Option.getD_none, EMPTY_ACCOUNT, hb, hn, hh,
+      empty_code_hash_eq]
+
 /-- The liveness SpecRef reads is the row's `present` flag. -/
 theorem accountRel_alive {ts : TransactionState} {hs : Evm.HostState}
     (hrel : AccountRel ts hs) (aV : Evm.Defs.address)
@@ -731,12 +781,8 @@ theorem specAcctRow_setAccount_ne (ts : TransactionState) (a a' : Address)
 /-- The view of a non-collapsing write's row. -/
 theorem hostAcctView_rowSet (c : Evm.Defs.Account)
     (info : Evm.Defs.AccountInfo) :
-    hostAcctView (acctRowSet c info)
-      = some
-        { nonce := info.nonce
-          balance := info.balance
-          codeHash := info.code_hash.toList } := by
-  unfold hostAcctView
+    hostAcctView (acctRowSet c info) = some (specAcctOfInfo info) := by
+  unfold hostAcctView specAcctOfInfo
   rw [if_pos (acctRowSet_present c info)]
   rfl
 
@@ -842,5 +888,24 @@ theorem accountRel_hostFrame {ts : TransactionState}
       presentNonEmpty := fun aV v hv =>
         hrel.presentNonEmpty aV v (by rw [← hrow]; exact hv)
       wf := fun aV v hv => hrel.wf aV v (by rw [← hrow]; exact hv) }
+
+/-- **`AccountRel` is stable under one non-collapsing `modifyState`.**
+`accountRel_write` phrased against the state `runTx_modifyState_nonEmpty`
+actually produces: `modifyState` wraps its write in two read marks, and
+the relation reads only `accountWrites`. -/
+theorem accountRel_modifyState {ts : TransactionState}
+    {hs hs' : Evm.HostState} (hrel : AccountRel ts hs)
+    (aV : Evm.Defs.address) (v : Evm.Defs.AcctValue)
+    (info : Evm.Defs.AccountInfo)
+    (hne : Evm.Functions.account_info_empty info = false)
+    (hwf : WordWf info.balance)
+    (hw : HostAcctWritten hs hs' aV { v with curr := acctRowSet v.curr info }) :
+    AccountRel (specModifyStateOut ts aV.toList (specAcctOfInfo info)) hs' :=
+  accountRel_frame
+    (show (specModifyStateOut ts aV.toList (specAcctOfInfo info)).accountWrites
+      = (specSetAccount ts aV.toList (some (specAcctOfInfo info))).accountWrites
+      from rfl)
+    (accountRel_write hrel aV v info hne hwf (specAcctOfInfo info)
+      (hostAcctView_rowSet v.curr info) hw)
 
 end EvmSpecsVerify

@@ -104,6 +104,79 @@ theorem bytesBEtoNat_natToBytesBE (w : Nat) :
         = 2 ^ (8 * w) * (x / 2 ^ (8 * w)) := Nat.mul_comm _ _
     omega
 
+/-- **Encode after decode**: the fixed-width encoder inverts the
+big-endian decoder at the list's own length. Companion to
+`bytesBEtoNat_natToBytesBE`, and what turns a host address or hash vector
+back into itself after a trip through a word. -/
+theorem natToBytesBE_bytesBEtoNat : ∀ bs : Bytes,
+    natToBytesBE bs.length (bytesBEtoNat bs) = bs := by
+  intro bs
+  induction bs with
+  | nil => rfl
+  | cons b bs ih =>
+    have hlt : bytesBEtoNat bs < 256 ^ bs.length :=
+      EvmAsm.EL.RLP.Nat.fromBytesBE_lt bs
+    have hpow : (256 : Nat) ^ bs.length = 2 ^ (8 * bs.length) := by
+      rw [show (256 : Nat) = 2 ^ 8 from by decide, ← Nat.pow_mul]
+    have hcons : ∀ x, natToBytesBE (bs.length + 1) x
+        = BitVec.ofNat 8 (x >>> (8 * bs.length))
+            :: natToBytesBE bs.length x := by
+      intro x
+      unfold EvmAsm.Stateless.SpecRef.natToBytesBE
+      rw [List.range_succ, List.reverse_append]
+      rfl
+    have hval : bytesBEtoNat (b :: bs)
+        = b.toNat * 256 ^ bs.length + bytesBEtoNat bs := rfl
+    show natToBytesBE (bs.length + 1) (bytesBEtoNat (b :: bs)) = _
+    rw [hcons, hval]
+    refine List.cons_eq_cons.mpr ⟨?_, ?_⟩
+    · apply BitVec.eq_of_toNat_eq
+      rw [BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, ← hpow,
+        Nat.mul_comm, Nat.mul_add_div (Nat.pow_pos (by omega)),
+        Nat.div_eq_of_lt hlt, Nat.add_zero]
+      exact Nat.mod_eq_of_lt b.isLt
+    · rw [← natToBytesBE_mod, Nat.mul_comm (BitVec.toNat b), Nat.mul_add_mod,
+        Nat.mod_eq_of_lt hlt]
+      exact ih
+
+/-- **Zero extension**: a value that fits in `b` bytes encodes at width
+`a + b` as `a` zero bytes followed by its `b`-byte encoding. The
+address-in-a-topic padding both specifications spell by hand. -/
+theorem natToBytesBE_pad (a b x : Nat) (hx : x < 256 ^ b) :
+    natToBytesBE (a + b) x = List.replicate a 0 ++ natToBytesBE b x := by
+  have hzero : ∀ k, b ≤ k → BitVec.ofNat 8 (x >>> (8 * k)) = 0 := by
+    intro k hk
+    have hdiv : x / 2 ^ (8 * k) = 0 := by
+      refine Nat.div_eq_of_lt ?_
+      calc x < 256 ^ b := hx
+        _ = 2 ^ (8 * b) := by
+            rw [show (256 : Nat) = 2 ^ 8 from by decide, ← Nat.pow_mul]
+        _ ≤ 2 ^ (8 * k) := Nat.pow_le_pow_right (by omega) (by omega)
+    apply BitVec.eq_of_toNat_eq
+    rw [BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, hdiv]
+    rfl
+  have hlenb : (natToBytesBE b x).length = b := by
+    simp [EvmAsm.Stateless.SpecRef.natToBytesBE]
+  apply List.ext_getElem
+  · simp [EvmAsm.Stateless.SpecRef.natToBytesBE]
+  · intro i h1 h2
+    simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.length_map,
+      List.length_reverse, List.length_range] at h1
+    rw [show (natToBytesBE (a + b) x)[i]
+        = BitVec.ofNat 8 (x >>> (8 * (a + b - 1 - i))) from by
+      simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.getElem_map,
+        List.getElem_reverse, List.length_range, List.getElem_range]]
+    by_cases hi : i < a
+    · rw [List.getElem_append_left (by simpa using hi),
+        List.getElem_replicate, hzero _ (by omega)]
+    · rw [List.getElem_append_right (by simpa using hi)]
+      simp only [List.length_replicate]
+      rw [show (natToBytesBE b x)[i - a]
+          = BitVec.ofNat 8 (x >>> (8 * (b - 1 - (i - a)))) from by
+        simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.getElem_map,
+          List.getElem_reverse, List.length_range, List.getElem_range]]
+      rw [show b - 1 - (i - a) = a + b - 1 - i from by omega]
+
 /-- `toBeBytes32` is injective on well-formed words. -/
 theorem toBeBytes32_inj {a b : Nat} (ha : WordWf a) (hb : WordWf b)
     (h : toBeBytes32 a = toBeBytes32 b) : a = b := by

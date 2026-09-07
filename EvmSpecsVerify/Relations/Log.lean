@@ -32,7 +32,7 @@ proves the relation survives it. Consumers: the LOG family.
 -/
 
 open private modifyLastLog appendLogData readArrayBytes
-  memoryBytesOf from Evm.HostAxioms
+  memoryBytesOf wordBytes from Evm.HostAxioms
 
 set_option maxHeartbeats 1000000
 
@@ -220,6 +220,67 @@ theorem runS_k_log_memory (a : Evm.Defs.address) (ts : LogTopics)
             (runS_log_add_topic t3 a [t0, t1, t2] hs ss)))) ?_
     exact runS_log_add_data_memory s d a [t0, t1, t2, t3] hs ss hd
 
+/-! ## The word-payload emission
+
+`k_log`'s other data constructor. The EIP-7708 transfer and burn logs
+carry a bare word rather than a memory slice, so they reach
+`log_add_data_word` — the same `appendLogData` as the memory variant, on
+`wordBytes` instead. -/
+
+theorem runS_log_add_data_word (value : word) (a : Evm.Defs.address)
+    (ws : List word) (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.log_add_data_word value) (logPending hs a ws) ss =
+      .ok ((), logAppend hs a ws (toBeBytes32 value)) ss := by
+  unfold Evm.Functions.log_add_data_word
+  rw [show wordBytes value = toBeBytes32 value from wordBytes_eq value]
+  unfold appendLogData
+  rw [runS_modify,
+    modifyLastLog_push
+      { logPending hs a ws with
+          logBytes := (logPending hs a ws).logBytes
+            ++ (toBeBytes32 value).toArray }
+      hs.logs (logRowTopics hs a ws) _ rfl]
+  simp [logPending, logRowTopics, logAppend]
+
+open Evm.Functions in
+/-- **One word-payload emission**: as `runS_k_log_memory`, with the
+payload the word's 32 big-endian bytes. -/
+theorem runS_k_log_word (a : Evm.Defs.address) (ts : LogTopics)
+    (value : word) (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.k_log a ts (.LogDataWord value)) hs ss =
+      .ok ((), logAppend hs a (topicWords ts) (toBeBytes32 value)) ss := by
+  unfold Evm.Functions.k_log
+  refine runS_bind_ok (runS_log_begin a hs ss) ?_
+  unfold Evm.Functions.k_log_topics Evm.Functions.k_log_data
+  cases ts with
+  | LogTopics0 u =>
+    refine runS_bind_ok (runS_pure _ _ _) ?_
+    exact runS_log_add_data_word value a [] hs ss
+  | LogTopics1 t0 =>
+    refine runS_bind_ok (runS_log_add_topic t0 a [] hs ss) ?_
+    exact runS_log_add_data_word value a [t0] hs ss
+  | LogTopics2 p =>
+    obtain ⟨t0, t1⟩ := p
+    refine runS_bind_ok
+      (runS_bind_ok (runS_log_add_topic t0 a [] hs ss)
+        (runS_log_add_topic t1 a [t0] hs ss)) ?_
+    exact runS_log_add_data_word value a [t0, t1] hs ss
+  | LogTopics3 p =>
+    obtain ⟨t0, t1, t2⟩ := p
+    refine runS_bind_ok
+      (runS_bind_ok (runS_log_add_topic t0 a [] hs ss)
+        (runS_bind_ok (runS_log_add_topic t1 a [t0] hs ss)
+          (runS_log_add_topic t2 a [t0, t1] hs ss))) ?_
+    exact runS_log_add_data_word value a [t0, t1, t2] hs ss
+  | LogTopics4 p =>
+    obtain ⟨t0, t1, t2, t3⟩ := p
+    refine runS_bind_ok
+      (runS_bind_ok (runS_log_add_topic t0 a [] hs ss)
+        (runS_bind_ok (runS_log_add_topic t1 a [t0] hs ss)
+          (runS_bind_ok (runS_log_add_topic t2 a [t0, t1] hs ss)
+            (runS_log_add_topic t3 a [t0, t1, t2] hs ss)))) ?_
+    exact runS_log_add_data_word value a [t0, t1, t2, t3] hs ss
+
 /-! ## Popping the topic operands
 
 `pop_log_topics` matches on the arity and pops that many operands, so the
@@ -354,6 +415,26 @@ theorem logAppend_logBytes (hs : Evm.HostState) (a : Evm.Defs.address)
     (ts : List word) (d : List byte) :
     (logAppend hs a ts d).logBytes = hs.logBytes ++ d.toArray := rfl
 
+/-- The overlays and registers an emission does not touch. Stated as
+lemmas rather than left to `rfl` at the use site: `isDefEq` on a
+projection of `logAppend` tries the congruence route first, which pushes
+the emission's concrete address and topic constants through `whnf`. -/
+@[simp] theorem logAppend_accountTx (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List byte) :
+    (logAppend hs a ts d).accountTx = hs.accountTx := rfl
+
+@[simp] theorem logAppend_storageTx (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List byte) :
+    (logAppend hs a ts d).storageTx = hs.storageTx := rfl
+
+@[simp] theorem logAppend_warmSlots (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List byte) :
+    (logAppend hs a ts d).warmSlots = hs.warmSlots := rfl
+
+@[simp] theorem logAppend_warmEpoch (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List byte) :
+    (logAppend hs a ts d).warmEpoch = hs.warmEpoch := rfl
+
 theorem logAppend_logs_size (hs : Evm.HostState) (a : Evm.Defs.address)
     (ts : List word) (d : List byte) :
     (logAppend hs a ts d).logs.size = hs.logs.size + 1 := by
@@ -463,6 +544,31 @@ theorem logRel_expandedHost (L : List Log) (hs : Evm.HostState)
     LogRel L (expandedHost hs off len req mfrest) base := by
   obtain ⟨hcount, haddr, htop, hdata, hbound⟩ := hrel
   exact ⟨hcount, haddr, htop, hdata, hbound⟩
+
+/-- The relation reads two host fields, so any step that leaves the log
+store and its byte arena alone preserves it — an account write, a warm
+stamp, a storage write. Dual to `logRel_expandedHost`, which is the same
+fact for the one host step whose shape is already named. -/
+theorem logRel_frame (L : List Log) {hs hs' : Evm.HostState} (base : Nat)
+    (hlogs : hs'.logs = hs.logs) (hbytes : hs'.logBytes = hs.logBytes)
+    (hrel : LogRel L hs base) : LogRel L hs' base := by
+  have hrow : ∀ i, logRow hs' i = logRow hs i := by
+    intro i
+    unfold logRow
+    rw [hlogs]
+  have hdata : ∀ i, logRowData hs' i = logRowData hs i := by
+    intro i
+    unfold logRowData
+    rw [hrow, hbytes]
+  obtain ⟨hcount, haddr, htop, hd, hbound⟩ := hrel
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · rw [show hs'.logs.size = hs.logs.size from by rw [hlogs]]; exact hcount
+  · intro i hi; rw [hrow]; exact haddr i hi
+  · intro i hi; rw [hrow]; exact htop i hi
+  · intro i hi; rw [hdata]; exact hd i hi
+  · intro i hi
+    rw [hrow, show hs'.logBytes.size = hs.logBytes.size from by rw [hbytes]]
+    exact hbound i hi
 
 /-! ## The success post for the LOG family -/
 

@@ -543,11 +543,34 @@ is one-directional in the same way `StorageRel` is.
   reachable.
 - **Expected EVM behavior**: the balances agree — SpecRef's two writes
   net to the original value, and the extraction never moves anything.
-  The transfer *log* agrees too: SpecRef guards `emit_transfer_log` with
-  `beneficiary != originator`, matching the extraction's skip. What
-  differs is only *presence* in the transaction's write set, which is
-  observable in principle in the block access list, exactly as in MM-16
-  — and there SpecRef is again the conservative side.
+  The transfer *log* agrees too, and that half is now **proven**: SpecRef
+  guards `emit_transfer_log` with `beneficiary != originator` in the
+  caller (Interpreter.lean:304 and :382) where the extraction guards
+  `src == dst` inside the emitter, and
+  [`transfer_equiv`](../EvmSpecsVerify/Relations/Transfer.lean) pairs the
+  two spellings on the case that emits. What differs is only *presence*
+  in the transaction's write set, which is observable in principle in the
+  block access list, exactly as in MM-16 — and there SpecRef is again the
+  conservative side.
+- **The `value == 0` half.** `k_transfer`'s early return covers
+  `word_is_zero v` as well as `src == dst`, and that branch **is**
+  independently reachable: `iSelfdestruct` calls
+  `moveEther originator beneficiary originator_balance`
+  (Interpreter.lean:302) with no zero guard, so a `SELFDESTRUCT` from a
+  zero-balance account reaches `moveEther a b 0`. SpecRef then runs both
+  `modifyState`s: `a` survives (it is executing code, so its code hash is
+  not empty), but `b`'s write is a no-op tuple, and if `b` is dead the
+  EIP-161 collapse fires — `destroyAccount b` writes
+  `accountWrites[b] = none` and runs `destroyStorage b`. The account half
+  is again invisible to `AccountRel` (SpecRef holds a row the extraction
+  lacks, and `none` reads back as absent either way) and invisible in the
+  BAL (`updateBuilderFromTx` diffs post against pre, and a dead account's
+  pre and post both read as balance 0 / nonce 0 / empty code hash). The
+  *storage* half is the open question: `destroyStorage b` moves `b`'s
+  `storageWrites` into `storageReads`, which the BAL does record — but
+  reaching it needs a dead account with pending storage writes in the
+  same transaction, and `setStorage` rejects on a non-existent account.
+  Not substantiated; `transfer_equiv`'s `hv : v ≠ 0` excludes it.
 - **Fork**: all (EIP-7708 adds the log question at Amsterdam, but the
   row asymmetry predates it). **Reachability**: trivially reachable.
   **Severity**: none within a step; potentially observable at
@@ -571,7 +594,44 @@ is one-directional in the same way `StorageRel` is.
   SpecRef row the extraction lacks is invisible to it. That is the same
   weakening MM-16 forces on `StorageRel`, for the same reason, and
   `accountRel_write` preserves the relation across the writes that do
-  happen.
+  happen. The log clause is closed outright by `transfer_equiv`.
+
+## MM-19: SpecRef's balance addition does not reduce modulo `2^256`
+
+The account-state instance of the pattern MM-8 records for the stack, and
+the reason [`transfer_equiv`](../EvmSpecsVerify/Relations/Transfer.lean)
+carries a `hsum` hypothesis.
+
+- **Area**: every SpecRef credit to an account balance — `move_ether`,
+  `create_ether`, `set_account_balance`, `increment_nonce`
+  (StateTracker.lean:298–314).
+- **SpecRef**: `modifyState a (fun x => { x with balance := x.balance + amount })`.
+  `U256 := Nat` (Types.lean:27), so the sum is an unbounded `Nat` and
+  nothing wraps it.
+- **`Evm`**: `k_transfer` credits with `alu_add`, i.e.
+  `word_add_word l r = (l + r) % 2^256` (Prelude.lean:197).
+- **Trigger**: a credit whose result reaches `2^256`. Above it SpecRef's
+  stored balance is not a word, so `AccountRel.wf` — the field that lets
+  a balance be pushed by `BALANCE`/`SELFBALANCE` — fails, while the
+  extraction quietly wraps.
+- **Fork**: all. **Reachability**: not reachable in a well-formed chain.
+  The total ether supply is far below `2^256` wei and the transfer's
+  source is debited by exactly what the destination is credited, so the
+  sum of all balances is invariant; a single balance can only reach
+  `2^256` if the pre-state already violates that invariant. Neither
+  specification checks it, and the stateless witness is caller-supplied,
+  so a hand-built witness can present such a pre-state.
+- **Severity**: none in practice, but it is a real gap in the *statement*
+  of the equivalence rather than in either implementation: the two agree
+  only below the wrap, and `transfer_equiv` says so
+  (`hsum : dv.curr.info.balance + v < 2 ^ 256`, discharged by
+  `alu_add_of_lt`).
+- **Likely cause**: the same modelling gap as MM-8 and MM-15 —
+  execution-specs' `U256` raises on out-of-range construction and
+  SpecRef's `Nat` alias cannot express that.
+- **Disposition**: *assumption* — threaded as a hypothesis, recorded in
+  `EvmSpecsVerify/Assumptions.lean`. Closing it needs a supply invariant
+  on the witness, which is outside a single step's scope.
 
 ## MM-4: Step-boundary pc convention
 
