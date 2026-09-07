@@ -227,6 +227,11 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   whole row (`acctRowSet`/`acctRow1..3` there; `returnedStatus`,
   `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). Hoist
   BEFORE writing the proof: rows passed as lemma arguments hit this too.
+  The same whitespace sensitivity bites a **wrapped `show`**: in
+  `show A\n  = B`, the continuation line binds tighter than intended and
+  `show true = x || y` parses as `(true = x) || y`. Parenthesise the
+  right-hand side, or replace the `show` with a `simp only [theDef]`
+  that unfolds the projection you were trying to spell.
 - **`&&` is left-associative; the extraction's predicates often nest
   right.** Trigger: a Bool-equality lemma that "obviously" matches the
   goal fails with a type mismatch whose two sides differ only in
