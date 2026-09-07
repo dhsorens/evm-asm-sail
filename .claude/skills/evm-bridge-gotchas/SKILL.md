@@ -104,6 +104,14 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 - Prefer existing `Representation/` run-shape lemmas (`runR_bind_ok`,
   `runS` algebra, `charge`/`validate_stack` forms) over unfolding the whole
   handler in one `simp`.
+- **Grep the relation layer before proving any container law.**
+  `Relations/Assoc.lean` already holds the assoc-list/dict algebra both
+  sides need — `dictGet?_dictSet_self`/`_ne` and their `find?_*` helpers
+  for SpecRef's `dictSet`, alongside `assocGet_put_self`/`_ne` and
+  `assocPut_put_self` in `Relations/Warm.lean` for the extraction's
+  `assocPut`. A whole re-derivation of that file was written in one
+  session and caught only by a name clash. `grep -rn "dictSet\|assocPut"
+  EvmSpecsVerify/Relations/` first.
 - Heartbeats: large step theorems may need `set_option maxHeartbeats …`
   (see `Opcodes/Add.lean`). Raise deliberately; do not hide nontermination.
 - **`SailME.run do …` handlers** (`k_sload`, `execute_sstore`) are an
@@ -204,16 +212,31 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
   application is fully concrete (no holes); see `runS_pop_body_ok`
   (`Opcodes/Pop.lean`).
-- **A structure-instance field value must fit on ONE physical line.**
+- **A structure-instance field value must fit on ONE physical line, and a
+  COMMA-separated field list must not wrap at all.**
   Trigger: any `{ x with field := v }` where `v` spans two lines — whether
   it starts inline after `:=` or on its own continuation line — dies with
   `unexpected token '('; expected '}'`. (Earlier wording claimed an
   own-continuation-line value is safe; STOP's `ss.regs.insert R\n (v…)`
   disproved it — only a value that also ENDS on that one line parses.)
-  Right move: make the value a single token/line — shorten with
-  `open … (name)` or a small named `def` (`returnedStatus`,
-  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). See also
-  `runS_exp_body_ok`.
+  The same error fires on a wrapped **comma**-separated list even when
+  every value is short (`{ nonce := a, balance := b,⏎ codeHash := c }`),
+  in a statement as readily as in a tactic. Right move: either the
+  whitespace-sensitive form — one field per line, **no commas**, aligned
+  (`hostAcctView`, `Relations/Account.lean`) — or a named `def` for the
+  whole row (`acctRowSet`/`acctRow1..3` there; `returnedStatus`,
+  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). Hoist
+  BEFORE writing the proof: rows passed as lemma arguments hit this too.
+- **`&&` is left-associative; the extraction's predicates often nest
+  right.** Trigger: a Bool-equality lemma that "obviously" matches the
+  goal fails with a type mismatch whose two sides differ only in
+  parenthesisation (`(a && b) && c` vs `a && (b && c)`) — SpecRef spells
+  `nonce == 0 && codeHash == … && balance == 0` (left), the extraction's
+  `account_info_empty` spells `code == … && (nonce == 0 && …)` (right).
+  Right move: state the bridge lemma in the spelling of the side you will
+  `rw`/`exact` against, and prove it by `cases` on each Bool operand
+  (`specAcctEmpty_eq`, `Relations/Account.lean`) so the nesting is
+  irrelevant to the proof.
 - **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
   projection atoms that omega/simp can't merge.**
   Trigger: stating a relation or lemma hypothesis over a whole sigma value
