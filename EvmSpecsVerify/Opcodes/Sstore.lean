@@ -202,37 +202,6 @@ theorem sstoreRefundEvm_refundCounter (e : Evm) (o c n : U256) :
   · by_cases ho : o = 0 <;> by_cases hc : c = 0 <;> by_cases hn : n = 0 <;>
       by_cases hon : o = n <;> simp_all <;> try omega
 
-/-- `credit_state_gas_refund`, LIFO: execution gas up to the recorded
-spill, then the reservoir. -/
-def creditEvm (e : Evm) (cond : Bool) (amount : Uint) : Evm :=
-  if cond then
-    { e with
-        gasLeft := e.gasLeft + min amount e.stateGasSpilled
-        stateGasSpilled := e.stateGasSpilled - min amount e.stateGasSpilled
-        stateGasLeft :=
-          e.stateGasLeft + (amount - min amount e.stateGasSpilled) }
-  else e
-
-/-- `charge_gas`. -/
-def chargeEvm (e : Evm) (amount : Uint) : Evm :=
-  { e with
-      gasLeft := e.gasLeft - amount
-      regularGasUsed := e.regularGasUsed + amount }
-
-/-- `charge_state_gas`: reservoir first, then spill out of execution gas. -/
-def chargeStateEvm (e : Evm) (amount : Uint) : Evm :=
-  if amount ≤ e.stateGasLeft then
-    { e with stateGasLeft := e.stateGasLeft - amount }
-  else
-    { e with
-        stateGasLeft := 0
-        gasLeft := e.gasLeft - (amount - e.stateGasLeft)
-        stateGasSpilled :=
-          e.stateGasSpilled + (amount - e.stateGasLeft) }
-
-/-- `pcAdd 1`. -/
-def pcBump (e : Evm) : Evm := { e with pc := e.pc + 1 }
-
 /-- The frame after both pops and the cold-slot marking. -/
 def sstoreWarmedEvm (e : Evm) (rest : List U256) (key : Address × Bytes32)
     (cold : Bool) : Evm :=

@@ -1,5 +1,6 @@
 import EvmSpecsVerify.Relations.Warm
 import EvmSpecsVerify.Representation.AddressWord
+import EvmSpecsVerify.Representation.EvmMonad
 
 /-!
 # Warm address relation
@@ -77,5 +78,53 @@ theorem warmaddr_after_mark (pid : Evm.Defs.address → PrecompileId)
       · rw [List.contains_append]
         simp [hlist]]
     exact h aV
+
+/-! ## The extraction's run shapes
+
+`k_account_is_warm` and `k_account_mark_warm` both consult the
+precompile classifier first, so both take its run shape as a hypothesis
+(`hpid`). They live here rather than with an opcode because BALANCE,
+EXTCODEHASH, EXTCODESIZE, EXTCODECOPY and SELFDESTRUCT all use them. -/
+
+/-- The warm-address table after `k_account_mark_warm`: precompiles are
+never stamped. (Named so structure-update literals stay single-line.) -/
+def wsAfterMark (pid : Evm.Defs.address → PrecompileId)
+    (aV : Evm.Defs.address) (hs : Evm.HostState) :
+    List (Evm.Defs.address × Nat) :=
+  if (pid aV != PrecompileId.NotPrecompile) then hs.warmAddresses
+  else assocPut hs.warmAddresses aV hs.warmEpoch
+
+open Evm.Functions in
+/-- `k_account_is_warm`: precompiles short-circuit warm, otherwise the
+epoch stamp decides. -/
+theorem runS_k_account_is_warm (pid : Evm.Defs.address → PrecompileId)
+    (aV : Evm.Defs.address) (hs : Evm.HostState) (ss : SeqState)
+    (hpid : runS (Evm.Functions.precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss) :
+    runS (Evm.Functions.k_account_is_warm aV) hs ss =
+      .ok ((if (pid aV != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch
+          ≤ (assocGet hs.warmAddresses aV).getD 0)), hs) ss := by
+  simp only [Evm.Functions.k_account_is_warm, runS_bind, hpid]
+  by_cases hp : (pid aV != PrecompileId.NotPrecompile) = true
+  · rw [if_pos hp, if_pos hp]
+    exact runS_pure _ _ _
+  · rw [if_neg hp, if_neg hp]
+    simp only [Evm.Functions.account_is_warm, runS_bind, runS_get, runS_pure]
+
+open Evm.Functions in
+/-- `k_account_mark_warm` stamps non-precompiles, skips precompiles. -/
+theorem runS_k_account_mark_warm (pid : Evm.Defs.address → PrecompileId)
+    (aV : Evm.Defs.address) (hs : Evm.HostState) (ss : SeqState)
+    (hpid : runS (Evm.Functions.precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss) :
+    runS (Evm.Functions.k_account_mark_warm aV) hs ss =
+      .ok ((), { hs with warmAddresses := wsAfterMark pid aV hs }) ss := by
+  simp only [Evm.Functions.k_account_mark_warm, runS_bind, hpid, wsAfterMark]
+  by_cases hp : (pid aV != PrecompileId.NotPrecompile) = true
+  · rw [if_pos hp, if_pos hp]
+    exact runS_pure _ _ _
+  · rw [if_neg hp, if_neg hp]
+    simp only [Evm.Functions.account_mark_warm, runS_modify]
 
 end EvmSpecsVerify

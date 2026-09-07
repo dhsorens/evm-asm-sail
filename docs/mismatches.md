@@ -714,6 +714,14 @@ and the upstream comment says it is deliberate.
 - **Impact**: at handler entry the pcs differ by one; they re-align at step boundaries.
   Encoded in the theorems as `pc_in = sRef.evm.pc + 1` (hypothesis) and
   `returned pc = post.evm.pc` (conclusion, inside `BasePost`).
+- **Note (2026-09-07)**: SpecRef's two normal-halt handlers disagree with
+  *each other* about this. `iStop` does `pcAdd 1` before clearing
+  `running`; `iSelfdestruct` (Interpreter.lean:282) leaves `pc`
+  untouched. That is internal to SpecRef and **unobservable** — a halted
+  frame's pc is not read past the frame boundary, which is why `StopPost`
+  and `SelfdestructPost` mention neither pc nor stack — but it is worth
+  recording, because it means the `pc_in = sRef.evm.pc + 1` convention
+  cannot be stated uniformly for the halting family.
 - **Disposition**: *intentional abstraction* (decode/fetch layering difference),
   handled by the statement shape; will need care at JUMP/JUMPI and PUSH.
 

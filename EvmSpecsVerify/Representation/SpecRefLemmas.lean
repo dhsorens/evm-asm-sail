@@ -122,6 +122,35 @@ theorem runR_stackPush_overflow (s : Machine) (v : U256)
   simp only [stackPush, runR_bind, runR_getEvm]
   simp [hlen]
 
+/-! ## Guarded statements
+
+A do-block statement of the form `if c then act` (no `else`) with more
+statements after it elaborates to
+`if c then act >>= k else pure () >>= k` — the continuation is duplicated
+into both branches. `runR_guard_step` steps over one such guard given the
+guarded action's *own* run shape, so a caller states the effect once
+rather than once per branch. Consumers: the cold-address marking, the
+EIP-6780 lifecycle mark, the guarded EIP-7708 log. -/
+
+theorem runR_guard_step {α : Type} (c : Bool) (m : EvmM PUnit)
+    (k : PUnit → EvmM α) (s s' : Machine)
+    {r : Except SpecError (Except EvmError α × Machine)}
+    (hg : runR (if c = true then m else (pure PUnit.unit : EvmM PUnit)) s
+      = .ok (.ok PUnit.unit, s'))
+    (hk : runR (k PUnit.unit) s' = r) :
+    runR (if c = true then m >>= k
+        else (pure PUnit.unit : EvmM PUnit) >>= k) s = r := by
+  cases c
+  · rw [if_neg (by simp)] at hg ⊢
+    rw [runR_pure] at hg
+    have hs : s = s' := by
+      injection hg with hg'
+      exact (Prod.mk.injEq _ _ _ _).mp hg' |>.2
+    rw [hs]
+    exact runR_bind_ok (runR_pure _ _) hk
+  · rw [if_pos rfl] at hg ⊢
+    exact runR_bind_ok hg hk
+
 /-! ## Gas primitives -/
 
 theorem runR_charge_gas (s : Machine) (amount : Uint)

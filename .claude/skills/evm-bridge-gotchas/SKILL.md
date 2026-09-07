@@ -309,6 +309,20 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   definitional equality" — `#print <Type>.instBEq….beq` first, then state it
   over **constructor applications** and `cases a; cases b` before rewriting
   (`account_beq_eq`, Relations/Account.lean).
+- **`if c then act` with no `else`, followed by more statements,
+  duplicates the whole continuation into both branches.** Trigger: a
+  `runR`/`runS` chain that stalls on a huge goal after a guarded
+  statement — the elaborated term is
+  `if c then act >>= k else pure () >>= k`, not
+  `(if c then act else pure ()) >>= k`. `moveEther`'s `if … then throw`
+  and `iSelfdestruct`'s three guards are all this shape. Right move: a
+  generic stepper — `runR_guard_step` (`Representation/SpecRefLemmas.lean`)
+  takes the guarded action's own run shape and steps over the guard
+  without a case split; `runE_bind_cond` is the `SailME` analogue. The
+  same duplication is why a `def` you factored out (`specTransfer`) does
+  *not* appear as a subterm of the caller's chain: its statements are
+  inlined and re-associated, so it has to be stepped over rather than
+  rewritten.
 - **A `rfl` for `(bigStateUpdate …).field = hs.field` can hang when the
   update's *arguments* are concrete constants.** Trigger: passing
   `(show (logAppend hs2 EIP7708_SYSTEM_ADDRESS (topicWords …)

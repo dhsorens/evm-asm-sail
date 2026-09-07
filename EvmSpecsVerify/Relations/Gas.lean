@@ -26,4 +26,48 @@ structure GasRel (evmRef : EvmAsm.Stateless.SpecRef.Evm) (g : Nat)
   spilled : ss.regs.get? Evm.Defs.Register.state_gas_spilled =
     some evmRef.stateGasSpilled
 
+/-! ## Frame-level gas effects
+
+The three `Evm`-record updates SpecRef's gas primitives perform, named so
+that a step theorem can compose them and project the fields afterwards
+rather than carrying nested record literals. `charge_gas` and
+`charge_state_gas` are the charges; `credit_state_gas_refund` is
+`charge_state_gas`'s LIFO inverse. -/
+
+open EvmAsm.Stateless.SpecRef in
+/-- `charge_gas`. -/
+def chargeEvm (e : Evm) (amount : Uint) : Evm :=
+  { e with
+      gasLeft := e.gasLeft - amount
+      regularGasUsed := e.regularGasUsed + amount }
+
+open EvmAsm.Stateless.SpecRef in
+/-- `charge_state_gas`: reservoir first, then spill out of execution gas. -/
+def chargeStateEvm (e : Evm) (amount : Uint) : Evm :=
+  if amount ≤ e.stateGasLeft then
+    { e with stateGasLeft := e.stateGasLeft - amount }
+  else
+    { e with
+        stateGasLeft := 0
+        gasLeft := e.gasLeft - (amount - e.stateGasLeft)
+        stateGasSpilled :=
+          e.stateGasSpilled + (amount - e.stateGasLeft) }
+
+open EvmAsm.Stateless.SpecRef in
+/-- `credit_state_gas_refund`, LIFO: execution gas up to the recorded
+spill, then the reservoir. Guarded, since every caller so far applies it
+conditionally. -/
+def creditEvm (e : Evm) (cond : Bool) (amount : Uint) : Evm :=
+  if cond then
+    { e with
+        gasLeft := e.gasLeft + min amount e.stateGasSpilled
+        stateGasSpilled := e.stateGasSpilled - min amount e.stateGasSpilled
+        stateGasLeft :=
+          e.stateGasLeft + (amount - min amount e.stateGasSpilled) }
+  else e
+
+open EvmAsm.Stateless.SpecRef in
+/-- `pcAdd 1`. -/
+def pcBump (e : Evm) : Evm := { e with pc := e.pc + 1 }
+
 end EvmSpecsVerify
