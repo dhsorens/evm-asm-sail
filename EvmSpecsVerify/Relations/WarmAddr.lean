@@ -94,6 +94,42 @@ def wsAfterMark (pid : Evm.Defs.address → PrecompileId)
   if (pid aV != PrecompileId.NotPrecompile) then hs.warmAddresses
   else assocPut hs.warmAddresses aV hs.warmEpoch
 
+/-- **The extraction's warmth test is SpecRef's set membership.** The
+value `k_account_is_warm` returns (see below) reduces to
+`accessedAddresses.contains`, in both directions at once: a precompile is
+warm on the extraction by short-circuit and warm on SpecRef by the
+prewarm invariant `WarmAddrRel` carries, and a non-precompile is decided
+by the epoch stamp.
+
+Every access-list opcode needs this to price its access, and each one was
+deriving it inline (BALANCE, EXTCODEHASH, EXTCODESIZE, EXTCODECOPY, and
+now SELFDESTRUCT) — twenty-odd lines twice per opcode, once per branch of
+the membership test. -/
+theorem warm_of_warmAddrRel (pid : Evm.Defs.address → PrecompileId)
+    {sRef : Machine} {hs : Evm.HostState} (hwrel : WarmAddrRel pid sRef hs)
+    (aV : Evm.Defs.address) :
+    (if (pid aV != PrecompileId.NotPrecompile) then true
+        else decide (hs.warmEpoch ≤ (assocGet hs.warmAddresses aV).getD 0))
+      = sRef.evm.accessedAddresses.contains aV.toList := by
+  have hiff := hwrel aV
+  cases hwc : sRef.evm.accessedAddresses.contains aV.toList with
+  | true =>
+    by_cases hp : (pid aV != PrecompileId.NotPrecompile) = true
+    · rw [if_pos hp]
+    · rw [if_neg hp]
+      rcases hiff.mp hwc with hpre | hle
+      · exact absurd (bne_iff_ne.mpr hpre) hp
+      · exact decide_eq_true hle
+  | false =>
+    have hnot : pid aV = PrecompileId.NotPrecompile
+        ∧ ¬ hs.warmEpoch ≤ (assocGet hs.warmAddresses aV).getD 0 := by
+      by_cases hp : pid aV = PrecompileId.NotPrecompile
+      · refine ⟨hp, fun hle => ?_⟩
+        rw [hiff.mpr (Or.inr hle)] at hwc
+        cases hwc
+      · exact absurd (hiff.mpr (Or.inl hp)) (by rw [hwc]; simp)
+    rw [if_neg (by simp [hnot.1]), decide_eq_false hnot.2]
+
 open Evm.Functions in
 /-- `k_account_is_warm`: precompiles short-circuit warm, otherwise the
 epoch stamp decides. -/

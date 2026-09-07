@@ -576,32 +576,33 @@ their rows agree), and the lemma hands back both the plain run equation
 and a step-over principle for the do-elaborator's pushed continuation. -/
 private theorem runS_opt_step (aV : Evm.Defs.address) (v : Evm.Defs.AcctValue)
     (c c' : Evm.Defs.Account) (cond : Bool) (m : Evm.SailM Unit)
-    (hs : Evm.HostState) (ss : SeqState)
+    (hs : Evm.HostState)
     (hrow : hostAcctRow hs aV = some { v with curr := c })
-    (hyes : cond = true → runS m hs ss
+    (hyes : cond = true → ∀ ss : SeqState, runS m hs ss
       = .ok ((), hostAcctWrite hs aV { v with curr := c } c') ss)
     (hno : cond = false → c = c') :
     ∃ hs' : Evm.HostState,
       HostAcctWritten hs hs' aV { v with curr := c' }
-      ∧ runS (if cond = true then m else pure ()) hs ss = .ok ((), hs') ss
-      ∧ (∀ {α : Type} (k : Unit → Evm.SailM α)
+      ∧ (∀ ss : SeqState,
+          runS (if cond = true then m else pure ()) hs ss = .ok ((), hs') ss)
+      ∧ (∀ {α : Type} (k : Unit → Evm.SailM α) (ss : SeqState)
           {r : EStateM.Result SailError SeqState (α × Evm.HostState)},
           runS (k ()) hs' ss = r
           → runS (if cond = true then m >>= k else pure () >>= k) hs ss = r) := by
   by_cases hc : cond = true
-  · refine ⟨hostAcctWrite hs aV { v with curr := c } c', ?_, ?_, ?_⟩
+  · refine ⟨hostAcctWrite hs aV { v with curr := c } c', ?_, fun ss => ?_, ?_⟩
     · simpa using hostAcctWritten_write hs aV { v with curr := c } c'
     · rw [if_pos hc]
-      exact hyes hc
-    · intro α k r hk
+      exact hyes hc ss
+    · intro α k ss r hk
       rw [if_pos hc]
-      exact runS_bind_ok (hyes hc) hk
-  · refine ⟨hs, ?_, ?_, ?_⟩
+      exact runS_bind_ok (hyes hc ss) hk
+  · refine ⟨hs, ?_, fun ss => ?_, ?_⟩
     · rw [← hno (by simpa using hc)]
       exact hostAcctWritten_refl hs aV _ hrow
     · rw [if_neg hc]
       exact runS_pure _ _ _
-    · intro α k r hk
+    · intro α k ss r hk
       rw [if_neg hc]
       exact runS_bind_ok (runS_pure _ _ _) hk
 
@@ -649,11 +650,12 @@ theorem account_set_info_nonEmpty (acc : Evm.Defs.Account)
 the whole-row install and the scalar fast paths — leave the same row. -/
 theorem runS_store_account_info_hit (aV : Evm.Defs.address)
     (v : Evm.Defs.AcctValue) (info : Evm.Defs.AccountInfo)
-    (hs : Evm.HostState) (ss : SeqState)
+    (hs : Evm.HostState)
     (hrow : hostAcctRow hs aV = some v)
     (hne : Evm.Functions.account_info_empty info = false) :
-    ∃ hs', runS (Evm.Functions.store_account_info aV v.curr info) hs ss
-        = .ok ((), hs') ss
+    ∃ hs', (∀ ss : SeqState,
+        runS (Evm.Functions.store_account_info aV v.curr info) hs ss
+          = .ok ((), hs') ss)
       ∧ HostAcctWritten hs hs' aV
           { v with curr := Evm.Functions.account_set_info v.curr info } := by
   have hset := account_set_info_nonEmpty v.curr info hne
@@ -667,7 +669,7 @@ theorem runS_store_account_info_hit (aV : Evm.Defs.address)
       = true
   · -- the whole-row install
     refine ⟨hostAcctWrite hs aV v (acctRowSet v.curr info),
-      runS_bind_ok (runS_pure _ _ _) ?_,
+      fun ss => runS_bind_ok (runS_pure _ _ _) ?_,
       hostAcctWritten_write hs aV v (acctRowSet v.curr info)⟩
     rw [if_pos hb]
     exact runS_store_account_hit aV v _ hs ss hrow
@@ -687,9 +689,9 @@ theorem runS_store_account_info_hit (aV : Evm.Defs.address)
       rfl
     obtain ⟨hs1, w1, -, step1⟩ := runS_opt_step aV v v.curr
       (acctRow1 v.curr info) (info.balance != v.curr.info.balance)
-      (Evm.Functions.acct_tx_set_balance aV info.balance) hs ss
+      (Evm.Functions.acct_tx_set_balance aV info.balance) hs
       (by simpa using hrow)
-      (fun _ => by
+      (fun _ ss => by
         simpa [acctRow1] using
           runS_acct_tx_set_balance_hit aV v info.balance hs ss hrow)
       (fun hc => by
@@ -697,8 +699,8 @@ theorem runS_store_account_info_hit (aV : Evm.Defs.address)
         rw [show info.balance = v.curr.info.balance from by simpa using hc])
     obtain ⟨hs2, w2, -, step2⟩ := runS_opt_step aV v (acctRow1 v.curr info)
       (acctRow2 v.curr info) (info.nonce != v.curr.info.nonce)
-      (Evm.Functions.acct_tx_set_nonce aV info.nonce) hs1 ss w1.1
-      (fun _ => by
+      (Evm.Functions.acct_tx_set_nonce aV info.nonce) hs1 w1.1
+      (fun _ ss => by
         simpa [acctRow2] using
           runS_acct_tx_set_nonce_hit aV _ info.nonce hs1 ss w1.1)
       (fun hc => by
@@ -707,8 +709,8 @@ theorem runS_store_account_info_hit (aV : Evm.Defs.address)
         rfl)
     obtain ⟨hs3, w3, plain3, -⟩ := runS_opt_step aV v (acctRow2 v.curr info)
       (acctRow3 v.curr info) (info.code_hash != v.curr.info.code_hash)
-      (Evm.Functions.acct_tx_set_code_hash aV info.code_hash) hs2 ss w2.1
-      (fun _ => by
+      (Evm.Functions.acct_tx_set_code_hash aV info.code_hash) hs2 w2.1
+      (fun _ ss => by
         simpa [acctRow3] using
           runS_acct_tx_set_code_hash_hit aV _ info.code_hash hs2 ss w2.1)
       (fun hc => by
@@ -717,9 +719,9 @@ theorem runS_store_account_info_hit (aV : Evm.Defs.address)
         rfl)
     have hrow3 : acctRow3 v.curr info = acctRowSet v.curr info := by
       simp only [acctRow3, acctRow2, acctRow1, acctRowSet, hpr, ← hsr]
-    refine ⟨hs3, runS_bind_ok (runS_pure _ _ _) ?_, ?_⟩
+    refine ⟨hs3, fun ss => runS_bind_ok (runS_pure _ _ _) ?_, ?_⟩
     · rw [if_neg hb]
-      exact step1 _ (step2 _ plain3)
+      exact step1 _ ss (step2 _ ss (plain3 ss))
     · rw [← hrow3]
       exact hostAcctWritten_trans w1 (hostAcctWritten_trans w2 w3)
 

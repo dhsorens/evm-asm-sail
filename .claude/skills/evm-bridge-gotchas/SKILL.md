@@ -415,6 +415,34 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   rule: an assumption the proof does not need on some branch is a claim
   you did not mean to make.
 
+- **`!` binds looser than `=`: `!a = b` means `a ≠ b`.** A `Bool`-valued
+  equation written `!foo x = bar y` elaborates as `!(foo x = bar y)` and
+  coerces through `decide` to `(!decide (foo x = bar y)) = true`. For
+  `Bool`s that is *equivalent* to the intended `(!foo x) = bar y`, so the
+  mis-parsed statement is still true and usually still provable — it
+  compiles, it proves, and it is silently useless as a `rw`/`simp` lemma.
+  One survived review this way (`beneficiaryDead_eq`,
+  `Relations/Selfdestruct.lean`); with the parentheses added its proof got
+  *shorter*, because the trailing `simp` had only been bridging the wrong
+  form. **Always parenthesise the negated side**, and after adding any
+  `Bool` equation run `lake env lean scripts/audit-bool-not-precedence.lean`,
+  which scans every `EvmSpecsVerify` type for `Bool.not` applied to a
+  `Decidable.decide`. Signals to watch for without the script: `rw`
+  reporting a pattern of the shape `!decide (… = …)`, and a `Bool`
+  equation whose proof needs a `simp` you cannot explain.
+
+- **`omega` silently drops hypotheses** once the context carries enough
+  opaque atoms and `Nat` subtractions: it reports "could not prove the
+  goal" with a counterexample whose atom list is *missing* the very
+  hypothesis you need (and sometimes missing the goal's own atoms). It is
+  not that the hypothesis is malformed — it was never admitted. Don't
+  hunt for the malformed hypothesis; lift the arithmetic out to an
+  abstract helper over fresh variables and apply it:
+  `have key : ∀ a b n : Nat, a + b < n → a < n ∧ b < n - a := fun _ _ _ h
+  => ⟨by omega, by omega⟩`, then `obtain ⟨…⟩ := key …`. Two `omega`s on a
+  three-variable goal always succeed where one `omega` on the real
+  context silently gives up (`selfdestruct_equiv_state_oog`).
+
 ## Anti-patterns (stop and record)
 
 | temptation | do this instead |

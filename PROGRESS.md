@@ -650,17 +650,35 @@ Residual for the remaining `unstated` rows:
      `runS_k_selfdestruct_hit` was strengthened to quantify the register
      file *inside* its existential, since callers reach it after the
      state charge has moved the registers.
-  2. The composition. The success case splits four ways on the transfer
-     (nonzero-and-distinct, self, zero, zero-with-collapse — one
-     `transfer_equiv*` each) and two ways on the EIP-6780 mark; the halt
-     is the STOP/RETURN normal-halt pairing (`running := false` ↔
-     `Halted HaltSelfDestruct`), not a new `StepResultRel` case.
-  The remaining shape question for (2) is the transfer, which
-  `runS_selfdestruct_body_ok` takes as a hypothesis (quantified over the
-  register file the state charge left) rather than a run shape — the
-  four `transfer_equiv*` results are what discharge it, and
-  `runS_k_transfer`/`_noop` will need the same register-file
-  generalization `runS_k_selfdestruct_hit` just got.
+  2. The composition. **The five failure outcomes are paired**
+     (`selfdestruct_equiv_underflow` — which also carries MM-14's double
+     fault, since the extraction's hoisted stack check fires whatever the
+     static flag is — `_static`, `_sentry_oog`, `_charge_oog`,
+     `_state_oog`), together with `SelfdestructPost` and the two bridges
+     they needed: `warm_of_warmAddrRel` (the extraction's warmth test *is*
+     `accessedAddresses.contains`, in both directions — previously
+     re-derived inline by BALANCE, EXTCODEHASH, EXTCODESIZE and
+     EXTCODECOPY) and `sdCreates_eq` (the same conjunction with its
+     operands the other way round). What is left is the **success**
+     outcome — four ways on the transfer (nonzero-and-distinct, self,
+     zero, zero-with-collapse, one `transfer_equiv*` each) and two ways on
+     the EIP-6780 mark, with the halt being the STOP/RETURN normal-halt
+     pairing (`running := false` ↔ `Halted HaltSelfDestruct`), not a new
+     `StepResultRel` case — and then the dispatcher that case-splits over
+     all six.
+  The register-file generalization that (2) needed is **done**: the whole
+  account-write chain (`runS_opt_step`,
+  `runS_store_account_info_hit`, `runS_k_transfer`, `runS_k_transfer_noop`)
+  now quantifies the register file *inside* its existential, and all four
+  `transfer_equiv*` results expose their extraction run as
+  `∀ ss, ss.regs.get? k_execution_profile = some prof → …`. That is what
+  lets the transfer be used after a state charge has moved the registers.
+  They also gained a `TransferFrame` clause — one frame equation saying a
+  transfer touches only `txState` and `evm.logs`, plus
+  `createdAccounts` being untouched — which is what lets SELFDESTRUCT read
+  `txState.createdAccounts` and clear `evm.running` *after* the transfer
+  without the existentially bound post-machine hiding those fields. All
+  four closed by `rfl`, so the clause is a real check, not a restatement.
 
   The re-association that the SpecRef step was expected to need did not
   arise:

@@ -1113,4 +1113,360 @@ theorem runS_execute_selfdestruct_of_body (pc_in : Nat) (top : StackTop)
   rw [dif_pos rfl, selfdestruct_dispatch]
   exact runS_bind_ok hbody (runS_pure _ _ _)
 
+/-! ## The step equivalence
+
+### The rows, and what the step needs about them
+
+`sdHostWarm` touches only `warmAddresses`, so every account row survives
+it — which is what lets the agreement bundle below be stated on the
+*pre*-state rows. -/
+
+@[simp] theorem hostAcctRow_sdHostWarm (pid : Evm.Defs.address → PrecompileId)
+    (bV : Evm.Defs.address) (hs : Evm.HostState) (aV : Evm.Defs.address) :
+    hostAcctRow (sdHostWarm pid bV hs) aV = hostAcctRow hs aV := rfl
+
+/-- **The transfer agrees**, in whichever of its four shapes applies.
+This is `transfer_equiv`'s conclusion minus the log clause (which
+`TransferPost` already carries), quantified over the machine the handler
+actually reaches the transfer at — the charges and the reads have already
+moved `sRef`'s gas and read marks by then, and `moveEther` reads the live
+tracker, so a statement at `sRef` would not transport. The three frame
+conditions on `M` are exactly what a caller needs to re-derive
+`AccountRel`/`LogRel` there. Each of
+[`transfer_equiv`](../Relations/Transfer.lean),
+`transfer_equiv_self`, `transfer_equiv_zero` and
+`transfer_equiv_zero_collapse` produces it.
+
+It is a hypothesis rather than something the step theorem derives because
+choosing among the four needs facts `AccountRel` does not supply: the
+non-wrap bound on the beneficiary's balance (MM-19), and — for the zero
+case — whether the beneficiary collapses and whether it has pending
+storage writes (MM-18). Two of `transfer_equiv`'s side conditions *are*
+automatic here and are noted rather than assumed: the originator cannot
+collapse, because it is executing code and so is not EIP-161-empty, and a
+nonzero-value beneficiary cannot collapse, because the credit leaves it
+with a nonzero balance. -/
+def SelfdestructTransfer (sRef : Machine) (hs : Evm.HostState) (base : Nat)
+    (prof : ExecutionProfile) (oV bV : Evm.Defs.address) (v : U256) : Prop :=
+  ∀ M : Machine,
+    M.txState.accountWrites = sRef.txState.accountWrites →
+    M.txState.createdAccounts = sRef.txState.createdAccounts →
+    M.evm.logs = sRef.evm.logs →
+    ∃ (sR' : Machine) (hs' : Evm.HostState),
+      runR (specTransfer oV.toList bV.toList v) M = .ok (.ok (), sR')
+      ∧ (∀ ss : SeqState,
+          ss.regs.get? Register.k_execution_profile = some prof →
+          runS (Evm.Functions.k_transfer oV bV v) hs ss = .ok ((), hs') ss)
+      ∧ TransferPost base sR' hs'
+      ∧ TransferFrame M sR'
+
+/-- Success post-relation for SELFDESTRUCT. The gas clauses mirror
+[`StopPost`](Stop.lean) — a halted frame's pc, stack and memory are not
+observable past the frame boundary — and the four world clauses are the
+step's footprint: the account overlay, the log store, the access list and
+the EIP-6780 lifecycle flags. -/
+def SelfdestructPost (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address) (sR' : Machine) (step : EvmStep)
+    (hs' : Evm.HostState) (ss' : SeqState) : Prop :=
+  sR'.evm.running = false
+  ∧ step.2.2.2 = sR'.evm.gasLeft
+  ∧ ss'.regs.get? Register.state_gas_remaining = some sR'.evm.stateGasLeft
+  ∧ ss'.regs.get? Register.state_gas_spilled = some sR'.evm.stateGasSpilled
+  ∧ ss'.regs.get? Register.frame_status
+      = some (FrameStatus.Halted (HaltKind.HaltSelfDestruct ()))
+  ∧ AccountRel sR'.txState hs'
+  ∧ LogRel sR'.evm.logs hs' base
+  ∧ WarmAddrRel pid sR' hs'
+  ∧ LifecycleRel sR' hs' outer
+
+/-! ### The outcomes, paired
+
+One lemma per outcome, each concluding `StepResultRel` on its own state
+class. The dispatcher that case-splits over them is the last piece. -/
+
+open Evm.Functions in
+/-- **Underflow, and MM-14's double fault.** The extraction's hoisted
+`validate_stack` fires whatever the static flag is, so this single shape
+covers both SpecRef outcomes: `.stackUnderflow` in a non-static frame and
+`.writeInStaticContext` in a static one (the latter through
+`haltedStaticFirst`). It needs no static hypothesis for that reason. -/
+theorem selfdestruct_equiv_underflow (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address)
+    (hrel : StateRel sRef top g hs ss)
+    (hunder : sRef.evm.stack = []) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨-, htop, -, -⟩ := hstackR
+  rw [runS_execute_selfdestruct_underflow pc_in top g mem hs ss prof
+      sRef.evm.stateGasSpilled msg hprof hgasR.spilled hmsg hfork
+      (by rw [htop, hunder]; simp)]
+  by_cases hstat : sRef.evm.message.isStatic = true
+  · rw [runR_iSelfdestruct_static sRef hstat]
+    exact StepResultRel.haltedStaticFirst
+      (haltRegs_frame_status ss msg .StackUnderflow)
+  · rw [runR_iSelfdestruct_underflow sRef (by simpa using hstat) hunder]
+    exact StepResultRel.halted ErrorRel.stackUnderflow
+      (haltRegs_frame_status ss msg .StackUnderflow)
+
+open Evm.Functions in
+/-- **The static halt**, with an operand present so the stack check
+passes and both sides reach their own `isStatic` test. -/
+theorem selfdestruct_equiv_static (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address)
+    (hrel : StateRel sRef top g hs ss)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hstat : sRef.evm.message.isStatic = true)
+    (hne : 1 ≤ sRef.evm.stack.length) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨-, htop, hlim, -⟩ := hstackR
+  rw [runR_iSelfdestruct_static sRef hstat,
+    runS_execute_selfdestruct_of_body pc_in top g mem hs _ ss _ _ _
+      (by rw [htop]; exact hne) (by rw [htop]; exact hlim)
+      (runS_selfdestruct_body_static top g hs ss prof
+        sRef.evm.stateGasSpilled msg hprof hgasR.spilled hmsg hfork
+        (by rw [hstatic msg hmsg]; exact hstat))]
+  exact StepResultRel.halted ErrorRel.writeInStaticContext
+    (haltRegs_frame_status ss msg .WriteProtection)
+
+/-- **The two `creates_account` flags agree.** SpecRef's
+`beneficiary_dead && originator_has_balance` against the extraction's
+`nonzero_balance && beneficiary_empty`: the same conjunction with its
+operands the other way round, over operands
+[`beneficiaryDead_eq`](../Relations/Selfdestruct.lean) and
+`originatorHasBalance_eq` identify. -/
+theorem sdCreates_eq {sRef : Machine} {hs : Evm.HostState}
+    (harel : AccountRel sRef.txState hs)
+    (oV bV : Evm.Defs.address) (ov bv : Evm.Defs.AcctValue)
+    (horow : hostAcctRow hs oV = some ov)
+    (hbrow : hostAcctRow hs bV = some bv) :
+    sdCreates ((hostAcctView bv.curr).getD EMPTY_ACCOUNT != EMPTY_ACCOUNT)
+        ((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance
+      = sdCreatesS ov bv := by
+  unfold sdCreates sdCreatesS
+  rw [beneficiaryDead_eq harel bV bv hbrow,
+    show decide (((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance ≠ 0)
+        = (((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance != 0)
+      from by
+        by_cases hb : ((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance = 0
+          <;> simp [hb],
+    originatorHasBalance_eq harel oV ov horow, Bool.and_comm]
+
+open Evm.Functions in
+/-- **The sentry halt.** Neither side has read a row or marked the
+beneficiary warm, so the halt is the pop alone. -/
+theorem selfdestruct_equiv_sentry_oog (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address) (x : U256) (rest : List U256)
+    (hrel : StateRel sRef top g hs ss)
+    (hwrel : WarmAddrRel pid sRef hs)
+    (hpid : ∀ aV, runS (precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hstat : sRef.evm.message.isStatic = false)
+    (hstack : sRef.evm.stack = x :: rest)
+    (hoog : sRef.evm.gasLeft < selfdestructAccessCost
+      (!sRef.evm.accessedAddresses.contains (to_address_masked x))) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, -⟩ := hstackR
+  rw [hstack] at hpfx htop hlim
+  have hwb := warm_of_warmAddrRel pid hwrel (word_to_address x)
+  rw [word_to_address_toList] at hwb
+  rw [runR_iSelfdestruct_sentry_oog sRef x rest _ hstack hstat rfl hoog,
+    runS_execute_selfdestruct_of_body pc_in top g mem hs _ ss _ _ _
+      (by rw [htop]; simp) (by simp at htop hlim; omega)
+      (runS_selfdestruct_body_sentry_oog top g hs ss prof
+        sRef.evm.stateGasSpilled msg l frest x rest pid _
+        hprof hgasR.spilled hmsg hfork hframe hpfx htop
+        (by rw [hstatic msg hmsg]; exact hstat) (hpid _) hwb.symm
+        (by rw [hgasR.live]; exact hoog))]
+  exact StepResultRel.halted ErrorRel.outOfGas
+    (haltRegs_frame_status ss msg .OutOfGas)
+
+/-- A read mark leaves the write map alone, so a row read back at the
+state after one read is the row before it. -/
+theorem specAcctRow_specAccountReadOf (ts : TransactionState) (a b : Address) :
+    specAcctRow (specAccountReadOf ts b) a = specAcctRow ts a := rfl
+
+open Evm.Functions in
+/-- **The regular-charge halt.** Both sides have popped, marked the
+beneficiary warm and read both rows; neither has written one. -/
+theorem selfdestruct_equiv_charge_oog (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address) (x : U256) (rest : List U256)
+    (ov bv : Evm.Defs.AcctValue)
+    (hrel : StateRel sRef top g hs ss)
+    (hwrel : WarmAddrRel pid sRef hs)
+    (harel : AccountRel sRef.txState hs)
+    (hpid : ∀ aV, runS (precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss)
+    (haddr : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.address.toList = sRef.evm.message.currentTarget)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hrows : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      hostAcctRow hs m.address = some ov)
+    (hbrow : hostAcctRow hs (word_to_address x) = some bv)
+    (hstat : sRef.evm.message.isStatic = false)
+    (hstack : sRef.evm.stack = x :: rest)
+    (hsentry : selfdestructAccessCost
+      (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+      ≤ sRef.evm.gasLeft)
+    (hoog : sRef.evm.gasLeft
+      < selfdestructCost
+          (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+          (sdCreatesS ov bv)) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, -⟩ := hstackR
+  rw [hstack] at hpfx htop hlim
+  have horow := hrows msg hmsg
+  have hax := haddr msg hmsg
+  have hwb := warm_of_warmAddrRel pid hwrel (word_to_address x)
+  rw [word_to_address_toList] at hwb
+  -- SpecRef's two reads, from the extraction's rows
+  have hbrowR : specAcctRow sRef.txState (to_address_masked x)
+      = some (hostAcctView bv.curr) := by
+    have h := harel.curr (word_to_address x) bv hbrow
+    rwa [word_to_address_toList] at h
+  have halive := runTx_isAccountAlive_hit sRef.txState (to_address_masked x)
+    _ hbrowR
+  have horowR : specAcctRow
+      (specAccountReadOf sRef.txState (to_address_masked x))
+      sRef.evm.message.currentTarget = some (hostAcctView ov.curr) := by
+    rw [specAcctRow_specAccountReadOf, ← hax]
+    exact harel.curr msg.address ov horow
+  have hacct := runTx_getAccount_hit _ sRef.evm.message.currentTarget _ horowR
+  have hcr := sdCreates_eq harel msg.address (word_to_address x) ov bv horow hbrow
+  rw [runR_iSelfdestruct_charge_oog sRef x rest _ _ _ _ _
+      hstack hstat rfl hsentry halive hacct (by rw [hcr]; exact hoog),
+    runS_execute_selfdestruct_of_body pc_in top g mem hs _ ss _ _ _
+      (by rw [htop]; simp) (by simp at htop hlim; omega)
+      (runS_selfdestruct_body_charge_oog top g hs ss prof
+        sRef.evm.stateGasSpilled msg l frest x rest pid _ ov bv
+        hprof hgasR.spilled hmsg hfork hframe hpfx htop
+        (by rw [hstatic msg hmsg]; exact hstat) (hpid _) hwb.symm
+        (by rw [hgasR.live]; exact hsentry) horow hbrow
+        (by rw [hgasR.live]; exact hoog))]
+  exact StepResultRel.halted ErrorRel.outOfGas
+    (haltRegs_frame_status ss msg .OutOfGas)
+
+open Evm.Functions in
+/-- **The state-charge halt.** Only reachable when `creates_account`, so
+the regular charge has already gone through on both sides and what fails
+is the `NEW_ACCOUNT` charge against the reservoir plus the execution gas
+the regular charge left. The one hypothesis is SpecRef's form of that;
+the extraction's two-part form (`hshort` and its own `hoog`) follows by
+arithmetic, which is the whole content of the two dimensions agreeing
+here. -/
+theorem selfdestruct_equiv_state_oog (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address) (x : U256) (rest : List U256)
+    (ov bv : Evm.Defs.AcctValue)
+    (hrel : StateRel sRef top g hs ss)
+    (hwrel : WarmAddrRel pid sRef hs)
+    (harel : AccountRel sRef.txState hs)
+    (hpid : ∀ aV, runS (precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss)
+    (haddr : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.address.toList = sRef.evm.message.currentTarget)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hrows : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      hostAcctRow hs m.address = some ov)
+    (hbrow : hostAcctRow hs (word_to_address x) = some bv)
+    (hstat : sRef.evm.message.isStatic = false)
+    (hstack : sRef.evm.stack = x :: rest)
+    (hsentry : selfdestructAccessCost
+      (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+      ≤ sRef.evm.gasLeft)
+    (hcreates : sdCreatesS ov bv = true)
+    (hcharge : selfdestructCost
+        (!sRef.evm.accessedAddresses.contains (to_address_masked x)) true
+      ≤ sRef.evm.gasLeft)
+    (hoog : sRef.evm.stateGasLeft
+        + (sRef.evm.gasLeft - selfdestructCost
+            (!sRef.evm.accessedAddresses.contains (to_address_masked x)) true)
+      < StateGasCosts.NEW_ACCOUNT) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, -⟩ := hstackR
+  rw [hstack] at hpfx htop hlim
+  have hlive := hgasR.live
+  have horow := hrows msg hmsg
+  have hax := haddr msg hmsg
+  have hwb := warm_of_warmAddrRel pid hwrel (word_to_address x)
+  rw [word_to_address_toList] at hwb
+  have hbrowR : specAcctRow sRef.txState (to_address_masked x)
+      = some (hostAcctView bv.curr) := by
+    have h := harel.curr (word_to_address x) bv hbrow
+    rwa [word_to_address_toList] at h
+  have halive := runTx_isAccountAlive_hit sRef.txState (to_address_masked x)
+    _ hbrowR
+  have horowR : specAcctRow
+      (specAccountReadOf sRef.txState (to_address_masked x))
+      sRef.evm.message.currentTarget = some (hostAcctView ov.curr) := by
+    rw [specAcctRow_specAccountReadOf, ← hax]
+    exact harel.curr msg.address ov horow
+  have hacct := runTx_getAccount_hit _ sRef.evm.message.currentTarget _ horowR
+  have hcr := sdCreates_eq harel msg.address (word_to_address x) ov bv horow hbrow
+  rw [hcreates] at hcr
+  -- The extraction's two-part state-gas failure from SpecRef's one-part
+  -- form. Stated abstractly first: `omega` silently drops hypotheses
+  -- once the goal carries enough opaque atoms and `Nat` subtractions,
+  -- and this context has both.
+  have key : ∀ a b n : Nat, a + b < n → a < n ∧ b < n - a :=
+    fun _ _ _ h => ⟨by omega, by omega⟩
+  obtain ⟨hshort, hoogR⟩ := key sRef.evm.stateGasLeft
+    (sRef.evm.gasLeft - selfdestructCost
+      (!sRef.evm.accessedAddresses.contains (to_address_masked x)) true)
+    StateGasCosts.NEW_ACCOUNT hoog
+  have hoog' : g - selfdestructCost
+        (!sRef.evm.accessedAddresses.contains (to_address_masked x)) true
+      < StateGasCosts.NEW_ACCOUNT - sRef.evm.stateGasLeft := by
+    rw [hlive]; exact hoogR
+  rw [runR_iSelfdestruct_state_oog sRef x rest _ _ _ _ _
+      hstack hstat rfl hsentry halive hacct
+      (by rw [hcr]; exact hcharge)
+      (by rw [hcr, if_pos rfl]; exact hoog),
+    runS_execute_selfdestruct_of_body pc_in top g mem hs _ ss _ _ _
+      (by rw [htop]; simp) (by simp at htop hlim; omega)
+      (runS_selfdestruct_body_state_oog top g hs ss prof
+        sRef.evm.stateGasLeft sRef.evm.stateGasSpilled msg l frest x rest
+        pid _ ov bv
+        hprof hgasR.reservoir hgasR.spilled hmsg hfork hframe hpfx htop
+        (by rw [hstatic msg hmsg]; exact hstat) (hpid _) hwb.symm
+        (by rw [hgasR.live]; exact hsentry) horow hbrow hcreates
+        (by rw [hgasR.live]; exact hcharge) hshort hoog')]
+  exact StepResultRel.halted ErrorRel.outOfGas
+    (haltRegs_frame_status ss msg .OutOfGas)
+
 end EvmSpecsVerify

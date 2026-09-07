@@ -150,15 +150,21 @@ theorem word_nonzero_eq (w : Nat) :
 /-- **SpecRef's `beneficiary_dead` is the extraction's
 `beneficiary_empty`.** SpecRef tests `EMPTY_ACCOUNT` equality on the tuple
 it stores; the extraction tests EIP-161 emptiness on the row's `info`.
-`AccountRel`'s discipline fields make those the same predicate. -/
+`AccountRel`'s discipline fields make those the same predicate.
+
+The parentheses around the `!` are load-bearing: Lean's `!` binds
+*looser* than `=`, so `!a = b` elaborates as `!(a = b)` and then coerces
+to `(!decide (a = b)) = true` — i.e. `a ≠ b`. For `Bool`s that happens to
+be equivalent to `(!a) = b`, so the mis-parsed statement is still true
+and still provable, which is exactly why it went unnoticed: it compiles,
+it proves, and it is useless as a rewrite. -/
 theorem beneficiaryDead_eq {ts : TransactionState} {hs : Evm.HostState}
     (hrel : AccountRel ts hs) (bV : Evm.Defs.address)
     (bv : Evm.Defs.AcctValue) (hbrow : hostAcctRow hs bV = some bv) :
-    !((hostAcctView bv.curr).getD EMPTY_ACCOUNT != EMPTY_ACCOUNT)
+    (!((hostAcctView bv.curr).getD EMPTY_ACCOUNT != EMPTY_ACCOUNT))
       = Evm.Functions.account_info_empty bv.curr.info := by
   rw [accountRel_alive hrel bV bv hbrow,
     accountRel_empty_iff_absent hrel bV bv hbrow]
-  simp
 
 /-- **SpecRef's `originator_has_balance` is the extraction's
 `nonzero_balance`.** -/
