@@ -225,6 +225,17 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `some ⟨off, len, cf⟩`) so no goal ever carries a projection. See
   `JumpdestRel` (`Relations/Jumpdest.lean`). The memory tranche will face the
   same choice with `EvmMemorySlice`.
+- **`cases h : b` substitutes the value and breaks the `rw [if_pos h]` that
+  follows; `by_cases` does not.** Trigger: an extraction `if` guarded by a
+  `Bool` field (`v.curr.present`, `cold`, `found`) — after
+  `cases hp : v.curr.present`, the goal reads `if true = true then …` and
+  `rw [if_pos hp]` fails with "did not find the pattern" naming the
+  already-substituted term, while the RHS you wanted to rewrite in lockstep
+  is untouched. Right move: `by_cases hp : b = true` and
+  `rw [if_pos hp] / rw [if_neg hp]`, which keeps `b` in both sides and
+  rewrites them together (`accountRel_balance` / `accountRel_alive`,
+  Relations/Account.lean). Use `cases h :` only when you *want* the
+  substitution and both sides reduce by `rfl`.
 - **`simp [h]` misses Bool `contains`/`decide` hypotheses because it
   normalizes the goal past them.**
   Trigger: an `if`-condition goal like `¬((!l.contains x) = true)` with
@@ -263,12 +274,18 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   expressions are flattened by the do elaborator — chain
   `runS_readReg`/`runS_pure` directly; a compound `show`-lemma over-groups
   the binds and fails to unify (`execute_caller`, `Opcodes/Caller.lean`).
-- **Extraction types with derived `BEq` have no `LawfulBEq`** — `beq_iff_eq`
-  / `bne_iff_ne` / assoc-list lemmas stall with "failed to synthesize
-  LawfulBEq". Add a local instance: structures via field `beq_iff_eq`
-  (`StorageKey`, Relations/Warm.lean); enums via
+- **Extraction *and SpecRef* types with derived `BEq` have no `LawfulBEq`** —
+  `beq_iff_eq` / `bne_iff_ne` / `bne_self_eq_false` / assoc-list lemmas stall
+  with "failed to synthesize LawfulBEq". Add a local instance: structures via
+  field `beq_iff_eq` (`StorageKey`, Relations/Warm.lean); enums via
   `cases a <;> cases b <;> first | rfl | exact absurd h (by decide)`
-  (`PrecompileId`, Relations/WarmAddr.lean).
+  (`PrecompileId`, Relations/WarmAddr.lean). The `(a == b) = (…fields…)`
+  bridge lemma is `rfl` only if the derived `beq` is a projection
+  conjunction; when it is a `match` (SpecRef's `Account`, which derives
+  `BEq` *and* `DecidableEq`) a lemma stated over variables dies with "not a
+  definitional equality" — `#print <Type>.instBEq….beq` first, then state it
+  over **constructor applications** and `cases a; cases b` before rewriting
+  (`account_beq_eq`, Relations/Account.lean).
 - **Never `rfl`/whnf through a chain of `Vector.set!`s** (extraction
   builders like `word_to_address`): 20 sets time out at any heartbeat
   budget. Right move: the simp set `vector_set!_eq` (a local
