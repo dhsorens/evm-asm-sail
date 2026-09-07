@@ -33,21 +33,33 @@ spell, and `transfer_equiv` pairs it with `k_transfer`.
   ledger MM-18's log clause; it is disproven, and MM-18 is now only about
   the account row.
 
+* **The degenerate branches agree too.** `k_transfer`'s early return
+  covers `word_is_zero v || src == dst`, and both are reachable through
+  `SELFDESTRUCT` — a zero-balance originator gives the first,
+  `SELFDESTRUCT(address(this))` the second. `transfer_equiv` excludes
+  them (`hv`, `hne`); `transfer_equiv_self`, `transfer_equiv_zero` and
+  `transfer_equiv_zero_collapse` discharge them. Each shows SpecRef's two
+  writes leave every **row** holding the value it already held, so
+  mismatch ledger MM-18's "harmless" is now a theorem rather than an
+  argument. The collapsing branch is included: a dead beneficiary is
+  written as the empty tuple and immediately deleted again, landing back
+  on the `some none` entry the relation had — which is where
+  `AccountRel`'s `presentNonEmpty` field earns its keep.
+
 ## What it does not settle
 
-`k_transfer`'s early return also covers `value_is_zero`, where SpecRef
-runs its two `modifyState`s regardless. That case is MM-18's second half
-(see `docs/mismatches.md`) and the hypothesis `hv : v ≠ 0` excludes it,
-as `hne : dstV ≠ srcV` excludes the self-transfer. Both exclusions are
-recorded in the ledger rather than proven away, because on SpecRef's side
-they run a `modifyState` whose collapse branch destroys storage — a
-different slice.
+The destination's balance, and this one is representational: the
+extraction reduces the sum modulo `2^256` (`alu_add`), SpecRef adds two
+`Nat`s (`a.balance + amount`). They agree exactly under `hsum`, the
+no-overflow invariant the total ether supply guarantees and neither
+specification checks (mismatch ledger MM-19).
 
-The destination's balance is a second exclusion, and this one is
-representational: the extraction reduces the sum modulo `2^256`
-(`alu_add`), SpecRef adds two `Nat`s (`a.balance + amount`). They agree
-exactly under `hsum`, the no-overflow invariant the total ether supply
-guarantees and neither specification checks.
+The collapsing write also carries `hstore`: `destroyStorage` is the
+identity only when the account has no pending storage writes. Every
+reachable collapse satisfies it — `iSstore` writes storage only to
+`message.currentTarget`, which is executing code, and an account with
+code is never EIP-161-empty — but that argument is transaction-level, so
+it stays a hypothesis (`Assumptions.lean`).
 -/
 
 set_option maxHeartbeats 4000000
@@ -153,6 +165,12 @@ theorem logOf_transfer (srcV dstV : Evm.Defs.address) (v : U256) :
 def specLogAppend (s : Machine) (l : Log) : Evm :=
   { s.evm with logs := s.evm.logs ++ [l] }
 
+/-- The machine a *degenerate* transfer leaves: only the tracker moved.
+Named because a structure-instance field value has to fit on one physical
+line. -/
+def specTxOut (s : Machine) (ts' : TransactionState) : Machine :=
+  { s with txState := ts' }
+
 /-- The machine `specTransfer` leaves: the tracker's new state and one
 appended log record. -/
 def specTransferOut (s : Machine) (ts' : TransactionState) (l : Log) :
@@ -198,19 +216,6 @@ private theorem except_ok_bind {ε α β : Type} (a : α) (f : α → Except ε 
 
 private theorem except_pure_bind {ε α β : Type} (a : α) (f : α → Except ε β) :
     (pure a : Except ε α) >>= f = f a := rfl
-
-/-- Fused bind for the tracker monad: a success step then the
-continuation. Supplying both halves as terms keeps the proof out of
-`rw`'s syntactic matching, which the record literals `modifyState`
-receives would otherwise defeat. -/
-private theorem runTx_bind_ok {α β : Type} {m : TxM α} {k : α → TxM β}
-    {ts ts' : TransactionState} {a : α}
-    {r : Except SpecError (β × TransactionState)}
-    (h1 : m.run ts = .ok (a, ts')) (h2 : (k a).run ts' = r) :
-    (m >>= k).run ts = r := by
-  rw [show (m >>= k).run ts
-      = (m.run ts) >>= (fun p => (k p.1).run p.2) from rfl, h1]
-  exact h2
 
 /-- **`moveEther` on the non-degenerate case.** Sufficient balance, two
 distinct addresses, and neither write collapsing: the sub then the add,
@@ -364,6 +369,194 @@ theorem runS_k_transfer (srcV dstV : Evm.Defs.address) (v : U256)
     from run2) ?_
   exact runS_k_emit_transfer_log srcV dstV v hs2 ss prof hprof hfork hv hbeq
 
+/-! ## The degenerate cases
+
+`k_transfer`'s early return covers `word_is_zero v || src == dst`, and
+both branches are reachable through `SELFDESTRUCT` — a zero-balance
+originator gives the first, `SELFDESTRUCT(address(this))` the second.
+SpecRef runs its two `modifyState`s regardless, so mismatch ledger MM-18
+recorded the row asymmetry and `transfer_equiv` excluded both. The two
+theorems below discharge them instead: SpecRef's writes are
+relation-preserving in each case, so the ledger entry's "harmless"
+becomes a proof.
+
+The self-transfer needs no extra hypothesis beyond the first write's
+non-collapse: the second `modifyState` reads the balance the first left
+and adds `v` back, and `v ≤ balance` makes the restored balance nonzero,
+so the second write cannot collapse. The zero-value transfer *does* let
+the destination collapse — the beneficiary of a `SELFDESTRUCT` may be
+dead — and that branch is exactly where `AccountRel` earns its
+`presentNonEmpty` field: a collapsing SpecRef write and an absent
+extraction row agree, because `hostAcctView` of a non-`present` row is
+`none`. -/
+
+/-- `k_transfer`'s early return: the two `k_aload`s hit the overlay and
+touch nothing, then the guard short-circuits. -/
+theorem runS_k_transfer_noop (srcV dstV : Evm.Defs.address) (v : U256)
+    (sv dv : Evm.Defs.AcctValue) (hs : Evm.HostState) (ss : SeqState)
+    (hsrc : hostAcctRow hs srcV = some sv)
+    (hdst : hostAcctRow hs dstV = some dv)
+    (hguard : (Evm.Functions.word_is_zero v || (srcV == dstV)) = true) :
+    runS (Evm.Functions.k_transfer srcV dstV v) hs ss = .ok ((), hs) ss := by
+  unfold Evm.Functions.k_transfer
+  refine runS_bind_ok (runS_k_aload_hit srcV sv hs ss hsrc) ?_
+  refine runS_bind_ok (runS_k_aload_hit dstV dv hs ss hdst) ?_
+  show runS (if (Evm.Functions.word_is_zero v || (srcV == dstV)) = true then
+      pure () else _) hs ss = _
+  rw [if_pos hguard]
+  exact runS_pure _ _ _
+
+/-! ### The self-transfer -/
+
+/-- The transaction state a self-transfer leaves: two writes at the same
+address, the second restoring the balance the first debited. -/
+def specSelfTransferOut (ts : TransactionState) (a : Address)
+    (sa fa : EvmAsm.Stateless.SpecRef.Account) : TransactionState :=
+  specModifyStateOut (specModifyStateOut (specAccountReadOf ts a) a sa) a fa
+
+/-- The credit undoes the debit when the balance covers it. -/
+theorem acctAddBalance_acctSubBalance (acct : EvmAsm.Stateless.SpecRef.Account)
+    (v : U256) (h : v ≤ acct.balance) :
+    acctAddBalance (acctSubBalance acct v) v = acct := by
+  unfold acctAddBalance acctSubBalance
+  rw [Nat.sub_add_cancel h]
+
+/-- **`moveEther a a v` on the reachable regime.** The debit then the
+credit, both at `a`; only the *first* needs a non-collapse hypothesis,
+because `v ≤ balance` together with `v ≠ 0` makes the restored balance
+nonzero. The net effect on the row is the identity, which is why
+`AccountRel` survives it. -/
+theorem runTx_moveEther_self (ts : TransactionState) (a : Address) (v : U256)
+    (r : Option EvmAsm.Stateless.SpecRef.Account)
+    (hrow : specAcctRow ts a = some r)
+    (hbal : v ≤ (r.getD EMPTY_ACCOUNT).balance)
+    (hv : v ≠ 0)
+    (hsne : ((r.getD EMPTY_ACCOUNT).nonce == 0
+      && (r.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (r.getD EMPTY_ACCOUNT).balance - v == 0) = false) :
+    (moveEther a a v).run ts
+      = .ok ((), specSelfTransferOut ts a
+          (acctSubBalance (r.getD EMPTY_ACCOUNT) v) (r.getD EMPTY_ACCOUNT)) := by
+  have hrow1 : specAcctRow (specAccountReadOf ts a) a = some r := hrow
+  have hrow2 : specAcctRow
+      (specModifyStateOut (specAccountReadOf ts a) a
+        (acctSubBalance (r.getD EMPTY_ACCOUNT) v)) a
+      = some (some (acctSubBalance (r.getD EMPTY_ACCOUNT) v)) :=
+    dictGet?_dictSet_self _ a _
+  have hrestore := acctAddBalance_acctSubBalance (r.getD EMPTY_ACCOUNT) v hbal
+  have hbalpos : (r.getD EMPTY_ACCOUNT).balance ≠ 0 := by
+    intro hc
+    rw [hc] at hbal
+    exact hv (Nat.le_zero.mp hbal)
+  have hdne : ((acctSubBalance (r.getD EMPTY_ACCOUNT) v).nonce == 0
+      && (acctSubBalance (r.getD EMPTY_ACCOUNT) v).codeHash == EMPTY_CODE_HASH
+      && (acctSubBalance (r.getD EMPTY_ACCOUNT) v).balance + v == 0) = false := by
+    simp [acctSubBalance, Nat.sub_add_cancel hbal, hbalpos]
+  have hraw : (moveEther a a v).run ts
+      = .ok ((), specSelfTransferOut ts a
+          (acctSubBalance (r.getD EMPTY_ACCOUNT) v)
+          (acctAddBalance (acctSubBalance (r.getD EMPTY_ACCOUNT) v) v)) := by
+    unfold moveEther specSelfTransferOut
+    refine runTx_bind_ok (runTx_getAccount_hit ts a r hrow) ?_
+    rw [if_neg (by simpa using hbal)]
+    refine runTx_bind_ok (m := pure ()) rfl ?_
+    refine runTx_bind_ok
+      (runTx_modifyState_nonEmpty (specAccountReadOf ts a) a _ r hrow1 hsne) ?_
+    exact runTx_modifyState_nonEmpty _ a
+      (fun x => { nonce := x.nonce, balance := x.balance + v, codeHash := x.codeHash })
+      _ hrow2 hdne
+  rw [hraw, hrestore]
+
+/-! ### The zero-value transfer -/
+
+/-- The transaction state a zero-value transfer leaves when the
+destination survives: two no-op writes. -/
+def specZeroTransferOut (ts : TransactionState) (src dst : Address)
+    (sa da : EvmAsm.Stateless.SpecRef.Account) : TransactionState :=
+  specModifyStateOut (specModifyStateOut (specAccountReadOf ts src) src sa) dst da
+
+/-- The same when the destination collapses: EIP-161 deletes it. -/
+def specZeroTransferCollapseOut (ts : TransactionState) (src dst : Address)
+    (sa da : EvmAsm.Stateless.SpecRef.Account) : TransactionState :=
+  specModifyStateCollapseOut
+    (specModifyStateOut (specAccountReadOf ts src) src sa) dst da
+
+theorem acctSubBalance_zero (acct : EvmAsm.Stateless.SpecRef.Account) :
+    acctSubBalance acct 0 = acct := by
+  unfold acctSubBalance
+  rw [Nat.sub_zero]
+
+theorem acctAddBalance_zero (acct : EvmAsm.Stateless.SpecRef.Account) :
+    acctAddBalance acct 0 = acct := by
+  unfold acctAddBalance
+  rw [Nat.add_zero]
+
+/-- **`moveEther src dst 0`, destination surviving.** Both writes store
+the value that was already there. -/
+theorem runTx_moveEther_zero (ts : TransactionState) (src dst : Address)
+    (rs rd : Option EvmAsm.Stateless.SpecRef.Account)
+    (hsrc : specAcctRow ts src = some rs)
+    (hdst : specAcctRow ts dst = some rd)
+    (hne : dst ≠ src)
+    (hsne : ((rs.getD EMPTY_ACCOUNT).nonce == 0
+      && (rs.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (rs.getD EMPTY_ACCOUNT).balance == 0) = false)
+    (hdne : ((rd.getD EMPTY_ACCOUNT).nonce == 0
+      && (rd.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (rd.getD EMPTY_ACCOUNT).balance == 0) = false) :
+    (moveEther src dst 0).run ts
+      = .ok ((), specZeroTransferOut ts src dst
+          (rs.getD EMPTY_ACCOUNT) (rd.getD EMPTY_ACCOUNT)) := by
+  have h := runTx_moveEther ts src dst 0 rs rd hsrc hdst hne (Nat.zero_le _)
+    (by rw [Nat.sub_zero]; exact hsne) (by rw [Nat.add_zero]; exact hdne)
+  rw [h]
+  unfold specMoveEtherOut specZeroTransferOut
+  rw [acctSubBalance_zero, acctAddBalance_zero]
+
+/-- **`moveEther src dst 0`, destination collapsing.** The reachable
+shape of a zero-balance `SELFDESTRUCT` to a dead beneficiary: SpecRef
+writes the empty tuple and EIP-161 immediately deletes it. -/
+theorem runTx_moveEther_zero_collapse (ts : TransactionState)
+    (src dst : Address)
+    (rs rd : Option EvmAsm.Stateless.SpecRef.Account)
+    (hsrc : specAcctRow ts src = some rs)
+    (hdst : specAcctRow ts dst = some rd)
+    (hne : dst ≠ src)
+    (hsne : ((rs.getD EMPTY_ACCOUNT).nonce == 0
+      && (rs.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (rs.getD EMPTY_ACCOUNT).balance == 0) = false)
+    (hdemp : ((rd.getD EMPTY_ACCOUNT).nonce == 0
+      && (rd.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (rd.getD EMPTY_ACCOUNT).balance == 0) = true)
+    (hstore : dictGet? ts.storageWrites dst = none) :
+    (moveEther src dst 0).run ts
+      = .ok ((), specZeroTransferCollapseOut ts src dst
+          (rs.getD EMPTY_ACCOUNT) (rd.getD EMPTY_ACCOUNT)) := by
+  have hsrc1 : specAcctRow (specAccountReadOf ts src) src = some rs := hsrc
+  have hdst1 : specAcctRow
+      (specModifyStateOut (specAccountReadOf ts src) src
+        (rs.getD EMPTY_ACCOUNT)) dst = some rd := by
+    unfold specAcctRow
+    rw [specModifyStateOut_accountWrites, dictGet?_dictSet_ne _ _ _ _ hne]
+    exact hdst
+  have hstore1 : dictGet?
+      (specModifyStateOut (specAccountReadOf ts src) src
+        (rs.getD EMPTY_ACCOUNT)).storageWrites dst = none := hstore
+  unfold moveEther specZeroTransferCollapseOut
+  refine runTx_bind_ok (runTx_getAccount_hit ts src rs hsrc) ?_
+  rw [if_neg (by simp)]
+  refine runTx_bind_ok (m := pure ()) rfl ?_
+  refine runTx_bind_ok
+    (show (modifyState src _).run (specAccountReadOf ts src)
+        = .ok ((), specModifyStateOut (specAccountReadOf ts src) src
+            (rs.getD EMPTY_ACCOUNT))
+      from by
+        rw [← acctSubBalance_zero (rs.getD EMPTY_ACCOUNT)]
+        exact runTx_modifyState_nonEmpty (specAccountReadOf ts src) src _ rs
+          hsrc1 (by rw [Nat.sub_zero]; exact hsne)) ?_
+  rw [← acctAddBalance_zero (rd.getD EMPTY_ACCOUNT)]
+  exact runTx_modifyState_collapse _ dst _ rd hdst1 hdemp hstore1
+
 /-! ## The pairing -/
 
 /-- What a transfer preserves: the account overlay and the log store. -/
@@ -492,5 +685,233 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
       exact logRel_append _ hs2 base _ _ _ hbase
     exact hfinal
   · rfl
+
+/-! ## The degenerate pairings
+
+The two branches `transfer_equiv` excludes, now discharged. Both emit no
+log on either side: the extraction's guard is inside
+`k_emit_transfer_log`, and SpecRef's is split between the caller
+(`dst != src`) and `emit_transfer_log`'s own `transfer_amount == 0` early
+return — so a zero-value transfer takes the caller's branch and then
+returns immediately anyway.
+
+Each concludes that the transaction state's **rows** are unchanged, which
+is what `accountRel_rowsFrame` needs. That is the precise content of
+mismatch ledger MM-18's "harmless": SpecRef writes where the extraction
+does not, and every row it writes holds the value that was already
+there. -/
+
+/-- **The self-transfer agrees.** SpecRef debits and credits the same
+row; the extraction returns immediately. -/
+theorem transfer_equiv_self (aV : Evm.Defs.address) (v : U256)
+    (sRef : Machine) (hs : Evm.HostState) (ss : SeqState) (base : Nat)
+    (av : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hrow : hostAcctRow hs aV = some av)
+    (hv : v ≠ 0)
+    (hbal : v ≤ av.curr.info.balance)
+    (hsne : Evm.Functions.account_info_empty (transferSrcInfo av.curr.info v)
+      = false) :
+    ∃ sR' : Machine,
+      runR (specTransfer aV.toList aV.toList v) sRef = .ok (.ok (), sR')
+      ∧ runS (Evm.Functions.k_transfer aV aV v) hs ss = .ok ((), hs) ss
+      ∧ TransferPost base sR' hs
+      ∧ sR'.evm.logs = sRef.evm.logs := by
+  have hrowR := harel.curr aV av hrow
+  have hview := accountRel_view_eq harel aV av hrow
+  have hsneR : (((hostAcctView av.curr).getD EMPTY_ACCOUNT).nonce == 0
+      && ((hostAcctView av.curr).getD EMPTY_ACCOUNT).codeHash
+            == EMPTY_CODE_HASH
+      && ((hostAcctView av.curr).getD EMPTY_ACCOUNT).balance - v == 0)
+      = false := by
+    rw [hview]
+    exact (specAcctEmpty_eq (transferSrcInfo av.curr.info v)).trans hsne
+  -- A nonzero balance means the entry is really there, so restoring the
+  -- balance restores the row.
+  have hp : av.curr.present = true := by
+    by_contra hc
+    obtain ⟨hb, -, -⟩ := harel.absentEmpty aV av hrow (by simpa using hc)
+    rw [hb] at hbal
+    exact hv (Nat.le_zero.mp hbal)
+  have hsome : hostAcctView av.curr
+      = some ((hostAcctView av.curr).getD EMPTY_ACCOUNT) := by
+    unfold hostAcctView
+    rw [if_pos hp]
+    rfl
+  have hmove := runTx_moveEther_self sRef.txState aV.toList v
+    (hostAcctView av.curr) hrowR (by rw [hview]; exact hbal) hv hsneR
+  have hspec : runR (specTransfer aV.toList aV.toList v) sRef
+      = .ok (.ok (), specTxOut sRef
+          (specSelfTransferOut sRef.txState aV.toList
+            (acctSubBalance ((hostAcctView av.curr).getD EMPTY_ACCOUNT) v)
+            ((hostAcctView av.curr).getD EMPTY_ACCOUNT))) := by
+    unfold specTransfer
+    refine runR_bind_ok (runR_liftTx_ok _ _ () _ hmove) ?_
+    rw [if_neg (by simp)]
+    rfl
+  refine ⟨_, hspec, runS_k_transfer_noop aV aV v av av hs ss hrow hrow
+      (by simp), ⟨?_, hlrel⟩, rfl⟩
+  refine accountRel_rowsFrame (fun b => ?_) harel
+  show specAcctRow (specSelfTransferOut sRef.txState aV.toList _ _) b
+    = specAcctRow sRef.txState b
+  unfold specSelfTransferOut specAcctRow
+  rw [specModifyStateOut_accountWrites, specModifyStateOut_accountWrites]
+  by_cases hkey : b = aV.toList
+  · rw [hkey, dictGet?_dictSet_self, ← hsome]
+    exact hrowR.symm
+  · rw [dictGet?_dictSet_ne _ _ _ _ hkey, dictGet?_dictSet_ne _ _ _ _ hkey]
+    rfl
+
+/-- **The zero-value transfer agrees, destination surviving.** Both of
+SpecRef's writes store the value that was already there. -/
+theorem transfer_equiv_zero (srcV dstV : Evm.Defs.address)
+    (sRef : Machine) (hs : Evm.HostState) (ss : SeqState) (base : Nat)
+    (sv dv : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hsrc : hostAcctRow hs srcV = some sv)
+    (hdst : hostAcctRow hs dstV = some dv)
+    (hne : dstV ≠ srcV)
+    (hsne : Evm.Functions.account_info_empty sv.curr.info = false)
+    (hdne : Evm.Functions.account_info_empty dv.curr.info = false) :
+    ∃ sR' : Machine,
+      runR (specTransfer srcV.toList dstV.toList 0) sRef = .ok (.ok (), sR')
+      ∧ runS (Evm.Functions.k_transfer srcV dstV 0) hs ss = .ok ((), hs) ss
+      ∧ TransferPost base sR' hs
+      ∧ sR'.evm.logs = sRef.evm.logs := by
+  have hsrcR := harel.curr srcV sv hsrc
+  have hdstR := harel.curr dstV dv hdst
+  have hsview := accountRel_view_eq harel srcV sv hsrc
+  have hdview := accountRel_view_eq harel dstV dv hdst
+  have hlistne : dstV.toList ≠ srcV.toList :=
+    fun hc => hne (Vector.toList_inj.mp hc)
+  have hsneR : (((hostAcctView sv.curr).getD EMPTY_ACCOUNT).nonce == 0
+      && ((hostAcctView sv.curr).getD EMPTY_ACCOUNT).codeHash
+            == EMPTY_CODE_HASH
+      && ((hostAcctView sv.curr).getD EMPTY_ACCOUNT).balance == 0) = false := by
+    rw [hsview]
+    exact (specAcctEmpty_eq sv.curr.info).trans hsne
+  have hdneR : (((hostAcctView dv.curr).getD EMPTY_ACCOUNT).nonce == 0
+      && ((hostAcctView dv.curr).getD EMPTY_ACCOUNT).codeHash
+            == EMPTY_CODE_HASH
+      && ((hostAcctView dv.curr).getD EMPTY_ACCOUNT).balance == 0) = false := by
+    rw [hdview]
+    exact (specAcctEmpty_eq dv.curr.info).trans hdne
+  have hssome := specAcctRow_some_of_nonEmpty (hostAcctView sv.curr) hsneR
+  have hdsome := specAcctRow_some_of_nonEmpty (hostAcctView dv.curr) hdneR
+  have hmove := runTx_moveEther_zero sRef.txState srcV.toList dstV.toList
+    (hostAcctView sv.curr) (hostAcctView dv.curr) hsrcR hdstR hlistne hsneR hdneR
+  have hspec : runR (specTransfer srcV.toList dstV.toList 0) sRef
+      = .ok (.ok (), specTxOut sRef
+          (specZeroTransferOut sRef.txState srcV.toList dstV.toList
+            ((hostAcctView sv.curr).getD EMPTY_ACCOUNT)
+            ((hostAcctView dv.curr).getD EMPTY_ACCOUNT))) := by
+    unfold specTransfer
+    refine runR_bind_ok (runR_liftTx_ok _ _ () _ hmove) ?_
+    rw [if_pos (show (dstV.toList != srcV.toList) = true from
+      bne_iff_ne.mpr hlistne)]
+    unfold emit_transfer_log
+    rw [if_pos (by decide)]
+    rfl
+  refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs ss hsrc hdst
+      (by simp [Evm.Functions.word_is_zero,
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl⟩
+  refine accountRel_rowsFrame (fun b => ?_) harel
+  show specAcctRow (specZeroTransferOut sRef.txState srcV.toList dstV.toList _ _) b
+    = specAcctRow sRef.txState b
+  unfold specZeroTransferOut specAcctRow
+  rw [specModifyStateOut_accountWrites, specModifyStateOut_accountWrites]
+  by_cases hkd : b = dstV.toList
+  · rw [hkd, dictGet?_dictSet_self, ← hdsome]
+    exact hdstR.symm
+  · rw [dictGet?_dictSet_ne _ _ _ _ hkd]
+    by_cases hks : b = srcV.toList
+    · rw [hks, dictGet?_dictSet_self, ← hssome]
+      exact hsrcR.symm
+    · rw [dictGet?_dictSet_ne _ _ _ _ hks]
+      rfl
+
+/-- **The zero-value transfer agrees, destination collapsing.** The
+reachable shape of a zero-balance `SELFDESTRUCT` to a dead beneficiary:
+SpecRef writes the empty tuple and EIP-161 deletes it again, landing back
+on the `some none` entry the relation already had. -/
+theorem transfer_equiv_zero_collapse (srcV dstV : Evm.Defs.address)
+    (sRef : Machine) (hs : Evm.HostState) (ss : SeqState) (base : Nat)
+    (sv dv : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hsrc : hostAcctRow hs srcV = some sv)
+    (hdst : hostAcctRow hs dstV = some dv)
+    (hne : dstV ≠ srcV)
+    (hsne : Evm.Functions.account_info_empty sv.curr.info = false)
+    (hdemp : Evm.Functions.account_info_empty dv.curr.info = true)
+    (hstore : dictGet? sRef.txState.storageWrites dstV.toList = none) :
+    ∃ sR' : Machine,
+      runR (specTransfer srcV.toList dstV.toList 0) sRef = .ok (.ok (), sR')
+      ∧ runS (Evm.Functions.k_transfer srcV dstV 0) hs ss = .ok ((), hs) ss
+      ∧ TransferPost base sR' hs
+      ∧ sR'.evm.logs = sRef.evm.logs := by
+  have hsrcR := harel.curr srcV sv hsrc
+  have hdstR := harel.curr dstV dv hdst
+  have hsview := accountRel_view_eq harel srcV sv hsrc
+  have hdview := accountRel_view_eq harel dstV dv hdst
+  have hlistne : dstV.toList ≠ srcV.toList :=
+    fun hc => hne (Vector.toList_inj.mp hc)
+  have hsneR : (((hostAcctView sv.curr).getD EMPTY_ACCOUNT).nonce == 0
+      && ((hostAcctView sv.curr).getD EMPTY_ACCOUNT).codeHash
+            == EMPTY_CODE_HASH
+      && ((hostAcctView sv.curr).getD EMPTY_ACCOUNT).balance == 0) = false := by
+    rw [hsview]
+    exact (specAcctEmpty_eq sv.curr.info).trans hsne
+  have hdempR : (((hostAcctView dv.curr).getD EMPTY_ACCOUNT).nonce == 0
+      && ((hostAcctView dv.curr).getD EMPTY_ACCOUNT).codeHash
+            == EMPTY_CODE_HASH
+      && ((hostAcctView dv.curr).getD EMPTY_ACCOUNT).balance == 0) = true := by
+    rw [hdview]
+    exact (specAcctEmpty_eq dv.curr.info).trans hdemp
+  -- The collapse fires exactly when the row is absent, so SpecRef's entry
+  -- was `some none` to begin with.
+  have hdabs : hostAcctView dv.curr = none := by
+    have hp : dv.curr.present = false := by
+      have h := (accountRel_empty_iff_absent harel dstV dv hdst).symm.trans hdemp
+      cases hq : dv.curr.present with
+      | false => rfl
+      | true => rw [hq] at h; exact absurd h (by decide)
+    unfold hostAcctView
+    rw [if_neg (by rw [hp]; decide)]
+  have hssome := specAcctRow_some_of_nonEmpty (hostAcctView sv.curr) hsneR
+  have hmove := runTx_moveEther_zero_collapse sRef.txState srcV.toList
+    dstV.toList (hostAcctView sv.curr) (hostAcctView dv.curr) hsrcR hdstR
+    hlistne hsneR hdempR hstore
+  have hspec : runR (specTransfer srcV.toList dstV.toList 0) sRef
+      = .ok (.ok (), specTxOut sRef
+          (specZeroTransferCollapseOut sRef.txState srcV.toList dstV.toList
+            ((hostAcctView sv.curr).getD EMPTY_ACCOUNT)
+            ((hostAcctView dv.curr).getD EMPTY_ACCOUNT))) := by
+    unfold specTransfer
+    refine runR_bind_ok (runR_liftTx_ok _ _ () _ hmove) ?_
+    rw [if_pos (show (dstV.toList != srcV.toList) = true from
+      bne_iff_ne.mpr hlistne)]
+    unfold emit_transfer_log
+    rw [if_pos (by decide)]
+    rfl
+  refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs ss hsrc hdst
+      (by simp [Evm.Functions.word_is_zero,
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl⟩
+  refine accountRel_rowsFrame (fun b => ?_) harel
+  show specAcctRow (specZeroTransferCollapseOut sRef.txState srcV.toList
+      dstV.toList _ _) b = specAcctRow sRef.txState b
+  unfold specZeroTransferCollapseOut specAcctRow
+  rw [specModifyStateCollapseOut_accountWrites, specModifyStateOut_accountWrites]
+  by_cases hkd : b = dstV.toList
+  · rw [hkd, dictGet?_dictSet_self, ← hdabs]
+    exact hdstR.symm
+  · rw [dictGet?_dictSet_ne _ _ _ _ hkd, dictGet?_dictSet_ne _ _ _ _ hkd]
+    by_cases hks : b = srcV.toList
+    · rw [hks, dictGet?_dictSet_self, ← hssome]
+      exact hsrcR.symm
+    · rw [dictGet?_dictSet_ne _ _ _ _ hks]
+      rfl
 
 end EvmSpecsVerify

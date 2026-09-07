@@ -570,7 +570,10 @@ is one-directional in the same way `StorageRel` is.
   `storageWrites` into `storageReads`, which the BAL does record — but
   reaching it needs a dead account with pending storage writes in the
   same transaction, and `setStorage` rejects on a non-existent account.
-  Not substantiated; `transfer_equiv`'s `hv : v ≠ 0` excludes it.
+  Not substantiated — and no longer load-bearing: `hstore` (no pending
+  storage writes at the destination) is the hypothesis that confines
+  `destroyStorage` to its identity branch, and
+  `transfer_equiv_zero_collapse` proves the rest of the case.
 - **Fork**: all (EIP-7708 adds the log question at Amsterdam, but the
   row asymmetry predates it). **Reachability**: trivially reachable.
   **Severity**: none within a step; potentially observable at
@@ -589,12 +592,35 @@ is one-directional in the same way `StorageRel` is.
   the journal (a self-transfer changes nothing) that also skips the row;
   execution-specs, which SpecRef mirrors, performs the two writes
   unconditionally.
-- **Disposition**: *relation* — `AccountRel` relates every extraction row
-  to a SpecRef row with the same EIP-161 view, and not conversely, so a
-  SpecRef row the extraction lacks is invisible to it. That is the same
-  weakening MM-16 forces on `StorageRel`, for the same reason, and
-  `accountRel_write` preserves the relation across the writes that do
-  happen. The log clause is closed outright by `transfer_equiv`.
+- **Disposition**: **closed by proof** (2026-09-07), and the argument is
+  sharper than the original "harmless". `AccountRel` is still
+  one-directional — every extraction row corresponds to a SpecRef row
+  with the same EIP-161 view, not conversely — but the writes this entry
+  is about no longer need that weakening, because they are *row-preserving*:
+  - `transfer_equiv_self` (self-transfer, `v ≠ 0`): the debit is undone by
+    the credit, `v ≤ balance` makes the restored balance nonzero so the
+    second write cannot collapse, and a nonzero balance proves the entry
+    was really present — so the final row is the original row.
+  - `transfer_equiv_zero` (zero value, destination surviving): both writes
+    store the value that was already there.
+  - `transfer_equiv_zero_collapse` (zero value, destination collapsing —
+    the reachable zero-balance `SELFDESTRUCT` to a dead beneficiary):
+    SpecRef writes the empty tuple and EIP-161 deletes it again, landing
+    back on the `some none` entry `AccountRel` already had. This is where
+    `presentNonEmpty` earns its keep: the collapse fires exactly when the
+    extraction's row is not `present`, and `hostAcctView` of such a row is
+    `none`.
+
+  All three are stated through `accountRel_rowsFrame`: the transaction
+  state's rows read back unchanged, so the relation is preserved
+  pointwise. The log clause was already closed by `transfer_equiv`
+  (SpecRef guards in the caller, the extraction in the emitter, and a
+  zero-value transfer hits `emit_transfer_log`'s own early return). What
+  remains from this entry is not a mismatch but two ledgered
+  hypotheses — `hsne` (the source write does not collapse) and `hstore`
+  (a collapsing destination has no pending storage writes) — both
+  recorded in `EvmSpecsVerify/Assumptions.lean` with their reachability
+  arguments.
 
 ## MM-19: SpecRef's balance addition does not reduce modulo `2^256`
 

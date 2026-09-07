@@ -287,6 +287,19 @@ continuation (see the same bridge in Relations/Storage.lean). -/
 private theorem except_ok_bind' {ε α β : Type} (a : α) (f : α → Except ε β) :
     (Except.ok a : Except ε α) >>= f = f a := rfl
 
+/-- Fused bind for the tracker monad: a success step then the
+continuation. Supplying both halves as terms keeps the proof out of
+`rw`/`simp`'s syntactic matching, which the record literals `modifyState`
+receives would otherwise defeat. -/
+theorem runTx_bind_ok {α β : Type} {m : TxM α} {k : α → TxM β}
+    {ts ts' : TransactionState} {a : α}
+    {r : Except SpecError (β × TransactionState)}
+    (h1 : m.run ts = .ok (a, ts')) (h2 : (k a).run ts' = r) :
+    (m >>= k).run ts = r := by
+  rw [show (m >>= k).run ts
+      = (m.run ts) >>= (fun p => (k p.1).run p.2) from rfl, h1]
+  exact h2
+
 /-- The EIP-161 collapse test, on a transaction-overlay hit. -/
 theorem runTx_accountExistsAndIsEmpty_hit (ts : TransactionState)
     (a : Address) (r : Option EvmAsm.Stateless.SpecRef.Account)
@@ -348,6 +361,60 @@ theorem runTx_modifyState_nonEmpty (ts : TransactionState) (a : Address)
     runTx_setAccount,
     runTx_accountExistsAndIsEmpty_some _ a _ hwrite, hne]
   rfl
+
+/-- SpecRef's **collapsing** `modifyState`: the write, then
+`destroyAccount` — `destroyStorage` (a no-op exactly when the account has
+no pending storage writes) followed by `setAccount … none`. -/
+def specModifyStateCollapseOut (ts : TransactionState) (a : Address)
+    (acct : EvmAsm.Stateless.SpecRef.Account) : TransactionState :=
+  specSetAccount (specModifyStateOut ts a acct) a none
+
+theorem specModifyStateCollapseOut_accountWrites (ts : TransactionState)
+    (a : Address) (acct : EvmAsm.Stateless.SpecRef.Account) :
+    (specModifyStateCollapseOut ts a acct).accountWrites
+      = dictSet (dictSet ts.accountWrites a (some acct)) a none := rfl
+
+/-- `destroyStorage` on an account with no pending storage writes is the
+identity — the `none` branch of its `match` returns the state unchanged.
+`hstore` is what confines the collapse to that branch; see
+`Assumptions.lean` for why every reachable collapse satisfies it (only a
+code-bearing account receives `setStorage`, and a collapsing account has
+no code). -/
+theorem runTx_destroyStorage_none (ts : TransactionState) (a : Address)
+    (hstore : dictGet? ts.storageWrites a = none) :
+    (destroyStorage a).run ts = .ok ((), ts) := by
+  unfold destroyStorage
+  simp only [StateT.run_modify, hstore]
+  rfl
+
+/-- **One collapsing account write.** The EIP-161 branch `modifyState`
+takes when the value it just wrote is empty. -/
+theorem runTx_modifyState_collapse (ts : TransactionState) (a : Address)
+    (f : EvmAsm.Stateless.SpecRef.Account → EvmAsm.Stateless.SpecRef.Account)
+    (r : Option EvmAsm.Stateless.SpecRef.Account)
+    (h : specAcctRow ts a = some r)
+    (hemp : ((f (r.getD EMPTY_ACCOUNT)).nonce == 0
+      && (f (r.getD EMPTY_ACCOUNT)).codeHash == EMPTY_CODE_HASH
+      && (f (r.getD EMPTY_ACCOUNT)).balance == 0) = true)
+    (hstore : dictGet? ts.storageWrites a = none) :
+    (modifyState a f).run ts
+      = .ok ((), specModifyStateCollapseOut ts a (f (r.getD EMPTY_ACCOUNT))) := by
+  have hwrite : specAcctRow
+      (specSetAccount (specAccountReadOf ts a) a
+        (some (f (r.getD EMPTY_ACCOUNT)))) a
+      = some (some (f (r.getD EMPTY_ACCOUNT))) :=
+    dictGet?_dictSet_self _ a _
+  have hstore' : dictGet?
+      (specModifyStateOut ts a (f (r.getD EMPTY_ACCOUNT))).storageWrites a
+      = none := hstore
+  unfold modifyState specModifyStateCollapseOut
+  simp only [StateT.run_bind, runTx_getAccount_hit ts a r h, except_ok_bind',
+    runTx_setAccount,
+    runTx_accountExistsAndIsEmpty_some _ a _ hwrite, hemp]
+  unfold destroyAccount
+  rw [if_pos trivial]
+  refine runTx_bind_ok (runTx_destroyStorage_none _ a hstore') ?_
+  exact runTx_setAccount _ a none
 
 /-! ## The extraction's writes
 
@@ -886,6 +953,34 @@ theorem accountRel_frame {ts ts' : TransactionState} {hs : Evm.HostState}
       absentEmpty := hrel.absentEmpty
       presentNonEmpty := hrel.presentNonEmpty
       wf := hrel.wf }
+
+/-- The weaker frame the degenerate transfers need: `accountWrites` may
+be rebuilt as long as every **row** reads back the same. A `dictSet` that
+writes the value already there is exactly this, and so is a
+`dictSet … none` on an entry that was already `some none`. -/
+theorem accountRel_rowsFrame {ts ts' : TransactionState} {hs : Evm.HostState}
+    (h : ∀ a : Address, specAcctRow ts' a = specAcctRow ts a)
+    (hrel : AccountRel ts hs) : AccountRel ts' hs :=
+  { curr := fun aV v hv => by rw [h]; exact hrel.curr aV v hv
+    absentEmpty := hrel.absentEmpty
+    presentNonEmpty := hrel.presentNonEmpty
+    wf := hrel.wf }
+
+/-- A row that is not `some none` when its tuple is not EIP-161-empty:
+SpecRef's `EMPTY_ACCOUNT` fallback *is* empty, so a non-collapsing write
+value proves the entry was really there. What lets the degenerate
+transfers conclude that restoring a balance restores the row. -/
+theorem specAcctRow_some_of_nonEmpty
+    (r : Option EvmAsm.Stateless.SpecRef.Account)
+    (h : ((r.getD EMPTY_ACCOUNT).nonce == 0
+      && (r.getD EMPTY_ACCOUNT).codeHash == EMPTY_CODE_HASH
+      && (r.getD EMPTY_ACCOUNT).balance == 0) = false) :
+    r = some (r.getD EMPTY_ACCOUNT) := by
+  cases r with
+  | none =>
+    rw [Option.getD_none] at h
+    simp [EMPTY_ACCOUNT] at h
+  | some acct => rfl
 
 /-- And one field of the host state, so a host step that leaves
 `accountTx` alone — `k_aload`'s block-level caching, a warm stamp, a

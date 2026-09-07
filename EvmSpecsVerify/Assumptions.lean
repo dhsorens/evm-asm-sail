@@ -180,20 +180,38 @@ EVM state can violate it, and whether it is eliminable by proving.
   transfer is balance-preserving), but the witness is caller-supplied, so
   nothing local rules the pre-state out. Eliminable only by a supply
   invariant on the witness.
-* `hne` / `hv` (`transfer_equiv`) — the two branches of `k_transfer`'s
-  early return: a self-transfer and a zero-value transfer, where the
-  extraction writes nothing and SpecRef runs both `modifyState`s
-  (mismatch ledger MM-18). Both are **reachable**, and both are excluded
-  rather than proven, because SpecRef's second `modifyState` can hit the
-  EIP-161 collapse branch — which also destroys storage, and so waits on
-  the same `destroyStorage` ↔ `storage_tx_cleared` correspondence as the
-  collapsing account write. MM-18 records the block-access-list argument
-  for why the account half is unobservable anyway.
+* ~~`hne` / `hv`~~ (`transfer_equiv`) — **discharged.** These excluded
+  `k_transfer`'s two early-return branches (mismatch ledger MM-18), both
+  reachable through `SELFDESTRUCT`. `transfer_equiv_self`,
+  `transfer_equiv_zero` and `transfer_equiv_zero_collapse` now prove them
+  instead, through `accountRel_rowsFrame`: SpecRef writes where the
+  extraction does not, and every row it writes holds the value that was
+  already there — including the collapsing branch, where a dead
+  beneficiary is written empty and deleted again, landing back on the
+  `some none` entry the relation had. `transfer_equiv` keeps the
+  hypotheses; what changed is that a caller can now supply either case by
+  proof.
 * `hsne` / `hdne` (`transfer_equiv`) — neither write collapses. Not an
   invariant: it is the `accountRel_write` scope restriction, stated on
   the extraction's `account_info_empty` and transported to SpecRef's test
   by `specAcctEmpty_eq`, so one hypothesis serves both sides. Both of
-  SELFDESTRUCT's writes and a value-carrying CALL's satisfy it.
+  SELFDESTRUCT's writes and a value-carrying CALL's satisfy it, and
+  `hdne` is *automatic* for a nonzero transfer (the credited balance
+  cannot be zero). `hsne` survives in the degenerate theorems too, where
+  it says the source is not EIP-161-empty after the debit — true for any
+  account executing code.
+* `hstore` (`runTx_modifyState_collapse`, and through it
+  `transfer_equiv_zero_collapse`) — a collapsing account has no pending
+  storage writes, which is what confines `destroyStorage` to its identity
+  branch. Every reachable collapse satisfies it: `iSstore` writes storage
+  only to `message.currentTarget`, which is executing code, and an
+  account with code is never EIP-161-empty — so a collapsing account
+  never has a `storageWrites` entry. Without it SpecRef would move those
+  slots into `storageReads` (block-access-list observable) and delete
+  them, breaking `StorageRel` in the one direction that matters. The
+  argument is transaction-level, so it stays a hypothesis; eliminable by
+  a tx-level invariant tying `storageWrites` keys to code-bearing
+  accounts.
 * The EIP-7708 constants are **not** assumptions: `transferLogAddress_eq`
   and `transferTopic_eq` are kernel computations, the second going
   through `byteArray_toList` because `String.toUTF8.toList` is

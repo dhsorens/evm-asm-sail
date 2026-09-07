@@ -546,6 +546,35 @@ residual notes at the end of this section scope each one.
       storage and so waits on the same correspondence the collapsing
       account write does.
 
+- [x] `Relations/Transfer.lean` (the degenerate branches) — and with them
+      **MM-18 closed by proof**. The two branches `k_transfer` returns
+      early on are both reachable through `SELFDESTRUCT`, so a complete
+      step theorem cannot exclude them. Three theorems discharge them,
+      all through one new frame lemma, `accountRel_rowsFrame`: the
+      transaction state's *rows* read back unchanged, so the relation is
+      preserved pointwise even though SpecRef wrote where the extraction
+      did not.
+      `transfer_equiv_self` — the debit is undone by the credit;
+      `v ≤ balance` makes the restored balance nonzero so the second
+      write cannot collapse, and a nonzero balance proves the entry was
+      present, so the final row is the original row.
+      `transfer_equiv_zero` — both writes store the value already there.
+      `transfer_equiv_zero_collapse` — the reachable zero-balance
+      `SELFDESTRUCT` to a dead beneficiary, and the interesting one: this
+      is the first **collapsing** account write in the tree. It needed
+      `runTx_modifyState_collapse` (the EIP-161 branch of `modifyState`,
+      with `destroyStorage` confined to its identity case by `hstore`)
+      and it lands back on the `some none` entry the relation already
+      held — which is exactly where `AccountRel`'s `presentNonEmpty`
+      field earns its keep: the collapse fires iff the extraction's row is
+      not `present`, and `hostAcctView` of such a row is `none`.
+      So the collapsing write is no longer blocked in general — what it
+      needed was not the `destroyStorage` ↔ `storage_tx_cleared`
+      correspondence but the observation that a collapsing account never
+      *has* pending storage writes (`iSstore` writes only to
+      `message.currentTarget`, which has code, and an account with code is
+      never EIP-161-empty). That is `hstore`, ledgered with its argument.
+
 - [x] `Relations/Selfdestruct.lean` — the rest of `SELFDESTRUCT`'s
       prerequisites, and one correction to the plan: **neither side
       deletes at the opcode.** `k_selfdestruct` only sets the row's
