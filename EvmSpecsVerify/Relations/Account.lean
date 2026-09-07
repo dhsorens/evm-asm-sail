@@ -761,6 +761,21 @@ theorem accountRel_isEmpty {ts : TransactionState} {hs : Evm.HostState}
     rw [if_neg hp, Option.getD_none, ← specAcctEmpty_eq v.curr.info, hb, hn, hh]
     simp [EMPTY_ACCOUNT, empty_code_hash_eq]
 
+/-- **A row is EIP-161-empty exactly when it is absent.** The two
+discipline fields, packaged as the equation the readers actually want:
+`absentEmpty` gives one direction, `presentNonEmpty` the other. -/
+theorem accountRel_empty_iff_absent {ts : TransactionState}
+    {hs : Evm.HostState} (hrel : AccountRel ts hs) (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue) (hrow : hostAcctRow hs aV = some v) :
+    Evm.Functions.account_info_empty v.curr.info = !v.curr.present := by
+  by_cases hp : v.curr.present = true
+  · rw [hp, hrel.presentNonEmpty aV v hrow hp]
+    rfl
+  · obtain ⟨hb, hn, hh⟩ := hrel.absentEmpty aV v hrow (by simpa using hp)
+    rw [show v.curr.present = false from by simpa using hp,
+      Evm.Functions.account_info_empty, hb, hn, hh]
+    simp [Evm.Functions.word_is_zero, word_zero_eq']
+
 /-! ## Preservation
 
 The write direction of the relation. Together with `accountRel_isEmpty`

@@ -633,6 +633,52 @@ carries a `hsum` hypothesis.
   `EvmSpecsVerify/Assumptions.lean`. Closing it needs a supply invariant
   on the witness, which is outside a single step's scope.
 
+## MM-20: `created_accounts` survives a revert on SpecRef's side and not on the extraction's
+
+Found while relating the EIP-6780 lifecycle flags. Unlike MM-16/MM-18,
+this asymmetry is in the **rollback discipline** rather than in a write,
+and the upstream comment says it is deliberate.
+
+- **Area**: EIP-6780's same-transaction test — `CREATE`/`CREATE2`
+  marking, and `SELFDESTRUCT` reading it.
+- **SpecRef**: `restoreTxState` (StateTracker.lean:332) restores
+  `accountWrites`, `storageWrites`, `codeWrites` and `transientStorage`
+  and nothing else; its docstring says "reads and `created_accounts` keep
+  accumulating". So a reverted `CREATE` leaves
+  `txState.createdAccounts ∋ target` behind.
+- **`Evm`**: `created` is a field of the `accountTx` row, and
+  `state_journal_revert` (HostAxioms.lean:2041) restores the whole
+  `accountTx` list, so the flag goes back to `false` with the rest of the
+  row.
+- **Trigger**: a `CREATE`/`CREATE2` whose frame later reverts, followed
+  by a `SELFDESTRUCT` executing at that address in the same transaction.
+  SpecRef would mark the account for deletion (EIP-6780 satisfied) where
+  the extraction would not.
+- **Fork**: Cancun onward (EIP-6780 introduced the test).
+  **Reachability**: **not reachable.** To take the divergent branch the
+  originator must be executing code when `SELFDESTRUCT` runs, and the
+  only creation of that address in this transaction reverted — which
+  rolled its code back with everything else, so there is no code to
+  execute. A *later* creation at the same address marks `created` on both
+  sides. The neighbouring worry is also settled: `generic_create`
+  (Interpreter.lean:561) runs the `accountDeployable` collision test
+  *before* `process_create_message`, so `markAccountCreated` never fires
+  on an occupied target — SpecRef cannot come to believe a pre-existing
+  contract was created this transaction.
+- **Severity**: none, given the argument above; but it is what forces
+  [`LifecycleRel`](../EvmSpecsVerify/Relations/Selfdestruct.lean)'s
+  `created` component to be one-directional, so it costs a hypothesis.
+- **Likely cause**: SpecRef mirrors execution-specs, where
+  `created_accounts` is a transaction-level set outside the journal,
+  while the extraction folds the flag into the journalled row for
+  witness-compactness.
+- **Disposition**: *relation + assumption*. `LifecycleRel.created` runs
+  extraction-row → SpecRef-set only. A step that *branches* on the test
+  needs the converse at one address, which is `CreatedAgree` — ledgered
+  in `EvmSpecsVerify/Assumptions.lean` with the reachability argument.
+  Closing it needs the CREATE family (M3), where the reverted-frame
+  states become expressible.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.
@@ -763,9 +809,28 @@ carries a `hsum` hypothesis.
   Machine-checked end to end by `sstore_step_equiv`, whose gas triple is
   the shared closed form `sstoreGasOut`. **The storage half of the open
   subset is closed; only the CALL/CREATE-family account writes remain.**
+- **Verified 2026-09-07 (SELFDESTRUCT — the account-write subset)**: the
+  five constants the Amsterdam `SELFDESTRUCT` schedule uses agree, and
+  four of them are the account-write constants this entry has been
+  carrying as open — `OPCODE_SELFDESTRUCT_BASE = 5000 = G_selfdestruct`,
+  `COLD_ACCOUNT_ACCESS = 3000 = G_amsterdam_cold_account_access`,
+  `ACCOUNT_WRITE = 8000 = G_amsterdam_account_write`, the warm surcharge
+  `0 = G_zero`, and the state-gas constant
+  `StateGasCosts.NEW_ACCOUNT = G_amsterdam_state_new_account`, which is a
+  *product* on SpecRef's side (`STATE_BYTES_PER_NEW_ACCOUNT ·
+  COST_PER_STATE_BYTE = 120 · 1530`) and the literal `183600` on the
+  extraction's. Machine-checked by `selfdestructBase_eq`,
+  `coldAccountAccess_eq`, `accountWrite_eq`, `warmAccessZero_eq` and
+  `newAccount_eq` (Relations/Selfdestruct.lean), with
+  `extractionAccessCost_eq` / `extractionExecutionCost_eq` reducing the
+  extraction's two staged sums to the shared closed form
+  `selfdestructCost`. **This closes the account-write subset except for
+  the CALL/CREATE family's own charges** (`CALL_VALUE`, `CREATE_ACCESS`),
+  which stay blocked by MM-3.
 - **Fork**: Amsterdam. **Severity**: potentially high if real (conformance-level).
-- **Disposition**: *needs investigation* (CALL/CREATE account-write subset
-  only; ALU, storage and account-read schedules are machine-checked).
+- **Disposition**: *needs investigation* (CALL/CREATE-family charges only;
+  ALU, storage, account-read and `SELFDESTRUCT` account-write schedules
+  are machine-checked).
 
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 

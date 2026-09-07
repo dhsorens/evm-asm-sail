@@ -546,25 +546,65 @@ residual notes at the end of this section scope each one.
       storage and so waits on the same correspondence the collapsing
       account write does.
 
+- [x] `Relations/Selfdestruct.lean` — the rest of `SELFDESTRUCT`'s
+      prerequisites, and one correction to the plan: **neither side
+      deletes at the opcode.** `k_selfdestruct` only sets the row's
+      `selfdestructed` flag (a whole-row install, not a collapsing
+      write) and SpecRef only appends to `evm.accountsToDelete`; both
+      defer the clearing to transaction end, and both do EIP-8246's
+      balance-preserving clear there (`clearAccountPreservingBalance` vs
+      `account_clear_preserving_balance` + `storage_tx_clear`). So the
+      collapsing-write blocker never applied to this opcode.
+      Three pieces landed. **The Amsterdam schedule**: all five constants
+      agree, four of them being the account-write constants MM-2 has been
+      carrying as open — base `5000`, cold `3000`, account-write `8000`,
+      warm `0`, and `NEW_ACCOUNT`, a product (`120 · 1530`) on SpecRef's
+      side against the literal `183600`. `selfdestructCost` is the shared
+      closed form, and `extractionAccessCost_eq` /
+      `extractionExecutionCost_eq` reduce the extraction's two staged
+      sums to it. **The `creates_account` predicate**: SpecRef's
+      `beneficiary_dead && originator_has_balance` against the
+      extraction's `nonzero_balance && beneficiary_empty`, identified
+      operand by operand (`beneficiaryDead_eq`,
+      `originatorHasBalance_eq`) on top of a new `AccountRel` corollary,
+      `accountRel_empty_iff_absent` — a row is EIP-161-empty exactly when
+      it is absent, which is the two discipline fields packaged as the
+      equation the readers want. **The lifecycle flags**: `LifecycleRel`
+      relates SpecRef's two address lists to the extraction's two row
+      flags, with an `outer` parameter playing `LogRel`'s `base` role
+      (`accountsToDelete` is frame-local, the row flag is not);
+      `lifecycleRel_mark` preserves it and `accountRel_flagWrite` shows
+      the flag write cannot disturb `AccountRel`.
+      **One finding, ledgered as MM-20**: `restoreTxState` keeps
+      `createdAccounts` across a revert — its own docstring says "reads
+      and `created_accounts` keep accumulating" — while the extraction's
+      `state_journal_revert` restores the whole `accountTx` list and with
+      it the `created` flag. So a reverted `CREATE` leaves the two sides
+      disagreeing about EIP-6780's test. It is **unreachable** (the
+      originator must be executing code when `SELFDESTRUCT` runs, and the
+      reverted creation rolled that code back), but the argument is
+      transaction-level, so `LifecycleRel.created` is one-directional and
+      a step that branches on the test carries `CreatedAgree` at the one
+      address. The neighbouring worry is *not* real and the entry says
+      so: `generic_create` runs its `accountDeployable` collision test
+      before `process_create_message`, so SpecRef never marks a
+      pre-existing contract as created this transaction.
+
 Residual for the remaining `unstated` rows:
 
-- **SELFDESTRUCT** now has its relation (`AccountRel`), its read shapes
-  (`runS_k_get_balance_hit`, `runS_k_account_exists_hit`,
-  `runTx_isAccountAlive_hit`), its write lemmas
-  (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
-  `accountRel_write`) and now its transfer (`transfer_equiv`, which also
-  settles the EIP-7708 log). What is still open: the
-  `accountsToDelete` / `created` + `selfdestructed` correspondence for
-  EIP-6780, the four constants (`OPCODE_SELFDESTRUCT_BASE`/`G_selfdestruct`,
-  `COLD_ACCOUNT_ACCESS`, `ACCOUNT_WRITE`, `StateGasCosts.NEW_ACCOUNT` —
-  which would close MM-2's remaining account-write subset), and the halt
-  shape: the handler stops the frame by setting `running := false` rather
-  than throwing, where the extraction writes `Halted HaltSelfDestruct` —
-  the STOP/RETURN normal-halt pairing rather than a new
-  `StepResultRel` case. Its liveness test also pairs neatly already:
-  SpecRef's `!isAccountAlive beneficiary` against the extraction's
-  `k_account_is_empty`, which is `accountRel_alive`/`accountRel_isEmpty`.
-  MM-14 covers its guard ordering.
+- **SELFDESTRUCT**'s prerequisites are all in: `AccountRel` for the
+  overlay, its read shapes (`runS_k_get_balance_hit`,
+  `runS_k_account_exists_hit`, `runTx_isAccountAlive_hit`), its write
+  lemmas (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
+  `accountRel_write`), `transfer_equiv` for the balance transfer and the
+  EIP-7708 log, and `Relations/Selfdestruct.lean` for the schedule, the
+  predicate and the lifecycle flags. What is left is the step theorem
+  itself: assembling the two staged charges (sentry on the access cost,
+  then the full charge plus the state-gas charge) and pairing the halt —
+  the handler stops the frame with `running := false` rather than
+  throwing, where the extraction writes `Halted HaltSelfDestruct`, which
+  is the STOP/RETURN normal-halt shape rather than a new
+  `StepResultRel` case. MM-14 covers its guard ordering.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

@@ -102,3 +102,4 @@ import EvmSpecsVerify.Opcodes.BlockEnv
 import EvmSpecsVerify.Opcodes.Blockhash
 import EvmSpecsVerify.Opcodes.Jumpdest
 import EvmSpecsVerify.Relations.Transfer
+import EvmSpecsVerify.Relations.Selfdestruct

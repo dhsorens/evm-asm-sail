@@ -284,6 +284,25 @@ theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
   unfold EvmAsm.Stateless.SpecRef.setAdd
   rw [if_pos h]
 
+/-- Membership after `setAdd`, at the added key and away from it. Both
+branches of `setAdd` have to be checked, so these do not follow from
+`List.contains_append` alone. -/
+theorem setAdd_contains_self {α : Type} [BEq α] [LawfulBEq α]
+    (s : List α) (x : α) : (setAdd s x).contains x = true := by
+  unfold EvmAsm.Stateless.SpecRef.setAdd
+  split
+  · rename_i hc; exact hc
+  · simp
+
+theorem setAdd_contains_ne {α : Type} [BEq α] [LawfulBEq α]
+    (s : List α) (x y : α) (h : y ≠ x) :
+    (setAdd s x).contains y = s.contains y := by
+  unfold EvmAsm.Stateless.SpecRef.setAdd
+  split
+  · rfl
+  · rw [List.contains_append]
+    simp [h]
+
 /-- The cold-path update preserves the relation: SpecRef `setAdd` vs the
 extraction's fresh epoch stamp. -/
 theorem warm_after_mark (keys : List (Address × Bytes32))

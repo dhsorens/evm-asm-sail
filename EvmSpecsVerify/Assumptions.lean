@@ -199,6 +199,39 @@ EVM state can violate it, and whether it is eliminable by proving.
   through `byteArray_toList` because `String.toUTF8.toList` is
   well-founded and so opaque to `decide`.
 
+## The `SELFDESTRUCT` lifecycle
+
+* `LifecycleRel` (Relations/Selfdestruct.lean) — a *relation*: SpecRef's
+  `txState.createdAccounts` and `evm.accountsToDelete` against the
+  extraction's per-row `created`/`selfdestructed` flags. Its `outer`
+  parameter is the same device as [`LogRel`](Relations/Log.lean)'s
+  `base` and for the same reason: `accountsToDelete` is frame-local and
+  merged upward by `incorporate_child_on_success`, while the row flag is
+  global within the transaction, so no frame-local statement can pin one
+  to the other. `lifecycleRel_mark` preserves it across the opcode's
+  mark, and `accountRel_flagWrite` shows a lifecycle-flag write cannot
+  disturb `AccountRel` (which reads only `info` and `present`).
+  The `deleted` component is an equality — SpecRef discards a failed
+  child's whole `evm` and the extraction's journal restores the flag, so
+  both roll back together. The `created` component is
+  **one-directional**, and that is mismatch ledger MM-20.
+* `CreatedAgree` (Relations/Selfdestruct.lean) — the converse of
+  `LifecycleRel.created` at **one** address, needed because
+  `SELFDESTRUCT` *branches* on the EIP-6780 same-transaction test and a
+  branch needs both directions. What makes it an assumption rather than a
+  theorem is MM-20: `restoreTxState` keeps `createdAccounts` across a
+  revert (its own docstring says so) where the extraction's
+  `state_journal_revert` restores the whole row. The divergent state is
+  **unreachable** — the originator must be executing code when
+  `SELFDESTRUCT` runs, and the only creation of that address in this
+  transaction reverted, which rolled its code back too — but the argument
+  is transaction-level, so it cannot be discharged inside one step.
+  Eliminable by the CREATE family (M3), where reverted frames become
+  expressible. MM-20 also records the neighbouring worry that is *not*
+  real: `generic_create` runs its collision test before
+  `markAccountCreated`, so SpecRef never marks a pre-existing contract as
+  created this transaction.
+
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
   account reads: SpecRef's journalled `getAccount` and the kernel's
   `k_get_balance` return the same balance, quantified over the ambient
