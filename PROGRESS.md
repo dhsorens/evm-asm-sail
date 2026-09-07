@@ -472,18 +472,59 @@ residual notes at the end of this section scope each one.
       `KECCAK_EMPTY` literal, `decide`-checked by the kernel — so the two
       sides' "codeless account" is a theorem, not a trust assumption.
 
+- [x] `Relations/Account.lean` (writes) — the other half of the same
+      relation, and the piece SELFDESTRUCT and the value-carrying CALL
+      family both need. `runTx_modifyState_nonEmpty` is SpecRef's writer
+      (`setAccount` + the `accountExistsAndIsEmpty` post-check), reported
+      through its `accountWrites` field since the read marks it leaves are
+      invisible to the relation; `runS_store_account_info_hit` is the
+      extraction's, covering **both** surviving shapes — the whole-row
+      install and the up-to-three scalar `acct_tx_set_*` fast paths —
+      which meet in the same row. That one is reported through its
+      **rows** rather than its `accountTx` list, because `assocPut` moves
+      the entry to the front: an all-fields-unchanged run performs no put
+      at all, so the two runs' lists differ while their rows agree.
+      `accountRel_write` is the preservation lemma, and
+      `specAcctEmpty_eq` — SpecRef's `accountExistsAndIsEmpty` and the
+      extraction's `account_info_empty` are the same function of the
+      tuple, the code-hash halves meeting through `empty_code_hash_eq` —
+      is what makes the relation's discipline fields *proved* preserved
+      rather than assumed.
+      Deferred, and documented: the **collapsing** write, which destroys
+      storage on both sides and so waits on the `destroyStorage` ↔
+      `storage_tx_cleared` correspondence `Relations/Storage.lean`
+      records as open. Nothing in scope needs it.
+      **One finding, ledgered as MM-18**: a self transfer writes a SpecRef
+      row (`moveEther a a v` runs `modifyState` twice) where the
+      extraction's `k_transfer` returns immediately — the account analogue
+      of MM-16, reachable through `SELFDESTRUCT(address(this))`, and
+      harmless for the same reason the relation is one-directional. Its
+      sharper sub-case (SpecRef's intermediate zero balance collapsing a
+      codeless account and destroying its storage) is unreachable, since a
+      codeless account cannot be executing; the entry says so and says
+      what would make it reachable.
+
 Residual for the remaining `unstated` rows:
 
-- **SELFDESTRUCT** now has its relation (`AccountRel`, above) and its
-  read shapes (`runS_k_get_balance_hit`, `runS_k_account_exists_hit`,
-  `runTx_isAccountAlive_hit`). What is still open is the *writes* and the
-  step's shape: `moveEther` vs the extraction's transfer, the EIP-7708
-  transfer log (`emit_transfer_log` — `LogRel` exists), the
-  `accountsToDelete` / `created` correspondence for EIP-6780, the
-  `NEW_ACCOUNT` state-gas + `ACCOUNT_WRITE` charge for a dead beneficiary,
-  and the fact that the handler *halts* by setting `running := false`
-  rather than throwing — a success-shaped step with a stopped frame, which
-  no existing `StepResultRel` case covers. MM-14 covers its guard ordering.
+- **SELFDESTRUCT** now has its relation (`AccountRel`), its read shapes
+  (`runS_k_get_balance_hit`, `runS_k_account_exists_hit`,
+  `runTx_isAccountAlive_hit`) and its write lemmas
+  (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
+  `accountRel_write`). What is still open: composing them into the
+  transfer (SpecRef's `moveEther` — two `modifyState`s and the
+  insufficient-balance rejection — against the extraction's `k_transfer`,
+  which also emits the EIP-7708 log, so `LogRel` joins in), the
+  `accountsToDelete` / `created` + `selfdestructed` correspondence for
+  EIP-6780, the four constants (`OPCODE_SELFDESTRUCT_BASE`/`G_selfdestruct`,
+  `COLD_ACCOUNT_ACCESS`, `ACCOUNT_WRITE`, `StateGasCosts.NEW_ACCOUNT` —
+  which would close MM-2's remaining account-write subset), and the halt
+  shape: the handler stops the frame by setting `running := false` rather
+  than throwing, where the extraction writes `Halted HaltSelfDestruct` —
+  the STOP/RETURN normal-halt pairing rather than a new
+  `StepResultRel` case. Its liveness test also pairs neatly already:
+  SpecRef's `!isAccountAlive beneficiary` against the extraction's
+  `k_account_is_empty`, which is `accountRel_alive`/`accountRel_isEmpty`.
+  MM-14 covers its guard ordering.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

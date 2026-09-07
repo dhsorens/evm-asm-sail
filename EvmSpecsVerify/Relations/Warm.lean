@@ -193,6 +193,18 @@ theorem assocGet_put_ne {κ ν : Type} [BEq κ] [LawfulBEq κ]
           List.find?_cons_of_neg (by simpa using hk')]
         exact ihs
 
+/-- Two writes at the same key collapse to the later one. The account
+write lemmas need it: the extraction's `store_account_info` reaches its
+scalar fast paths through up to three consecutive `acct_tx_set_*`. -/
+theorem assocPut_put_self {κ ν : Type} [BEq κ] [LawfulBEq κ]
+    (s : List (κ × ν)) (k : κ) (v w : ν) :
+    assocPut (assocPut s k v) k w = assocPut s k w := by
+  unfold assocPut
+  rw [List.filter_cons_of_neg (by simp)]
+  congr 1
+  rw [List.filter_filter]
+  simp
+
 /-- `setAdd` of a present key is the identity. -/
 theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
     (h : s.contains x = true) : setAdd s x = s := by

@@ -523,6 +523,56 @@ all and SpecRef produces a stack entry that is not a word.
   so what a caller has to establish is that one `SSTORE`'s worst-case
   movement still fits; a transaction-level tranche discharges them.
 
+## MM-18: A self-transfer records an account row on SpecRef's side and none on the extraction's
+
+The account analogue of MM-16, found while proving the account write
+lemmas, and the reason [`AccountRel`](../EvmSpecsVerify/Relations/Account.lean)
+is one-directional in the same way `StorageRel` is.
+
+- **Area**: value transfer to the sender's own address — reachable today
+  through `SELFDESTRUCT(address(this))`, and through a self-`CALL` with
+  value once that family is in scope.
+- **SpecRef**: `moveEther a a v` (StateTracker.lean:298) has no
+  self-check: it runs `modifyState a (balance - v)` and then
+  `modifyState a (balance + v)`, so it writes `a`'s row twice and leaves
+  an `accountWrites` entry with the original balance restored.
+- **`Evm`**: `k_transfer src dst v` (Kernel/Accounts.lean:168) returns
+  immediately when `value_is_zero || src == dst`, so it writes no row and
+  emits no EIP-7708 transfer log.
+- **Trigger**: any self-transfer with a nonzero balance. Trivially
+  reachable.
+- **Expected EVM behavior**: the balances agree — SpecRef's two writes
+  net to the original value, and the extraction never moves anything.
+  The transfer *log* agrees too: SpecRef guards `emit_transfer_log` with
+  `beneficiary != originator`, matching the extraction's skip. What
+  differs is only *presence* in the transaction's write set, which is
+  observable in principle in the block access list, exactly as in MM-16
+  — and there SpecRef is again the conservative side.
+- **Fork**: all (EIP-7708 adds the log question at Amsterdam, but the
+  row asymmetry predates it). **Reachability**: trivially reachable.
+  **Severity**: none within a step; potentially observable at
+  transaction end, in the BAL rather than in execution.
+- **A sharper sub-case, and why it is unreachable.** SpecRef's first
+  `modifyState` drops the balance to zero *before* restoring it, and
+  `modifyState` collapses an EIP-161-empty account
+  (`destroyAccount` → `destroyStorage` + `setAccount none`). For a
+  codeless, zero-nonce account the intermediate state is empty, so
+  SpecRef would destroy the account's storage and rewrite it as a fresh
+  tuple where the extraction does nothing at all. That state is not
+  reachable: an account with no code cannot be executing `SELFDESTRUCT`
+  in the first place, and a `CREATE` frame's target has nonce ≥ 1.
+  Worth re-checking if a future fork lets a codeless account execute.
+- **Likely cause**: the extraction's early return is an optimisation of
+  the journal (a self-transfer changes nothing) that also skips the row;
+  execution-specs, which SpecRef mirrors, performs the two writes
+  unconditionally.
+- **Disposition**: *relation* — `AccountRel` relates every extraction row
+  to a SpecRef row with the same EIP-161 view, and not conversely, so a
+  SpecRef row the extraction lacks is invisible to it. That is the same
+  weakening MM-16 forces on `StorageRel`, for the same reason, and
+  `accountRel_write` preserves the relation across the writes that do
+  happen.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.

@@ -151,13 +151,19 @@ EVM state can violate it, and whether it is eliminable by proving.
   row carries the empty tuple (`absentEmpty`) and a present row does not
   (`presentNonEmpty`) — because the extraction's readers return `info`
   fields straight out of the row where SpecRef substitutes `EMPTY_ACCOUNT`
-  for a deleted entry. They are also *preservable*: `accountRel_isEmpty`
-  proves SpecRef's `accountExistsAndIsEmpty` test — which `modifyState`
-  runs after every account write — and the extraction's inline
-  `account_info_empty` are the same three conditions on a related row, so
-  the two sides' EIP-161 collapse fires together.
-  `accountRel_frame`/`accountRel_hostFrame` carry the relation across the
-  read bookkeeping on either side. It **reduces the three
+  for a deleted entry. They are also *preserved*, not merely assumed:
+  `specAcctEmpty_eq` proves SpecRef's `accountExistsAndIsEmpty` test —
+  which `modifyState` runs after every account write — and the
+  extraction's inline `account_info_empty` are the same function of the
+  tuple, and `accountRel_write` carries the relation across one
+  **non-collapsing** write (SpecRef's `modifyState` against the
+  extraction's `store_account_info`, whole-row install and scalar fast
+  paths alike). The collapsing write is deferred: it destroys storage on
+  both sides, so it waits on the `destroyStorage` ↔ `storage_tx_cleared`
+  correspondence that Relations/Storage.lean records as open. Nothing in
+  scope needs it — SELFDESTRUCT's two writes and a value-carrying CALL's
+  are all non-collapsing. `accountRel_frame`/`accountRel_hostFrame` carry
+  the relation across the read bookkeeping on either side. It **reduces the three
   account-read hypotheses below** on the transaction-overlay regime, and
   is the account-side prerequisite SELFDESTRUCT waits on.
 
