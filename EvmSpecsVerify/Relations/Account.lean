@@ -33,7 +33,7 @@ re-establish both, which is where a host that broke the discipline would
 be caught.
 
 The discipline is maintainable because **both sides collapse**, and with
-the same test: SpecRef's `modifyState` (StateTracker.lean:273) writes the
+the same test: SpecRef's `modifyState` (StateTracker.lean:274) writes the
 new tuple and then, `if accountExistsAndIsEmpty`, calls `destroyAccount`
 — and every balance/nonce/code write goes through it (`moveEther`,
 `createEther`, `setAccountBalance`, `incrementNonce`). The extraction's
@@ -42,14 +42,20 @@ new tuple and then, `if accountExistsAndIsEmpty`, calls `destroyAccount`
 tuple. `accountRel_write` turns that into preservation for one
 **non-collapsing** write.
 
-The collapse itself is deferred, not forgotten: it also destroys storage
-on both sides (SpecRef's `destroyAccount` → `destroyStorage`, the
-extraction's `store_account_info` → `storage_tx_clear`), and how those
-two representations of "cleared" line up is the open thread
-[`Storage.lean`](Storage.lean)'s docstring records. Nothing in scope
-needs it — `SELFDESTRUCT`'s two writes are both non-collapsing (the
-originator keeps its code, the beneficiary gains balance) and a
-value-carrying `CALL` is the same shape.
+The collapse is now proven for the **account** overlay
+(`accountRel_write_collapse`, against `runS_store_account_info_clear`):
+both sides land "no account" at the address, so the relation crosses it,
+and the proof is shorter than the non-collapsing one because an absent
+row's view is `none` unconditionally.
+
+The **storage** overlays are a different matter, and the statement says
+so rather than eliding it: SpecRef's `destroyAccount` → `destroyStorage`
+is the identity on an account with no pending storage writes, while the
+extraction's `storage_tx_clear` unconditionally records the address in a
+clear generation that makes every later uncached slot read zero. That is
+**MM-21**, with the reason it is unreachable — an account holding storage
+is never EIP-161-empty. `HostAcctClearWritten` is framed against
+`hostStorageClear hs aV` precisely so a caller cannot forget it.
 
 One asymmetry worth naming, ledgered as **MM-18** and the account
 analogue of MM-16 — the relation is one-directional for the same reason:
@@ -274,7 +280,7 @@ theorem runS_k_get_codehash_hit (aV : Evm.Defs.address)
 /-! ## SpecRef's writes
 
 Every SpecRef account write goes through `modifyState`
-(StateTracker.lean:273): write the new tuple, then collapse it if the
+(StateTracker.lean:274): write the new tuple, then collapse it if the
 result is EIP-161-empty. Only the **non-collapsing** case is proven here
 — the collapse also destroys storage on both sides (`destroyAccount` →
 `destroyStorage` vs `store_account_info` → `storage_tx_clear`), and how
@@ -429,14 +435,22 @@ theorem runTx_modifyState_collapse (ts : TransactionState) (a : Address)
 /-! ## The extraction's writes
 
 `store_account_info` (Kernel/Accounts.lean) is the extraction's only
-account writer outside whole-row installs. It has three shapes: clear
-storage when the new tuple is EIP-161-empty, install the whole row when
-existence or the storage root moves, and otherwise up to three scalar
-`acct_tx_set_*` fast paths. The lemma below covers the two non-clearing
-shapes at once, reporting the result through its **rows** rather than its
-`accountTx` list: `assocPut` moves the entry to the front, so the
-all-fields-unchanged case produces a *reordered* list with the same
-contents, and `AccountRel` reads only rows. -/
+account writer outside whole-row installs. Its storage clear is a
+**prefix**, not one of three alternative shapes: when the new tuple is
+EIP-161-empty it runs `storage_tx_clear` and *then* takes the same branch
+it would otherwise — install the whole row when existence, the storage
+root or the clear flag moves, else up to three scalar `acct_tx_set_*`
+fast paths. So there are two shapes under an optional prefix, and the two
+lemmas below split on the prefix rather than on the branch.
+
+The fast-path branch applies only `balance`/`nonce`/`code_hash`, which is
+complete: `AccountInfo` has exactly those three plus `storage_root`, and
+the branch condition is what guarantees `storage_root` did not move.
+
+Both lemmas report through their **rows** rather than their `accountTx`
+list: `assocPut` moves the entry to the front, so the all-fields-unchanged
+case produces a *reordered* list with the same contents, and `AccountRel`
+reads only rows. -/
 
 /-- The extraction's overlay write: one `assocPut` of the row, keeping
 the transaction-start `orig`. -/
@@ -674,6 +688,144 @@ theorem account_set_info_nonEmpty (acc : Evm.Defs.Account)
   unfold Evm.Functions.account_set_info acctRowSet
   rw [hne]
   rfl
+
+/-! ### The clearing shape
+
+`store_account_info`'s storage clear is a **prefix**, not one of three
+alternative shapes: when the new tuple is EIP-161-empty it runs
+`storage_tx_clear` and *then* takes the same branch the non-clearing case
+takes. The two lemmas below therefore differ in their prefix and in which
+row `account_set_info` returns, not in structure.
+
+They cannot share a tail lemma. `store_account_info`'s `do` block
+elaborates through `have`-bound join points (`__do_jp`), so the tail is
+not definitionally equal to any hand-written factoring of it — `rfl`
+rejects the bridge even with `maxRecDepth` raised. -/
+
+/-- The extraction's `storage_tx_clear` post-state: the account's
+transaction-overlay storage rows dropped, and the account recorded in the
+clear generation. `hostAcctRow` is untouched — the clear and the row
+write hit disjoint parts of the host state. -/
+def hostStorageClear (hs : Evm.HostState) (aV : Evm.Defs.address) :
+    Evm.HostState :=
+  { hs with
+      storageTx := hs.storageTx.filter (·.1.addr != aV)
+      storageCleared :=
+        if hs.storageCleared.contains aV then hs.storageCleared
+        else aV :: hs.storageCleared }
+
+@[simp] theorem hostStorageClear_row (hs : Evm.HostState)
+    (aV bV : Evm.Defs.address) :
+    hostAcctRow (hostStorageClear hs aV) bV = hostAcctRow hs bV := rfl
+
+theorem runS_storage_tx_clear (aV : Evm.Defs.address) (hs : Evm.HostState)
+    (ss : SeqState) :
+    runS (Evm.Functions.storage_tx_clear aV) hs ss
+      = .ok ((), hostStorageClear hs aV) ss :=
+  runS_modify _ _ _
+
+/-- The row `account_set_info` installs when the new tuple is
+EIP-161-empty: the empty tuple, absent, storage marked cleared — but with
+the **old `storage_root` kept**, which is what leaves the shape-moved
+branch able to be false at all. -/
+def acctRowClear (c : Evm.Defs.Account) : Evm.Defs.Account :=
+  { c with
+      info := { Evm.Functions.EMPTY_ACCOUNT_INFO with
+                  storage_root := c.info.storage_root }
+      present := false
+      storage_cleared := true }
+
+@[simp] theorem acctRowClear_present (c : Evm.Defs.Account) :
+    (acctRowClear c).present = false := rfl
+
+@[simp] theorem acctRowClear_cleared (c : Evm.Defs.Account) :
+    (acctRowClear c).storage_cleared = true := rfl
+
+@[simp] theorem acctRowClear_root (c : Evm.Defs.Account) :
+    (acctRowClear c).info.storage_root = c.info.storage_root := rfl
+
+/-- The clearing row is independent of the `info` that triggered it: only
+its emptiness is used. -/
+theorem account_set_info_empty (acc : Evm.Defs.Account)
+    (info : Evm.Defs.AccountInfo)
+    (he : Evm.Functions.account_info_empty info = true) :
+    Evm.Functions.account_set_info acc info = acctRowClear acc := by
+  unfold Evm.Functions.account_set_info acctRowClear
+  rw [he]
+  rfl
+
+/-- What a clearing write leaves: the row facts of an ordinary write, but
+against the **cleared** state rather than `hs`. Stated by composition so
+the frame clause reads `hs' = { hostStorageClear hs aV with accountTx := … }`
+— i.e. the storage overlay moved, and it is the *only* thing besides the
+row that did. That is not a weakness of the lemma: it is the content of
+the clearing shape, and MM-21 records what SpecRef does not do here. -/
+def HostAcctClearWritten (hs hs' : Evm.HostState) (aV : Evm.Defs.address)
+    (r : Evm.Defs.AcctValue) : Prop :=
+  HostAcctWritten (hostStorageClear hs aV) hs' aV r
+
+/-- **One clearing `store_account_info`.** The shape-moved branch is
+`present || !storage_cleared` once `next` is `acctRowClear`, since the
+`storage_root` is preserved. Its false side needs `habs`: an absent row
+already carries the empty tuple, so all three scalar tests fail and the
+write is a complete no-op. `AccountRel.absentEmpty` is exactly that
+hypothesis, so a caller under the relation gets it for free — and it is
+what the field was introduced for. -/
+theorem runS_store_account_info_clear (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue) (info : Evm.Defs.AccountInfo)
+    (hs : Evm.HostState)
+    (hrow : hostAcctRow hs aV = some v)
+    (he : Evm.Functions.account_info_empty info = true)
+    (habs : v.curr.present = false →
+      v.curr.info.balance = 0 ∧ v.curr.info.nonce = 0
+        ∧ v.curr.info.code_hash = Evm.Functions.KECCAK_EMPTY) :
+    ∃ hs', (∀ ss : SeqState,
+        runS (Evm.Functions.store_account_info aV v.curr info) hs ss
+          = .ok ((), hs') ss)
+      ∧ HostAcctClearWritten hs hs' aV { v with curr := acctRowClear v.curr } := by
+  have hrow' : hostAcctRow (hostStorageClear hs aV) aV = some v := hrow
+  unfold Evm.Functions.store_account_info HostAcctClearWritten
+  rw [account_set_info_empty v.curr info he, he]
+  simp only [acctRowClear_present, acctRowClear_cleared, acctRowClear_root,
+    bne_self_eq_false, Bool.false_or]
+  by_cases hb : (Evm.Functions.neq_bool false v.curr.present
+      || Evm.Functions.neq_bool true v.curr.storage_cleared) = true
+  · -- the whole-row install
+    refine ⟨hostAcctWrite (hostStorageClear hs aV) aV v (acctRowClear v.curr),
+      fun ss => ?_,
+      hostAcctWritten_write _ aV v (acctRowClear v.curr)⟩
+    refine runS_bind_ok (runS_storage_tx_clear aV hs ss) ?_
+    rw [if_pos hb]
+    exact runS_store_account_hit aV v _ _ ss hrow'
+  · -- the fast paths, all three of them vacuous
+    have hpr : v.curr.present = false := by
+      by_contra hcon
+      refine hb ?_
+      rw [show v.curr.present = true from by simpa using hcon]
+      rfl
+    have hcl : v.curr.storage_cleared = true := by
+      by_contra hcon
+      refine hb ?_
+      rw [show v.curr.storage_cleared = false from by simpa using hcon]
+      simp [Evm.Functions.neq_bool]
+    obtain ⟨hbal, hnon, hcode⟩ := habs hpr
+    have hbal' : v.curr.info.balance = Evm.Functions.ZERO_WORD := by
+      rw [hbal]; rfl
+    have hinfo : ({ Evm.Functions.EMPTY_ACCOUNT_INFO with
+          storage_root := v.curr.info.storage_root } : Evm.Defs.AccountInfo)
+        = v.curr.info := by
+      simp only [Evm.Functions.EMPTY_ACCOUNT_INFO]
+      rw [← hnon, ← hbal', ← hcode]
+    have hself : acctRowClear v.curr = v.curr := by
+      unfold acctRowClear
+      rw [hinfo, ← hpr, ← hcl]
+    refine ⟨hostStorageClear hs aV, fun ss => ?_, ?_⟩
+    · refine runS_bind_ok (runS_storage_tx_clear aV hs ss) ?_
+      rw [if_neg hb, if_neg (by simp [hself]), if_neg (by simp [hself]),
+        if_neg (by simp [hself])]
+      exact runS_pure _ _ _
+    · rw [hself]
+      exact hostAcctWritten_refl _ aV v hrow'
 
 /-- **One non-clearing `store_account_info`.** Both surviving shapes —
 the whole-row install and the scalar fast paths — leave the same row. -/
@@ -976,6 +1128,89 @@ theorem accountRel_write {ts : TransactionState} {hs hs' : Evm.HostState}
       rw [acctRowSet_info]
       exact hwf
     · exact hrel.wf bV v' (by rw [← hw.2.1 bV hkey]; exact hv')
+
+/-- The absent row projects to no account — the EIP-161 view of a
+collapse. -/
+@[simp] theorem hostAcctView_acctRowClear (c : Evm.Defs.Account) :
+    hostAcctView (acctRowClear c) = none := rfl
+
+/-- **`AccountRel` is stable under one collapsing write** — the deferred
+half, and simpler than the non-collapsing one: the installed row is
+absent, so its view is `none` unconditionally and no `hval` is needed.
+SpecRef's `destroyAccount` leaves `some none` at the address and the
+extraction's `acctRowClear` leaves an absent row; both read back as "no
+account", which is what the relation compares.
+
+`acct` is deliberately unconstrained: SpecRef writes it and then
+overwrites it with `none` in the same `modifyState`, so the tuple it
+collapsed *through* is not observable in the post-state. That is why this
+lemma needs no counterpart to `accountRel_write`'s `hval` — there is no
+written value left to relate.
+
+The storage overlays are **not** related across this step and the
+statement does not pretend otherwise: `HostAcctClearWritten`'s frame
+clause is stated against `hostStorageClear hs aV`, and MM-21 records the
+asymmetry that leaves — SpecRef marks nothing cleared. -/
+theorem accountRel_write_collapse {ts : TransactionState}
+    {hs hs' : Evm.HostState}
+    (hrel : AccountRel ts hs) (aV : Evm.Defs.address)
+    (v : Evm.Defs.AcctValue)
+    (acct : EvmAsm.Stateless.SpecRef.Account)
+    (hw : HostAcctClearWritten hs hs' aV
+      { v with curr := acctRowClear v.curr }) :
+    AccountRel (specModifyStateCollapseOut ts aV.toList acct) hs' := by
+  have hne' : ∀ bV : Evm.Defs.address, bV ≠ aV → bV.toList ≠ aV.toList :=
+    fun bV hbV hc => hbV (Vector.toList_inj.mp hc)
+  -- the two `dictSet`s of the collapse, seen through the relation's one field
+  have hself : specAcctRow (specModifyStateCollapseOut ts aV.toList acct)
+      aV.toList = some none := by
+    unfold specAcctRow
+    rw [specModifyStateCollapseOut_accountWrites]
+    exact dictGet?_dictSet_self _ _ _
+  have hother : ∀ b : Address, b ≠ aV.toList →
+      specAcctRow (specModifyStateCollapseOut ts aV.toList acct) b
+        = specAcctRow ts b := by
+    intro b hb
+    unfold specAcctRow
+    rw [specModifyStateCollapseOut_accountWrites,
+      dictGet?_dictSet_ne _ _ _ _ hb, dictGet?_dictSet_ne _ _ _ _ hb]
+  constructor
+  case curr =>
+    intro bV v' hv'
+    by_cases hkey : bV = aV
+    · subst hkey
+      rw [hw.1] at hv'
+      rw [← Option.some.inj hv', hself, hostAcctView_acctRowClear]
+    · rw [hother bV.toList (hne' bV hkey)]
+      exact hrel.curr bV v' ((hw.2.1 bV hkey).symm.trans hv')
+  case absentEmpty =>
+    intro bV v' hv' _
+    by_cases hkey : bV = aV
+    · subst hkey
+      rw [hw.1] at hv'
+      rw [← Option.some.inj hv']
+      exact ⟨rfl, rfl, rfl⟩
+    · exact hrel.absentEmpty bV v' ((hw.2.1 bV hkey).symm.trans hv')
+        (by assumption)
+  case presentNonEmpty =>
+    intro bV v' hv' hpres
+    by_cases hkey : bV = aV
+    · subst hkey
+      rw [hw.1] at hv'
+      rw [← Option.some.inj hv'] at hpres
+      rw [acctRowClear_present] at hpres
+      cases hpres
+    · exact hrel.presentNonEmpty bV v' ((hw.2.1 bV hkey).symm.trans hv')
+        hpres
+  case wf =>
+    intro bV v' hv'
+    by_cases hkey : bV = aV
+    · subst hkey
+      rw [hw.1] at hv'
+      rw [← Option.some.inj hv']
+      show WordWf (acctRowClear v.curr).info.balance
+      exact Nat.two_pow_pos 256
+    · exact hrel.wf bV v' ((hw.2.1 bV hkey).symm.trans hv')
 
 /-! ## Frames -/
 

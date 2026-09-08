@@ -158,11 +158,20 @@ EVM state can violate it, and whether it is eliminable by proving.
   tuple, and `accountRel_write` carries the relation across one
   **non-collapsing** write (SpecRef's `modifyState` against the
   extraction's `store_account_info`, whole-row install and scalar fast
-  paths alike). The collapsing write is deferred: it destroys storage on
-  both sides, so it waits on the `destroyStorage` ↔ `storage_tx_cleared`
-  correspondence that Relations/Storage.lean records as open. Nothing in
-  scope needs it — SELFDESTRUCT's two writes and a value-carrying CALL's
-  are all non-collapsing. `accountRel_frame`/`accountRel_hostFrame` carry
+  paths alike). The collapsing write is **now also proven** for the
+  account overlay (`accountRel_write_collapse` against
+  `runS_store_account_info_clear`): both sides land "no account" at the
+  address, so no `hval` is needed — an absent row's EIP-161 view is
+  `none` unconditionally. Its fast-path branch is discharged by
+  `absentEmpty` itself: an absent row already carries the empty tuple, so
+  all three scalar tests fail and the write is a complete no-op.
+  What stays open is the *storage* half, now ledgered as **MM-21**: the
+  extraction's `storage_tx_clear` records a clear generation that makes
+  later uncached slots read zero, where SpecRef's `destroyStorage` is the
+  identity and has no such notion. Unreachable — an account holding
+  storage is never EIP-161-empty — and the clearing lemma's frame clause
+  is stated against `hostStorageClear` so a caller cannot cross it with a
+  `StorageRel` by accident. `accountRel_frame`/`accountRel_hostFrame` carry
   the relation across the read bookkeeping on either side. It **reduces the three
   account-read hypotheses below** on the transaction-overlay regime, and
   is the account-side prerequisite SELFDESTRUCT waits on.
