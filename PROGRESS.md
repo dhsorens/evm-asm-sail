@@ -130,6 +130,36 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
+- [x] The CALL/CREATE family's **extraction half**, and
+      `runS_execute_underflow`. The six remaining rows are blocked on
+      *SpecRef's* side only: all six handlers are `partial def`, so there
+      is no equation to run. The extraction's `run_call`/`run_create` and
+      the six wrappers are total, so that half is landed in
+      `Opcodes/CallFamily.lean` — six wrappers reduce to **two** runners
+      plus a kind tag, the tag's five-field meaning is given as equations
+      over *all* kinds (so a new `CallKind` must be accounted for), and
+      the six stack effects are proven.
+
+      `runS_execute_underflow` is the reusable piece and belongs to every
+      opcode, not just these: `execute` reads the stack effect, runs the
+      hoisted `validate_stack`, and on failure returns the carried tuple
+      with gas zeroed — **none of which depends on the opcode**. So an
+      underflow shape is fixed by `opcode_stack_effect` alone, and the
+      lemma is stated over `op`. It is the lemma form of what MM-11/MM-14
+      keep pointing at.
+
+      Two cross-checks against SpecRef were made **by reading**, and are
+      recorded as such rather than proven, because a `partial def` cannot
+      be run: the pop counts agree one for one (3/4/7/7/6/6), and
+      `takes_value` is set for `Call`/`CallCode` exactly — the two
+      handlers carrying an insufficient-balance early exit that pushes 0
+      without entering a frame. `DelegateCall` inherits the caller's
+      value and `StaticCall` has none, so neither can fail that way and
+      neither has the branch.
+
+      The rows stay `unstated` — correctly — with the blocker now stated
+      per opcode instead of class-wide.
+
 - [x] `EvmSpecsVerify/Assumptions.lean` audited and guarded. It is the
       trust base — what the comparison still rests on, and what
       discharges each item — and it was the last living artifact nothing

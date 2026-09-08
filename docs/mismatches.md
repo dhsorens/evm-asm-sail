@@ -976,6 +976,24 @@ account halves agree; the storage halves do not.
   CALL/CREATE family is that their *handlers* are `partial def`
   (`iCreate` :612, `iCall` :703, and four more), which is a different
   fact from the dispatch match being `partial`.
+- **The extraction's half is not blocked, and is landed.** `run_call`,
+  `run_create` and the six `execute_*` wrappers are total.
+  `EvmSpecsVerify/Opcodes/CallFamily.lean` proves the wrappers reduce to
+  **two** runners plus a kind tag, gives the kind tag's five-field
+  meaning as equations over all kinds, and gives the six stack effects —
+  which with `runS_execute_underflow` (generic in the opcode, because
+  `execute`'s failure path is) yield each opcode's underflow outcome.
+  Nothing there pairs anything with SpecRef, and the rows stay
+  `unstated`; what it buys is that when upstream de-partials, only
+  SpecRef's side remains.
+- **Two cross-checks against SpecRef, by reading rather than by proof**
+  (a `partial def` cannot be run): the pop counts agree one for one
+  (3/4/7/7/6/6 against `opcode_stack_effect`'s `inputs`), and
+  `call_semantics.takes_value` is set for `Call`/`CallCode` exactly —
+  the two handlers carrying an insufficient-balance early exit that
+  pushes `0` without entering a frame (Interpreter.lean:747, :803).
+  `DelegateCall` inherits the caller's value and `StaticCall` has none,
+  so neither can fail that way and neither has the branch.
 - **Disposition**: *deliberate scope restriction* here + candidate upstream request to
   evm-asm (the fuel is already threaded; de-partialing looks mechanical). Recorded in
   `EvmSpecsVerify/Assumptions.lean`.
