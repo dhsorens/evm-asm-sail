@@ -621,92 +621,47 @@ residual notes at the end of this section scope each one.
 
 Residual for the remaining `unstated` rows:
 
-- **SELFDESTRUCT**'s prerequisites are all in: `AccountRel` for the
-  overlay, its read shapes (`runS_k_get_balance_hit`,
-  `runS_k_account_exists_hit`, `runTx_isAccountAlive_hit`), its write
-  lemmas (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
-  `accountRel_write`), `transfer_equiv` for the balance transfer and the
-  EIP-7708 log, and `Relations/Selfdestruct.lean` for the schedule, the
-  predicate and the lifecycle flags. **SpecRef's side is now complete**
-  (`runR_iSelfdestruct_static`, `_underflow`, `_sentry_oog`,
-  `_charge_oog`, `_state_oog`, `_success`), factored through
-  `runR_iSelfdestruct_prefix` — the static test, the pop, the warm test,
-  the sentry, the cold marking and both reads, shared by every
-  non-static, non-underflowing, sentry-affordable outcome — and the tail
-  `sdChargeTail`. All three of its guards (the cold marking, the EIP-7708
-  log, the EIP-6780 mark) went through `runR_guard_step`. What is left,
-  in order:
-  1. ~~The extraction's side~~ — **done**:
-     `runS_selfdestruct_body_static`, `_sentry_oog`, `_charge_oog`,
-     `_state_oog`, `_ok`, carried through the dispatch by
-     `runS_execute_selfdestruct_of_body`, plus
-     `runS_execute_selfdestruct_underflow` for the stack check `execute`
-     hoists out of `execute_opcode`. Only one outcome takes the
-     `SailME.throw` (the state charge); the rest fall out of the
-     surrounding `if`s. The guarded state charge is stepped over by
-     `runE_sd_state_charge`, whose `hafford`/`hroom` are conditional on
-     `creates_account` so a charge that never runs cannot narrow the
-     domain, and the lifecycle mark by `runE_cond_val`.
-     `runS_k_selfdestruct_hit` was strengthened to quantify the register
-     file *inside* its existential, since callers reach it after the
-     state charge has moved the registers.
-  2. The composition. **The five failure outcomes are paired**
-     (`selfdestruct_equiv_underflow` — which also carries MM-14's double
-     fault, since the extraction's hoisted stack check fires whatever the
-     static flag is — `_static`, `_sentry_oog`, `_charge_oog`,
-     `_state_oog`), together with `SelfdestructPost` and the two bridges
-     they needed: `warm_of_warmAddrRel` (the extraction's warmth test *is*
-     `accessedAddresses.contains`, in both directions — previously
-     re-derived inline by BALANCE, EXTCODEHASH, EXTCODESIZE and
-     EXTCODECOPY) and `sdCreates_eq` (the same conjunction with its
-     operands the other way round). What is left is the **success**
-     outcome — four ways on the transfer (nonzero-and-distinct, self,
-     zero, zero-with-collapse, one `transfer_equiv*` each) and two ways on
-     the EIP-6780 mark, with the halt being the STOP/RETURN normal-halt
-     pairing (`running := false` ↔ `Halted HaltSelfDestruct`), not a new
-     `StepResultRel` case — and then the dispatcher that case-splits over
-     all six. Its groundwork is in: `runR_sd_transfer_step` resolves the
-     re-association (`sdChargeTail`'s two transfer statements *are*
-     `specTransfer`, with the rest of the handler duplicated into the log
-     guard's branches, so `bind_assoc` plus the guard's if-distribution
-     turns them into `specTransfer >>= k`);
-     `runR_iSelfdestruct_success_xfer` is SpecRef's success in the form
-     that consumes `transfer_equiv*`'s composite conclusion;
-     `sdChargedEvm_gas` matches SpecRef's two charges against the
-     extraction's `sdGasOut`/`sdResOut`/`sdSpillOut` in one lemma, over
-     the promoted `chargeStateEvm_proj` (moved out of `Opcodes/Sstore.lean`
-     — projecting the concrete composition instead blows the recursion
-     depth, so it has to be stated over a variable frame); and
-     `TransferHostFrame` exports the access-set and stack equalities
-     `WarmAddrRel` needs to cross a transfer. What remains is the
-     post-relation discharge itself: `accountRel_flagWrite` and
-     `logRel_frame` across the EIP-6780 row write, `warmaddr_after_mark`
-     across the whole step, and `lifecycleRel_mark` with `CreatedAgree`.
-  The register-file generalization that (2) needed is **done**: the whole
-  account-write chain (`runS_opt_step`,
-  `runS_store_account_info_hit`, `runS_k_transfer`, `runS_k_transfer_noop`)
-  now quantifies the register file *inside* its existential, and all four
-  `transfer_equiv*` results expose their extraction run as
-  `∀ ss, ss.regs.get? k_execution_profile = some prof → …`. That is what
-  lets the transfer be used after a state charge has moved the registers.
-  They also gained a `TransferFrame` clause — one frame equation saying a
-  transfer touches only `txState` and `evm.logs`, plus
-  `createdAccounts` being untouched — which is what lets SELFDESTRUCT read
-  `txState.createdAccounts` and clear `evm.running` *after* the transfer
-  without the existentially bound post-machine hiding those fields. All
-  four closed by `rfl`, so the clause is a real check, not a restatement.
+- **SELFDESTRUCT** is **done** — `selfdestruct_step_equiv`
+  (Opcodes/Selfdestruct.lean), six outcomes through one dispatcher:
+  success, static, underflow, sentry-OOG, execution-OOG, state-gas-OOG.
+  It was the last row outside the MM-3-blocked CALL/CREATE family, so M1's
+  opcode-by-opcode work is complete apart from that family and INVALID.
 
-  The re-association that the SpecRef step was expected to need did not
-  arise:
-  rather than stepping over `specTransfer` as a unit, `sdChargeTail`
-  steps `moveEther` with a plain bind and the log with
-  `runR_sd_log_guard`, so the composition can consume each
-  `transfer_equiv*`'s run and post halves separately without a
-  `runR_specTransfer_inline` lemma. Step (2)'s remaining question is the
-  *order* of the two tracker reads (the extraction reads the
-  originator's balance before the beneficiary's emptiness, SpecRef the
-  other way round) — both record into a read set, so they commute, and
-  the audit is in `Opcodes/Selfdestruct.lean`'s docstring.
+  What it closes. **MM-14** is now a closed class: SELFDESTRUCT was its
+  third and last member, and the underflow outcome pairs SpecRef's
+  `.writeInStaticContext` with the extraction's `StackUnderflow` through
+  `haltedStaticFirst`. **MM-2's** last non-CALL/CREATE subset is verified
+  — the four constants agree, and `sdChargedEvm_gas` goes further and
+  matches both gas *dimensions* after both charges. **MM-18** was already
+  closed by proof; **MM-19** (the non-wrap bound) and **MM-20** (the
+  EIP-6780 converse) remain, both inside `SelfdestructAgree`.
+
+  What stays assumed, and why it is narrow. `SelfdestructAgree` bundles
+  the two rows being in the transaction overlay (the same domain
+  restriction `BalanceAgree` carries), `CreatedAgree` at the originator,
+  the transfer's shape, and the EIP-7825 spill cap. Its transfer clause is
+  **reduced in all four shapes** (`selfdestructTransfer_nondegenerate`,
+  `_self`, `_zero`, `_zero_collapse`), so what is actually assumed there
+  is only which shape a state is in. Two of `transfer_equiv`'s side
+  conditions are automatic here and are noted rather than assumed: the
+  originator cannot EIP-161-collapse (it is executing code) and a
+  nonzero-value beneficiary cannot either (the credit leaves it a nonzero
+  balance).
+
+  Shared pieces this slice left behind, in rough order of reuse value:
+  `warm_of_warmAddrRel` (the extraction's warmth test *is*
+  `accessedAddresses.contains`, in both directions — BALANCE, EXTCODEHASH,
+  EXTCODESIZE and EXTCODECOPY each re-derive it inline today and can be
+  shortened); `chargeStateEvm_proj` promoted out of `Opcodes/Sstore.lean`;
+  the register-file generalization of the whole account-write chain
+  (`runS_opt_step`, `runS_store_account_info_hit`, `runS_k_transfer`,
+  `runS_k_transfer_noop`, `runS_k_selfdestruct_hit`), which is what lets a
+  write be used after a charge has moved the registers; `TransferFrame`,
+  `TransferHostFrame` and `TransferFlagFrame`, the three frame clauses that
+  let `AccountRel`, `LogRel`, `WarmAddrRel`, `StackRel` and `LifecycleRel`
+  all cross a transfer; and `lifecycleRel_transferFrame` /
+  `createdAgree_transferFrame`.
+
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

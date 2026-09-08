@@ -370,17 +370,19 @@ unreachable / ambiguity / needs investigation).
   `.writeInStaticContext` with the extraction's `StackUnderflow`. It
   admits **only** `StackUnderflow` — every opcode in this class is
   `n`-in/0-out, so overflow is unreachable. Machine-checked by
-  `tstore_step_equiv` and, for SSTORE, by `sstore_step_equiv`
-  (2026-09-03). SELFDESTRUCT is the remaining member of the class, and
-  both of its halves are now in: `runR_iSelfdestruct_static` and
-  `runS_execute_selfdestruct_underflow` (2026-09-07) are the two shapes
-  the constructor has to pair once `selfdestruct_step_equiv` is stated.
-  Worth recording because an earlier draft of
-  `Opcodes/Selfdestruct.lean`'s docstring claimed the crossing did *not*
-  reach SELFDESTRUCT, reasoning from `guard_static` preceding `pop`
-  *inside* `execute_selfdestruct` — which misses that `validate_stack`
-  is hoisted into `execute`, one level up. The Area line above was right
-  and the docstring was wrong; it has been corrected.
+  `tstore_step_equiv`, `sstore_step_equiv` (2026-09-03) and
+  `selfdestruct_step_equiv` (2026-09-08). **The class is now closed** —
+  those are all three of its members, and each pairs the two diagnostics
+  through `haltedStaticFirst`.
+
+  Worth recording how nearly SELFDESTRUCT's member was missed: an earlier
+  draft of `Opcodes/Selfdestruct.lean`'s docstring claimed the crossing
+  did *not* reach it, reasoning from `guard_static` preceding `pop`
+  *inside* `execute_selfdestruct` — which misses that `validate_stack` is
+  hoisted into `execute`, one level up. The Area line above was right and
+  the docstring was wrong; it has been corrected. The general lesson (now
+  a skill bullet) is that a handler body's first statement is not the
+  first thing that runs.
 
 ## MM-15: The blob base fee overflows a word inside the extraction's own permitted range
 
@@ -762,8 +764,18 @@ and the upstream comment says it is deliberate.
   (`COLD_ACCOUNT_ACCESS` = `G_amsterdam_cold_account_access`, the `fork ≥ Amsterdam`
   path of `account_cost`); and `OPCODE_ADDRESS`/`OPCODE_ORIGIN` `= 2 = G_base`.
   Machine-checked by `runS_account_cost` + `balance_step_equiv` and the
-  ADDRESS/ORIGIN step theorems. Remaining open subset: SSTORE and the
-  CALL/CREATE-family account writes.
+  ADDRESS/ORIGIN step theorems.
+- **Verified 2026-09-08 (SELFDESTRUCT)**: the last non-CALL/CREATE subset.
+  `OPCODE_SELFDESTRUCT_BASE = 5000 = G_selfdestruct`,
+  `COLD_ACCOUNT_ACCESS = G_amsterdam_cold_account_access`,
+  `ACCOUNT_WRITE = G_amsterdam_account_write`, and the state-gas constant
+  — a *product* on SpecRef's side (`STATE_BYTES_PER_NEW_ACCOUNT *
+  COST_PER_STATE_BYTE` = `120 * 1530`) against a literal on the
+  extraction's — agree by `newAccount_eq`. `sdChargedEvm_gas` then matches
+  both gas *dimensions* after both charges, not just the constants.
+  Machine-checked by `selfdestruct_step_equiv` (Opcodes/Selfdestruct.lean).
+  Remaining open subset: the CALL/CREATE-family account writes, blocked by
+  MM-3.
 - **Verified 2026-08-19 (copy family + size pushers)**: `OPCODE_CALLDATASIZE` /
   `OPCODE_CODESIZE` `= 2 = G_base`; `OPCODE_CALLDATACOPY_BASE` /
   `OPCODE_CODECOPY_BASE` `= 3 = G_verylow` and

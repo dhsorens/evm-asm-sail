@@ -620,9 +620,38 @@ def acctRowSet (c : Evm.Defs.Account) (info : Evm.Defs.AccountInfo) :
 @[simp] theorem acctRowSet_present (c : Evm.Defs.Account)
     (info : Evm.Defs.AccountInfo) : (acctRowSet c info).present = true := rfl
 
+@[simp] theorem acctRowSet_created (c : Evm.Defs.Account)
+    (info : Evm.Defs.AccountInfo) :
+    (acctRowSet c info).created = c.created := rfl
+
+@[simp] theorem acctRowSet_selfdestructed (c : Evm.Defs.Account)
+    (info : Evm.Defs.AccountInfo) :
+    (acctRowSet c info).selfdestructed = c.selfdestructed := rfl
+
 @[simp] theorem acctRowSet_cleared (c : Evm.Defs.Account)
     (info : Evm.Defs.AccountInfo) :
     (acctRowSet c info).storage_cleared = c.storage_cleared := rfl
+
+/-- **Every row's lifecycle flags survive one `store_account_info`.**
+The value installed is `acctRowSet` of the old row, which replaces `info`
+and `present` and nothing else — so `LifecycleRel` (and the EIP-6780 test
+a caller makes after a balance write) crosses it. Stated as one equation
+over the flag pair so it cannot fall behind either flag. -/
+theorem hostAcctFlags_of_written {hs hs' : Evm.HostState}
+    {aV : Evm.Defs.address} {v : Evm.Defs.AcctValue}
+    {info : Evm.Defs.AccountInfo}
+    (hrow : hostAcctRow hs aV = some v)
+    (hw : HostAcctWritten hs hs' aV { v with curr := acctRowSet v.curr info }) :
+    ∀ bV : Evm.Defs.address,
+      (hostAcctRow hs' bV).map
+          (fun w => (w.curr.created, w.curr.selfdestructed))
+        = (hostAcctRow hs bV).map
+            (fun w => (w.curr.created, w.curr.selfdestructed)) := by
+  intro bV
+  by_cases hb : bV = aV
+  · rw [hb, hw.1, hrow]
+    rfl
+  · rw [hw.2.1 bV hb]
 
 /-- The rows the three scalar fast paths leave, in order. -/
 private def acctRow1 (c : Evm.Defs.Account) (info : Evm.Defs.AccountInfo) :
