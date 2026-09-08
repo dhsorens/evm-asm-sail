@@ -130,6 +130,37 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
+- [x] `docs/comparison-matrix.md` audited against the landed proofs, and
+      guarded. Seven corrections, five of them on rows that claimed a
+      proof: `transient storage` was `unrelated` though `TransientRel` is
+      defined, consumed by `tstore_step_equiv` and re-established in
+      `TransientPost` (it is the *strongest*-related world component —
+      pointwise read equality in both directions, needing none of
+      `StorageRel`'s one-directional weakening); `logs` carried the status
+      word `stated`, which is not in the matrix's own legend, though
+      `LogRel` is re-established in `LogPost`; `valid jumpdests` cited a
+      `JumpiPost` that does not exist (the post is `ControlPost`); and
+      `pc`, `halt / error status`, `block env` and `chain id` named
+      relations that were never defined — `PcRel`, `StatusRel`,
+      `BlockEnvRel` — while claiming `proven-*`, so the rows now name what
+      actually discharges them (`BasePost`'s pc clause, `ErrorRel` plus
+      `StepResultRel`, per-field register ties).
+
+      The error-kind table was stale too: it listed four of `ErrorRel`'s
+      eight arms and named `ExceptionKind.StaticViolation` as the
+      counterpart for a static-context write. `StaticViolation` is **dead
+      in the extraction** — declared and serialized (`Exceptions.lean`,
+      index 5) but raised nowhere; `guard_static`, `run_create` and
+      `run_call` all raise `WriteProtection`, which is what `ErrorRel`
+      pairs. MM-11 and MM-14 had it right, so as with the MM-14 docstring
+      correction the ledger was the reliable artifact and the summary
+      table the drifting one.
+
+      `check_matrix` closes the class: a row may name an aspirational
+      relation only while its status is `unrelated`, and every artifact a
+      `related`/`proven-*` row cites must be declared somewhere. Status
+      words are checked against the legend.
+
 - [x] `Coverage/Registry.lean` — the classification in Lean, where the
       totality checker enforces what a markdown table cannot. `astStatus`
       is **total** over `Evm.Defs.ast`, so a constructor added or renamed

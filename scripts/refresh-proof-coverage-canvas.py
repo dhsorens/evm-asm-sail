@@ -924,6 +924,92 @@ DOC_LINK = re.compile(
 )
 
 
+DECL = re.compile(
+    r"^\s*(?:@\[[^\]]*\]\s*)?"
+    r"(?:private\s+|protected\s+|noncomputable\s+|partial\s+)*"
+    r"(?:theorem|lemma|def|inductive|structure|abbrev|opaque|axiom)\s+"
+    r"([A-Za-z_][\w'.]*)",
+    re.M,
+)
+MATRIX_ROW = re.compile(r"^\| (?!---)([^|]+)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|([^|]*)\|\s*$", re.M)
+BACKTICKED = re.compile(r"`([A-Za-z_][A-Za-z0-9_']*)`")
+# Names that look like a proof artifact rather than a field or a type.
+ARTIFACTISH = re.compile(r"(?:_)|(?:(?:Rel|Post|Safe|Wf|Agree|Profile|Headroom|Range)$)")
+MATRIX_STATUSES = ("unrelated", "related", "proven-", "n/a")
+
+
+def _declared(roots: tuple[str, ...]) -> set[str]:
+    names: set[str] = set()
+    for root in roots:
+        base = REPO / root
+        if not base.is_dir():
+            continue
+        for f in base.rglob("*.lean"):
+            if ".lake/build" in str(f):
+                continue
+            names |= set(DECL.findall(f.read_text(errors="ignore")))
+    return names
+
+
+def check_matrix() -> None:
+    """Fail loudly on a comparison-matrix row that cites a missing artifact.
+
+    The relation column is deliberately aspirational for a row that has no
+    relation yet — naming the `JournalRel` someone will write is how the
+    matrix records intent. That licence has to stop the moment the row
+    claims something: a `related`/`proven-<scope>` row naming a relation
+    that was never defined tells the reader a nonexistent artifact is
+    doing the work. Four rows had drifted that way (`PcRel`, `StatusRel`,
+    `BlockEnvRel` on `proven-*` rows, and `JumpiPost` for a post actually
+    called `ControlPost`), and one row's status word — `stated` — was not
+    even in the legend.
+
+    So: the status column is checked on every row, the relation column
+    only once the status is past `unrelated`.
+    """
+    if not COMPARISON_DOC.is_file():
+        return
+    text = COMPARISON_DOC.read_text()
+    local = _declared(("EvmSpecsVerify",))
+    upstream: set[str] | None = None
+    problems: list[str] = []
+
+    for m in MATRIX_ROW.finditer(text):
+        name, relation, status = m.group(1).strip(), m.group(4), m.group(6).strip()
+        if name in ("component", "aspect") or not name:
+            continue
+        kind = strip_md(status).lower()
+        if not kind.startswith(MATRIX_STATUSES):
+            problems.append(
+                f"  {name}: status starts {kind.split('(')[0].strip()!r}, "
+                "not one of unrelated / related / proven-<scope> / n/a"
+            )
+        cited = set(BACKTICKED.findall(status))
+        if not kind.startswith("unrelated"):
+            cited |= set(BACKTICKED.findall(relation))
+        cand = {c for c in cited if ARTIFACTISH.search(c)}
+        unknown = sorted(c for c in cand if c not in local)
+        if unknown:
+            if upstream is None:
+                upstream = _declared(
+                    (
+                        "extraction/evm-sail/extractions/lean/src/Evm",
+                        ".lake/packages/EvmAsm/EvmAsm",
+                    )
+                )
+            unknown = [c for c in unknown if c not in upstream]
+        for c in unknown:
+            problems.append(f"  {name}: cites `{c}`, declared nowhere")
+
+    if problems:
+        raise SystemExit(
+            "docs/comparison-matrix.md disagrees with the code:\n"
+            + "\n".join(problems)
+            + "\nName what actually discharges the row, or drop the status "
+            "back to `unrelated`."
+        )
+
+
 def check_row_theorems(data: dict) -> None:
     """Fail loudly when a row claims a proof but yields no theorem metadata.
 
@@ -1085,6 +1171,7 @@ def main() -> int:
     check_anchors()
     check_row_theorems(data)
     check_registry(data)
+    check_matrix()
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(
