@@ -916,6 +916,45 @@ def write_html(data: dict) -> None:
     HTML_OUT.write_text(render_html(data))
 
 
+DOC_LINK = re.compile(
+    r"\[`?([A-Za-z_][\w']*)`?\]\("
+    r"(?:\.\./)*((?:EvmSpecsVerify|extraction|scripts)[^)#\s]+?\.lean)"
+    r"#L(\d+)\)"
+)
+
+
+def check_anchors() -> None:
+    """Fail loudly on a `[name](file.lean#Lnnn)` whose line is not the decl.
+
+    `AGENTS.md` requires these to point at the `theorem`/`def` line, and
+    they drift on their own: every edit above a declaration moves it, and
+    a link written by hand can be wrong from birth. The primary theorem
+    link per row survives because `parse_proof` recomputes it through
+    `find_decl_line`, but anchors *inside* a status note are rendered
+    verbatim into `docs/index.html` — those went stale unnoticed through
+    several stacks (four at once by the SELFDESTRUCT stack: three in
+    `SSTORE`/`SLOAD` rows, one in `BALANCE`'s).
+    """
+    problems: list[str] = []
+    for doc in (OPCODE_DOC, COMPARISON_DOC, MISMATCH_DOC):
+        if not doc.is_file():
+            continue
+        for m in DOC_LINK.finditer(doc.read_text()):
+            name, rel, claimed = m.group(1), m.group(2), int(m.group(3))
+            actual = find_decl_line(rel, name)
+            where = f"  {doc.name}: [{name}]({rel}#L{claimed})"
+            if actual is None:
+                problems.append(f"{where} — no such declaration in that file")
+            elif actual != claimed:
+                problems.append(f"{where} — declared at L{actual}")
+    if problems:
+        raise SystemExit(
+            "stale doc anchors (link line != declaration line):\n"
+            + "\n".join(problems)
+            + "\nFix the anchors and re-run."
+        )
+
+
 def check_counts(data: dict) -> None:
     """Fail loudly when the Counts table disagrees with the rows above it.
 
@@ -944,6 +983,7 @@ def check_counts(data: dict) -> None:
 def main() -> int:
     data = load_data()
     check_counts(data)
+    check_anchors()
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(
