@@ -105,3 +105,4 @@ import EvmSpecsVerify.Relations.Transfer
 import EvmSpecsVerify.Relations.Selfdestruct
 import EvmSpecsVerify.Opcodes.Selfdestruct
 import EvmSpecsVerify.Opcodes.Invalid
+import EvmSpecsVerify.Coverage.Registry

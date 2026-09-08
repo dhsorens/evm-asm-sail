@@ -130,7 +130,35 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
-- [ ] `Coverage/Registry.lean` — machine-checked counts matching the docs tables
+- [x] `Coverage/Registry.lean` — the classification in Lean, where the
+      totality checker enforces what a markdown table cannot. `astStatus`
+      is **total** over `Evm.Defs.ast`, so a constructor added or renamed
+      by a re-extraction breaks the build instead of quietly lacking a
+      row; `astCtors` + `astCtors_map_idx` / `astCtors_getElem_idx` pin
+      down a complete duplicate-free enumeration; and the counts are
+      *computed* from it (`astStatusCount_full = 81`,
+      `astStatusCount_unstated = 6`, `astStatusCount_naOpaqueHash = 1`,
+      summing to `astCtors.length`). `astStatusCount_successProven = 0`
+      is the checked form of the doctrine that a success-only row is
+      never final. The refresh script compares rows, Counts table and
+      registry in both directions.
+
+      Two things the registry does **not** claim, stated in its
+      docstring: a `full` entry records the row's status, not its proof
+      (the artifact is the linked theorem), and seeding the entries from
+      the rows made the initial agreement tautological — the value is
+      that the two cannot drift afterwards.
+
+      It also turned up a live docs bug. SELFDESTRUCT's status cell
+      closed its parenthesis early and kept writing, and `parse_proof`
+      reads the theorem link only out of a parenthesised body that runs
+      to the end of the cell — so the row kept its `full` status while
+      its theorem name, line and deep link vanished from
+      `docs/index.html`. It was the only `full` row on the published site
+      with no link to its own theorem, and nothing complained because the
+      status column still read `full`. Fixed, and `check_row_theorems`
+      now fails the refresh on any row that claims a proof and yields no
+      theorem.
 
 ### M2 — Shape validators across machinery (next tranche)
 
