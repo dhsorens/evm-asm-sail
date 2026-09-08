@@ -86,6 +86,15 @@ For an opcode that just landed `full`:
    primary theorem link: `parse_proof` recomputes the latter through
    `find_decl_line`, but note text is rendered verbatim into
    `docs/index.html`.
+
+   **Keep the whole status note inside one pair of parentheses.** The
+   parser reads the theorem link only out of a parenthesised body that
+   runs to the *end* of the cell. A cell that closes early and keeps
+   writing — `**full** ([`thm`](f#L1) — outcomes). More prose` — keeps
+   its status and silently loses the theorem name, line and deep link
+   from the generated site. SELFDESTRUCT shipped that way and no guard
+   could see it: there was no anchor left to check. `check_row_theorems`
+   now fails the refresh on it.
 2. Run the refresh script.
 3. If the theorem newly ties a machine-frame component, bump that row in
    `docs/comparison-matrix.md` to `proven-<scope>` with the theorem name.
