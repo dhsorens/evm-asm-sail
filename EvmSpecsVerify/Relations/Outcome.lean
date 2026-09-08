@@ -48,6 +48,12 @@ inductive ErrorRel : EvmError → ExceptionKind → Prop
   `haltedChargeFirst` note). -/
   | writeInStaticContext :
       ErrorRel .writeInStaticContext .WriteProtection
+  /-- An undefined opcode byte. SpecRef carries the offending byte in the
+  error; the extraction's `ExceptionKind` has no payload, so the byte is
+  quantified away here. It is not observable: a frame teardown reads the
+  kind, and `InvalidOpcode` is what both sides report. -/
+  | invalidOpcode (op : Nat) :
+      ErrorRel (.invalidOpcode op) .InvalidOpcode
 
 /-- The value returned by the extraction's `execute`: the state-passing
 tuple (next pc, stack cursor, memory slice, remaining gas). -/
