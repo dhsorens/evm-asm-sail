@@ -25,9 +25,26 @@ EVM state can violate it, and whether it is eliminable by proving.
   active frame's cursor-prefix represents the stack. Guaranteed by the
   host contract's reference reading (HostAxioms.lean:1845); established
   at frame entry (`stack_reset`) and preserved by the step lemmas.
-* `StepRel` register hypotheses (`profile`, `message`, gas registers) —
-  registers present in the register file. Guaranteed by `sail_model_init`
-  + the interpreter's write discipline.
+* `StateRel`'s register fields (`profile`, `message`, and `gas`'s
+  reservoir/spill reads) — the registers a step reads are present in the
+  register file. Nothing in the extracted Lean establishes this: `SeqState`
+  is `PreSail.SequentialState`, whose `regs` is a plain
+  `Std.ExtDHashMap Register RegisterType` with **no totality invariant**, so
+  a missing register is expressible. What actually writes them sits above
+  the step boundary — `decode_stateless_input` for `k_execution_profile`
+  (Lib/Ssz/StatelessInput.lean:1462), `enter_transaction_frame` for
+  `message` (Evm/Transaction.lean:1167), `restore_frame` on frame return
+  (Evm/Machine.lean:501) — so presence is a genuine assumption of this
+  tranche, discharged at M3 rather than here. Every step theorem takes it
+  as an explicit hypothesis (`hprof`/`hmsg`/`hsp`) or through `StateRel`.
+
+  (Earlier revisions named a `StepRel` structure and a `sail_model_init`
+  function. `StepRel` does not exist — the register hypotheses live on
+  `StateRel`, whose fields are literally `profile`/`message`/`gas`.
+  `sail_model_init` does exist, but only in `EvmAsm/Rv64/SailEquiv/`,
+  which is a **different Sail model** (RISC-V); the EVM extraction has no
+  model-init entry point. A citation to the wrong model is worse than an
+  invented name: it resolves, so it reads as checked.)
 * `ReturnDataRel` (Relations/ReturnData.lean) — SpecRef's inline returndata
   equals the extraction's `returndata` output-slice window. Established when
   CALL-family frames return and consumed by RETURNDATASIZE/RETURNDATACOPY;
@@ -174,7 +191,8 @@ EVM state can violate it, and whether it is eliminable by proving.
   `StorageRel` by accident. `accountRel_frame`/`accountRel_hostFrame` carry
   the relation across the read bookkeeping on either side. It **reduces the three
   account-read hypotheses below** on the transaction-overlay regime, and
-  is the account-side prerequisite SELFDESTRUCT waits on.
+  was the account-side prerequisite SELFDESTRUCT needed — since landed
+  (`selfdestruct_step_equiv`).
 
 ## The value transfer
 
@@ -281,8 +299,8 @@ EVM state can violate it, and whether it is eliminable by proving.
 
   **Reduced** (with `AccountRel` + `LogRel`): the transfer clause is
   discharged in *all four* shapes —
-  `selfdestructTransfer_nondegenerate`, `_self`, `_zero`,
-  `_zero_collapse`. So what stays assumed there is only which shape a
+  `selfdestructTransfer_nondegenerate`, `selfdestructTransfer_self`,
+  `selfdestructTransfer_zero` and `selfdestructTransfer_zero_collapse`. So what stays assumed there is only which shape a
   given state is in, plus those pairings' own ledger conditions: MM-19's
   non-wrap bound on the beneficiary's balance, and MM-18's collapse tests.
   Two of `transfer_equiv`'s side conditions are *automatic* for
@@ -477,10 +495,25 @@ EVM state can violate it, and whether it is eliminable by proving.
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
   handler `def`s directly (mismatch ledger MM-3). Lifts if upstream
   de-partials the interpreter block.
-* The `mem` slice is a pass-through for the ALU family; memory content is
-  not yet related (matrix row: unrelated).
-* Precompiles, hashing, world state: out of scope; `n/a` rows in the
-  coverage matrix.
+* The `mem` slice is a pass-through for the **ALU** family — that family's
+  theorems relate no memory content. Memory itself is related and
+  preserved: `MemoryRel` with `mload_step_equiv`/`mstore_step_equiv`/
+  `return_step_equiv`, matrix rows `memory (bytes)` and `memory size` both
+  `proven-memory-ops`. (Earlier revisions of this bullet said memory was
+  "not yet related (matrix row: unrelated)", which the matrix had already
+  contradicted.)
+* Hashing is out of scope: `KECCAK256` is the **single** `n/a` row in the
+  coverage table, behind the opaque-hash axiom both sides share.
+  Precompiles have no row at all — they are not `Evm.Defs.ast`
+  constructors.
+* World state is **not** out of scope, though this section used to say so.
+  Five relations have landed — `AccountRel`, `StorageRel`, `TransientRel`,
+  `WarmAddrRel`, `LifecycleRel` — and the opcodes that read and write it
+  (SLOAD, SSTORE, TLOAD, TSTORE, BALANCE, SELFBALANCE, EXTCODE*,
+  SELFDESTRUCT) are all `full`. What remains scoped out is the
+  **transaction-level** tower: the CREATE/CALL frames (MM-3), the journal
+  and revert discipline, and the base storage layers behind the
+  transaction overlay (MM-16's miss regimes).
 
 ## External trust
 

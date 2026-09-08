@@ -31,6 +31,7 @@ OPCODE_DOC = REPO / "docs" / "opcode-coverage.md"
 COMPARISON_DOC = REPO / "docs" / "comparison-matrix.md"
 MISMATCH_DOC = REPO / "docs" / "mismatches.md"
 REGISTRY = REPO / "EvmSpecsVerify" / "Coverage" / "Registry.lean"
+ASSUMPTIONS = REPO / "EvmSpecsVerify" / "Assumptions.lean"
 HTML_OUT = REPO / "docs" / "index.html"
 SITE_URL = "https://derekhsorensen.com/evm-asm-sail/"
 GITHUB_BLOB = "https://github.com/dhsorens/evm-asm-sail/blob/main/"
@@ -951,6 +952,126 @@ def _declared(roots: tuple[str, ...]) -> set[str]:
     return names
 
 
+# A name the ledger's own prose flags as not-real may be cited freely:
+# "the future `JournalRel`" records intent, and a note explaining a
+# retired name has to be able to spell it. The marker is looked for in
+# the whole paragraph, not a line window — prose wraps, and a two-line
+# window around a citation is not where the qualifier reliably lands.
+PLANNED = (
+    "future",
+    "fragment",
+    "eventual",
+    "planned",
+    "retired",
+    "does not exist",
+    "no such",
+)
+# The two trees the comparison is actually against, plus our own. Scoped
+# to `Stateless` on the EvmAsm side because that is all this project
+# imports: `EvmAsm/Rv64/` is a *different* Sail model (RISC-V), and a
+# ledger citation resolving there is a citation to the wrong model —
+# `sail_model_init` was exactly that, real in `Rv64/SailEquiv/` and
+# absent from the EVM extraction.
+LEAN_ROOTS = (
+    "EvmSpecsVerify",
+    "extraction/evm-sail/extractions/lean/src/Evm",
+    ".lake/packages/EvmAsm/EvmAsm/Stateless",
+)
+
+
+def _mentioned(name: str, exclude: Path | None = None) -> bool:
+    """Does this identifier appear anywhere in the three Lean trees?
+
+    Weaker than "is declared" on purpose: register constructors, record
+    fields and Sail primitives are all legitimate citations that no
+    declaration regex collects. What this still catches is an *invented*
+    name, which is the defect class.
+
+    `exclude` skips the file being checked. Without it the check is
+    self-referential and useless: a ledger that explains its own retired
+    phantom names would vouch for them. That is not hypothetical — it is
+    how the first version of this guard passed its own canary.
+    """
+    needle = name.encode()
+    for root in LEAN_ROOTS:
+        base = REPO / root
+        if not base.is_dir():
+            continue
+        for f in base.rglob("*.lean"):
+            if ".lake/build" in str(f) or (exclude and f == exclude):
+                continue
+            if needle in f.read_bytes():
+                return True
+    return False
+
+
+def check_assumptions() -> None:
+    """Fail loudly on an assumptions-ledger citation that names nothing.
+
+    `Assumptions.lean` is the trust base: it says which hypotheses the
+    comparison still rests on and what discharges each. A citation that
+    resolves to nothing makes an unsubstantiated guarantee read like a
+    checked one — the ledger claimed the register hypotheses lived on a
+    `StepRel` (they live on `StateRel`) and were guaranteed by a
+    `sail_model_init` (no such entry point exists in the extracted tree,
+    and `SeqState.regs` has no totality invariant).
+
+    A name the surrounding prose marks as not-yet-written is fine; that is
+    how the ledger records intent, as in the matrix's relation column.
+    """
+    if not ASSUMPTIONS.is_file():
+        return
+    lines = ASSUMPTIONS.read_text().splitlines()
+    local = _declared(("EvmSpecsVerify",))
+    problems: list[str] = []
+    seen: set[str] = set()
+
+    # Paragraph bounds, so the qualifier can sit anywhere in the note.
+    paras: dict[int, str] = {}
+    starts: list[int] = []
+    buf: list[str] = []
+    for i, line in enumerate(lines):
+        if line.strip():
+            if not buf:
+                starts.append(i)
+            buf.append(line)
+        elif buf:
+            paras[starts[-1]] = " ".join(buf).lower()
+            buf = []
+    if buf:
+        paras[starts[-1]] = " ".join(buf).lower()
+
+    def context_of(i: int) -> str:
+        best = ""
+        for s in starts:
+            if s > i:
+                break
+            best = paras.get(s, "")
+        return best
+
+    for i, line in enumerate(lines):
+        if any(word in context_of(i) for word in PLANNED):
+            continue
+        for name in BACKTICKED.findall(line):
+            if name in seen or not ARTIFACTISH.search(name):
+                continue
+            seen.add(name)
+            if name in local:
+                continue
+            if not _mentioned(name, exclude=ASSUMPTIONS):
+                problems.append(
+                    f"  Assumptions.lean:{i + 1}: cites `{name}`, "
+                    "which names nothing in either tree"
+                )
+    if problems:
+        raise SystemExit(
+            "EvmSpecsVerify/Assumptions.lean cites names that do not exist:\n"
+            + "\n".join(problems)
+            + "\nCite what actually discharges the assumption, or say "
+            "plainly that it is not written yet."
+        )
+
+
 def check_matrix() -> None:
     """Fail loudly on a comparison-matrix row that cites a missing artifact.
 
@@ -991,12 +1112,7 @@ def check_matrix() -> None:
         unknown = sorted(c for c in cand if c not in local)
         if unknown:
             if upstream is None:
-                upstream = _declared(
-                    (
-                        "extraction/evm-sail/extractions/lean/src/Evm",
-                        ".lake/packages/EvmAsm/EvmAsm",
-                    )
-                )
+                upstream = _declared(LEAN_ROOTS[1:])
             unknown = [c for c in unknown if c not in upstream]
         for c in unknown:
             problems.append(f"  {name}: cites `{c}`, declared nowhere")
@@ -1172,6 +1288,7 @@ def main() -> int:
     check_row_theorems(data)
     check_registry(data)
     check_matrix()
+    check_assumptions()
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(
