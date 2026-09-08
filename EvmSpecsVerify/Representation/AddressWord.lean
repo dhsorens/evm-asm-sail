@@ -117,6 +117,24 @@ theorem hash_to_word_eq (hV : Vector (BitVec 8) 32) :
   show _ = hV[0].toNat * 256 ^ 31 + (hV[1].toNat * 256 ^ 30 + (hV[2].toNat * 256 ^ 29 + (hV[3].toNat * 256 ^ 28 + (hV[4].toNat * 256 ^ 27 + (hV[5].toNat * 256 ^ 26 + (hV[6].toNat * 256 ^ 25 + (hV[7].toNat * 256 ^ 24 + (hV[8].toNat * 256 ^ 23 + (hV[9].toNat * 256 ^ 22 + (hV[10].toNat * 256 ^ 21 + (hV[11].toNat * 256 ^ 20 + (hV[12].toNat * 256 ^ 19 + (hV[13].toNat * 256 ^ 18 + (hV[14].toNat * 256 ^ 17 + (hV[15].toNat * 256 ^ 16 + (hV[16].toNat * 256 ^ 15 + (hV[17].toNat * 256 ^ 14 + (hV[18].toNat * 256 ^ 13 + (hV[19].toNat * 256 ^ 12 + (hV[20].toNat * 256 ^ 11 + (hV[21].toNat * 256 ^ 10 + (hV[22].toNat * 256 ^ 9 + (hV[23].toNat * 256 ^ 8 + (hV[24].toNat * 256 ^ 7 + (hV[25].toNat * 256 ^ 6 + (hV[26].toNat * 256 ^ 5 + (hV[27].toNat * 256 ^ 4 + (hV[28].toNat * 256 ^ 3 + (hV[29].toNat * 256 ^ 2 + (hV[30].toNat * 256 ^ 1 + (hV[31].toNat * 256 ^ 0 + 0)))))))))))))))))))))))))))))))
   norm_num
 
+/-- **The address-in-a-topic padding.** Both specifications widen a
+20-byte address to a topic, and they spell it differently: SpecRef
+prepends twelve zero bytes by hand (`emit_transfer_log`,
+Interpreter.lean:117), the extraction decodes the address to a word with
+`address_to_word` and lets `toBeBytes32` re-encode it. The two agree. -/
+theorem toBeBytes32_address_to_word (aV : Vector (BitVec 8) 20) :
+    toBeBytes32 (Evm.Functions.address_to_word aV)
+      = List.replicate 12 0 ++ aV.toList := by
+  have hlen : aV.toList.length = 20 := by simp
+  have hlt : bytesBEtoNat aV.toList < 256 ^ 20 := by
+    have h := EvmAsm.EL.RLP.Nat.fromBytesBE_lt aV.toList
+    rwa [hlen] at h
+  have hround := natToBytesBE_bytesBEtoNat aV.toList
+  rw [hlen] at hround
+  rw [show toBeBytes32 (Evm.Functions.address_to_word aV)
+      = natToBytesBE (12 + 20) (bytesBEtoNat aV.toList) from by
+    rw [address_to_word_eq]; rfl, natToBytesBE_pad 12 20 _ hlt, hround]
+
 /-- The pushed hash word is well-formed (32 bytes, exactly the word
 width). -/
 theorem hash_to_word_wf (hV : Vector (BitVec 8) 32) :

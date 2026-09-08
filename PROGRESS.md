@@ -134,14 +134,13 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 ### M2 — Shape validators across machinery (next tranche)
 
-**Where M2 stands (2026-09-02): 78 of 88 AST constructors are `full`.**
+**Where M2 stands (2026-09-03): 79 of 88 AST constructors are `full`.**
 Every opcode that does not need the world-state tranche or is not blocked
-by MM-3 now has a full-outcome step theorem. The nine that remain are
-exactly those two classes: SSTORE and SELFDESTRUCT need world relations
-(persistent storage, accounts), and INVALID plus the six-member
-CREATE/CALL family have no SpecRef `def` to target while dispatch is
-`partial` (MM-3). The residual notes at the end of this section scope
-each one.
+by MM-3 now has a full-outcome step theorem. The eight that remain are
+exactly those two classes: SELFDESTRUCT needs the account side of the
+world relation, and INVALID plus the six-member CREATE/CALL family have
+no SpecRef `def` to target while dispatch is `partial` (MM-3). The
+residual notes at the end of this section scope each one.
 
 - [x] `Opcodes/Dup.lean` — DUP1–DUP16 (`dup_step_equiv`, full `StepResultRel`):
       first reachable stack overflow and first charge-first SpecRef handler.
@@ -377,24 +376,321 @@ each one.
       profile admits — stays open; `scripts/blob-fee-band.py` has the
       numbers.
 
+- [x] `Relations/Storage.lean` + `Representation/EvmSailME.lean` — the
+      persistent-storage relation, landed ahead of SSTORE because
+      `SloadAgree` waits on it too. `StorageRel` relates the
+      **transaction** overlay pointwise — `TransactionState.storageWrites`
+      (a nested address → slot dict) against `HostState.storageTx` (an
+      `assocPut` map of `StorageValue {curr, orig}` rows) — one-directional
+      on presence (MM-16, found while proving SSTORE: the extraction skips
+      the write when the value is unchanged, so a SpecRef row can have no
+      extraction row), and ties the extraction's stored `orig` to the
+      value SpecRef recomputes with `getStorageOriginal` (`specOrig`),
+      since SpecRef stores no such field. `storageRel_write` preserves it
+      across a write; `storageRel_frame` across the read bookkeeping
+      (`storageReads` / `accountReads` / `preStateReads`) that every
+      SpecRef probe performs, which is what keeps the relation usable
+      through a multi-read handler like SSTORE's.
+      **It reduces an assumption**: `sloadAgree_of_storageRel` proves
+      `SloadAgree` for any slot the transaction has already written —
+      that branch of `k_sload` is a `storage_tx_get` hit, the only one
+      that touches no state (a miss records an EIP-7928 read). The block
+      overlay (which doubles as the extraction's witness read-through
+      cache) and the authenticated trie walk below it stay ledgered.
+      `Representation/EvmSailME.lean` is the run-shape layer this needed:
+      `k_sload` is the first `SailME.run` handler in scope — an
+      `ExceptT (Error ⊕ α)` early return whose `Sum.inr` is a deliberate
+      value, not an error — and `simp` diverges on its `liftM`/`ExceptT`
+      unfolding, so it gets fused lemmas (`runE_bind_ok`,
+      `runE_bind_throw`, `runS_sailME_throw`) in the `EvmMonad.lean`
+      style. `execute_sstore` is the second such handler.
+
+- [x] `Opcodes/Sstore.lean` — SSTORE (`sstore_step_equiv`, full
+      `StepResultRel`), the widest single step in the comparison and the
+      last opcode that needed a world relation. Proven outright: the
+      Amsterdam schedule field by field (`sstoreCst_eq` — execution,
+      refund, state charge, state credit, so MM-2 is discharged for
+      SSTORE), the EIP-2200 sentry (`sstore_sentry_cost` = SpecRef's
+      `max access_cost (CALL_STIPEND + 1)`), EIP-2929 warm/cold
+      (`WarmRel`), the EIP-3529 refund counter (`RefundRel`,
+      `specRefundDelta` = the extraction's record field), and Amsterdam's
+      two-dimensional gas including the `credit_state_gas_refund` leg —
+      the two sides' three gas quantities meet in one closed form,
+      `sstoreGasOut`, which is how a 36-way branch product became a
+      case-free proof (`runS_credit_closed` / `runS_charge_state_closed`
+      collapse the credit and the charge; `runE_bind_cond` /
+      `runE_cond_val` step over the two trailing guards). Outcomes:
+      success, the static halt, the sentry, execution-gas OOG,
+      state-gas OOG, underflow, and the MM-14 double fault.
+      **Two findings.** MM-16: the extraction guards its write with
+      `entry.curr != value`, so a no-op store records a SpecRef row and
+      no extraction row — `StorageRel` is one-directional by design and
+      `storageRel_write_noop` is the step lemma for that case. MM-17: the
+      extraction's `state_gas_spill_add` and `validated_refund_add`
+      hard-abort on bounds SpecRef does not have, threaded as the
+      pre-state hypotheses `hroom`/`hhead` (the state-gas analogue of
+      `MemGasSafe`). What stays ledgered is `SstoreAgree` — the values
+      read and written — reduced by `sstoreAgree_of_storageRel` to the
+      transaction-overlay regime plus SpecRef's account-existence check,
+      which `k_sstore` has no counterpart for.
+
+- [x] `Relations/Account.lean` — the account relation, landed ahead of
+      SELFDESTRUCT the way `StorageRel` landed ahead of SSTORE (and for the
+      same reason: three ledgered read hypotheses wait on it).
+      `AccountRel` relates the **transaction** overlay pointwise —
+      SpecRef's `accountWrites : List (Address × Option Account)`, where
+      the `Option` *is* existence, against `HostState.accountTx`, whose
+      `curr` is a whole `Evm.Defs.Account` (the same three trie fields plus
+      a `storage_root` and four lifecycle flags). Existence being a flag on
+      one side and the shape of the entry on the other is the whole
+      difficulty: the relation compares SpecRef's entry against the row's
+      **EIP-161 view** and carries the host's collapse discipline as two
+      fields (`absentEmpty`, `presentNonEmpty`). Those are load-bearing,
+      not decorative — the extraction's readers return `info` fields
+      straight out of the row where SpecRef substitutes `EMPTY_ACCOUNT`, so
+      an absent row with a stale balance, or a present row that is
+      EIP-161-empty, would make `BALANCE` and `EXTCODEHASH` disagree. A
+      future `accountRel_write` has to re-establish both, which is exactly
+      where a host that broke the discipline gets caught — and they *are*
+      re-establishable: `accountRel_isEmpty` proves SpecRef's
+      `accountExistsAndIsEmpty` (which `modifyState` runs after every
+      account write, `moveEther`/`createEther`/`setAccountBalance`/
+      `incrementNonce` included) and the extraction's inline
+      `account_info_empty` are the same three conditions on a related row,
+      so both sides' collapse fires together. Both also clear storage as
+      part of it (`destroyAccount` → `destroyStorage` vs
+      `store_account_info` → `storage_tx_clear`), which is the open thread
+      `Relations/Storage.lean` already records rather than a new one.
+      **It reduces three assumptions**: `balanceAgree_of_accountRel`,
+      `selfBalanceAgree_of_accountRel` and `extcodehashAgree_of_accountRel`
+      prove `BalanceAgree` / `SelfBalanceAgree` / `ExtcodehashAgree` for
+      any account the transaction has already written — an `acct_tx_get`
+      hit, the one `k_aload` branch that touches no state. The block
+      overlay and the trie walk below it stay ledgered.
+      One constant fell out on the way: `empty_code_hash_eq` proves
+      SpecRef's *computed* `keccak256 []` equals the extraction's
+      `KECCAK_EMPTY` literal, `decide`-checked by the kernel — so the two
+      sides' "codeless account" is a theorem, not a trust assumption.
+
+- [x] `Relations/Account.lean` (writes) — the other half of the same
+      relation, and the piece SELFDESTRUCT and the value-carrying CALL
+      family both need. `runTx_modifyState_nonEmpty` is SpecRef's writer
+      (`setAccount` + the `accountExistsAndIsEmpty` post-check), reported
+      through its `accountWrites` field since the read marks it leaves are
+      invisible to the relation; `runS_store_account_info_hit` is the
+      extraction's, covering **both** surviving shapes — the whole-row
+      install and the up-to-three scalar `acct_tx_set_*` fast paths —
+      which meet in the same row. That one is reported through its
+      **rows** rather than its `accountTx` list, because `assocPut` moves
+      the entry to the front: an all-fields-unchanged run performs no put
+      at all, so the two runs' lists differ while their rows agree.
+      `accountRel_write` is the preservation lemma, and
+      `specAcctEmpty_eq` — SpecRef's `accountExistsAndIsEmpty` and the
+      extraction's `account_info_empty` are the same function of the
+      tuple, the code-hash halves meeting through `empty_code_hash_eq` —
+      is what makes the relation's discipline fields *proved* preserved
+      rather than assumed.
+      Deferred, and documented: the **collapsing** write, which destroys
+      storage on both sides and so waits on the `destroyStorage` ↔
+      `storage_tx_cleared` correspondence `Relations/Storage.lean`
+      records as open. Nothing in scope needs it.
+      **One finding, ledgered as MM-18**: a self transfer writes a SpecRef
+      row (`moveEther a a v` runs `modifyState` twice) where the
+      extraction's `k_transfer` returns immediately — the account analogue
+      of MM-16, reachable through `SELFDESTRUCT(address(this))`, and
+      harmless for the same reason the relation is one-directional. Its
+      sharper sub-case (SpecRef's intermediate zero balance collapsing a
+      codeless account and destroying its storage) is unreachable, since a
+      codeless account cannot be executing; the entry says so and says
+      what would make it reachable.
+
+- [x] `Relations/Transfer.lean` — the value transfer, where the two
+      specifications cut the work differently. SpecRef's `moveEther` is
+      pure state-tracker work (reject on insufficient balance, then two
+      `modifyState`s) and each *caller* emits the EIP-7708 log behind its
+      own `!=` guard; the extraction's `k_transfer` does all three and
+      carries the guard inside `k_emit_transfer_log`. `specTransfer` is
+      the composite both SpecRef call sites spell, and `transfer_equiv`
+      pairs it with `k_transfer`, preserving `AccountRel` and `LogRel`
+      together — the first theorem in the tree that moves two relations
+      at once.
+      Three constants had to meet first, and all three are **theorems**:
+      `transferLogAddress_eq` (SpecRef's `SYSTEM_ADDRESS` is the
+      extraction's `EIP7708_SYSTEM_ADDRESS`), `transferTopic_eq`
+      (`keccak256 "Transfer(address,address,uint256)"` is the literal
+      `0xddf252ad…`, kernel-computed) and
+      `toBeBytes32_address_to_word` (SpecRef pads twelve zero bytes by
+      hand where the extraction round-trips through a word). The topic
+      needed one bridge nobody had: `String.toUTF8.toList` goes through
+      `ByteArray.toList`, a well-founded loop and so opaque to `decide`,
+      so `byteArray_toList` rewrites it to the reducible
+      `.data.toList`. On the way, `natToBytesBE_bytesBEtoNat` and
+      `natToBytesBE_pad` filled in the missing half of the fixed-width
+      byte codec.
+      **One finding disproven, one recorded.** The suspected self-transfer
+      log divergence is *not* one: SpecRef checks `beneficiary !=
+      originator` in the caller (Interpreter.lean:304, :382) and the
+      extraction checks `src == dst` in the emitter, and the two agree —
+      MM-18's log clause is now closed by proof, leaving only the account
+      row. What is new is **MM-19**: SpecRef credits a balance with
+      unbounded `Nat` addition where the extraction reduces modulo
+      `2^256`, so the two agree only below the wrap. Unreachable in a
+      well-formed chain (a transfer preserves the balance sum, and the
+      ether supply is far below `2^256`) but the witness is
+      caller-supplied, so `transfer_equiv` carries `hsum` and the ledger
+      says why.
+      Excluded and ledgered rather than proven: `k_transfer`'s two
+      early-return branches (self-transfer, zero value — MM-18, and the
+      zero-value half is independently reachable through a zero-balance
+      `SELFDESTRUCT`) and SpecRef's EIP-161 collapse, which destroys
+      storage and so waits on the same correspondence the collapsing
+      account write does.
+
+- [x] `Relations/Transfer.lean` (the degenerate branches) — and with them
+      **MM-18 closed by proof**. The two branches `k_transfer` returns
+      early on are both reachable through `SELFDESTRUCT`, so a complete
+      step theorem cannot exclude them. Three theorems discharge them,
+      all through one new frame lemma, `accountRel_rowsFrame`: the
+      transaction state's *rows* read back unchanged, so the relation is
+      preserved pointwise even though SpecRef wrote where the extraction
+      did not.
+      `transfer_equiv_self` — the debit is undone by the credit;
+      `v ≤ balance` makes the restored balance nonzero so the second
+      write cannot collapse, and a nonzero balance proves the entry was
+      present, so the final row is the original row.
+      `transfer_equiv_zero` — both writes store the value already there.
+      `transfer_equiv_zero_collapse` — the reachable zero-balance
+      `SELFDESTRUCT` to a dead beneficiary, and the interesting one: this
+      is the first **collapsing** account write in the tree. It needed
+      `runTx_modifyState_collapse` (the EIP-161 branch of `modifyState`,
+      with `destroyStorage` confined to its identity case by `hstore`)
+      and it lands back on the `some none` entry the relation already
+      held — which is exactly where `AccountRel`'s `presentNonEmpty`
+      field earns its keep: the collapse fires iff the extraction's row is
+      not `present`, and `hostAcctView` of such a row is `none`.
+      So the collapsing write is no longer blocked in general — what it
+      needed was not the `destroyStorage` ↔ `storage_tx_cleared`
+      correspondence but the observation that a collapsing account never
+      *has* pending storage writes (`iSstore` writes only to
+      `message.currentTarget`, which has code, and an account with code is
+      never EIP-161-empty). That is `hstore`, ledgered with its argument.
+
+- [x] `Relations/Selfdestruct.lean` — the rest of `SELFDESTRUCT`'s
+      prerequisites, and one correction to the plan: **neither side
+      deletes at the opcode.** `k_selfdestruct` only sets the row's
+      `selfdestructed` flag (a whole-row install, not a collapsing
+      write) and SpecRef only appends to `evm.accountsToDelete`; both
+      defer the clearing to transaction end, and both do EIP-8246's
+      balance-preserving clear there (`clearAccountPreservingBalance` vs
+      `account_clear_preserving_balance` + `storage_tx_clear`). So the
+      collapsing-write blocker never applied to this opcode.
+      Three pieces landed. **The Amsterdam schedule**: all five constants
+      agree, four of them being the account-write constants MM-2 has been
+      carrying as open — base `5000`, cold `3000`, account-write `8000`,
+      warm `0`, and `NEW_ACCOUNT`, a product (`120 · 1530`) on SpecRef's
+      side against the literal `183600`. `selfdestructCost` is the shared
+      closed form, and `extractionAccessCost_eq` /
+      `extractionExecutionCost_eq` reduce the extraction's two staged
+      sums to it. **The `creates_account` predicate**: SpecRef's
+      `beneficiary_dead && originator_has_balance` against the
+      extraction's `nonzero_balance && beneficiary_empty`, identified
+      operand by operand (`beneficiaryDead_eq`,
+      `originatorHasBalance_eq`) on top of a new `AccountRel` corollary,
+      `accountRel_empty_iff_absent` — a row is EIP-161-empty exactly when
+      it is absent, which is the two discipline fields packaged as the
+      equation the readers want. **The lifecycle flags**: `LifecycleRel`
+      relates SpecRef's two address lists to the extraction's two row
+      flags, with an `outer` parameter playing `LogRel`'s `base` role
+      (`accountsToDelete` is frame-local, the row flag is not);
+      `lifecycleRel_mark` preserves it and `accountRel_flagWrite` shows
+      the flag write cannot disturb `AccountRel`.
+      **One finding, ledgered as MM-20**: `restoreTxState` keeps
+      `createdAccounts` across a revert — its own docstring says "reads
+      and `created_accounts` keep accumulating" — while the extraction's
+      `state_journal_revert` restores the whole `accountTx` list and with
+      it the `created` flag. So a reverted `CREATE` leaves the two sides
+      disagreeing about EIP-6780's test. It is **unreachable** (the
+      originator must be executing code when `SELFDESTRUCT` runs, and the
+      reverted creation rolled that code back), but the argument is
+      transaction-level, so `LifecycleRel.created` is one-directional and
+      a step that branches on the test carries `CreatedAgree` at the one
+      address. The neighbouring worry is *not* real and the entry says
+      so: `generic_create` runs its `accountDeployable` collision test
+      before `process_create_message`, so SpecRef never marks a
+      pre-existing contract as created this transaction.
+
 Residual for the remaining `unstated` rows:
 
-- **SSTORE** is TSTORE with every hard part back. `TransientRel` shows the
-  *shape* of the post it needs but none of the content: the extraction's
-  `k_sstore` writes a `StorageValue {curr, orig}` row through the tx
-  cache, with the transaction-original value supplied by a **preceding**
-  `k_sload` (Execute.lean:1458), against SpecRef's separate
-  `getStorageOriginal` / `getStorage` reads. On top of the write relation
-  it needs: EIP-2929 warm/cold (`WarmRel` exists), the Amsterdam
-  `sstore_sentry_cost` vs SpecRef's `check_gas (max access_cost
-  (CALL_STIPEND + 1))`, the EIP-2200 refund counter's three branches, and
-  two-dimensional state gas with a `credit_state_gas_refund` leg. That is
-  the persistent-storage relation the `SloadAgree` row also waits on —
-  the largest single slice left. Its static-guard ordering is already
-  covered (MM-14, `haltedStaticFirst`).
-- **SELFDESTRUCT** needs account deletion, the balance transfer, and the
-  created-account set — the account side of the world relation, not the
-  storage side. MM-14 covers its guard ordering too.
+- **SELFDESTRUCT**'s prerequisites are all in: `AccountRel` for the
+  overlay, its read shapes (`runS_k_get_balance_hit`,
+  `runS_k_account_exists_hit`, `runTx_isAccountAlive_hit`), its write
+  lemmas (`runTx_modifyState_nonEmpty`, `runS_store_account_info_hit`,
+  `accountRel_write`), `transfer_equiv` for the balance transfer and the
+  EIP-7708 log, and `Relations/Selfdestruct.lean` for the schedule, the
+  predicate and the lifecycle flags. **SpecRef's side is now complete**
+  (`runR_iSelfdestruct_static`, `_underflow`, `_sentry_oog`,
+  `_charge_oog`, `_state_oog`, `_success`), factored through
+  `runR_iSelfdestruct_prefix` — the static test, the pop, the warm test,
+  the sentry, the cold marking and both reads, shared by every
+  non-static, non-underflowing, sentry-affordable outcome — and the tail
+  `sdChargeTail`. All three of its guards (the cold marking, the EIP-7708
+  log, the EIP-6780 mark) went through `runR_guard_step`. What is left,
+  in order:
+  1. ~~The extraction's side~~ — **done**:
+     `runS_selfdestruct_body_static`, `_sentry_oog`, `_charge_oog`,
+     `_state_oog`, `_ok`, carried through the dispatch by
+     `runS_execute_selfdestruct_of_body`, plus
+     `runS_execute_selfdestruct_underflow` for the stack check `execute`
+     hoists out of `execute_opcode`. Only one outcome takes the
+     `SailME.throw` (the state charge); the rest fall out of the
+     surrounding `if`s. The guarded state charge is stepped over by
+     `runE_sd_state_charge`, whose `hafford`/`hroom` are conditional on
+     `creates_account` so a charge that never runs cannot narrow the
+     domain, and the lifecycle mark by `runE_cond_val`.
+     `runS_k_selfdestruct_hit` was strengthened to quantify the register
+     file *inside* its existential, since callers reach it after the
+     state charge has moved the registers.
+  2. The composition. **The five failure outcomes are paired**
+     (`selfdestruct_equiv_underflow` — which also carries MM-14's double
+     fault, since the extraction's hoisted stack check fires whatever the
+     static flag is — `_static`, `_sentry_oog`, `_charge_oog`,
+     `_state_oog`), together with `SelfdestructPost` and the two bridges
+     they needed: `warm_of_warmAddrRel` (the extraction's warmth test *is*
+     `accessedAddresses.contains`, in both directions — previously
+     re-derived inline by BALANCE, EXTCODEHASH, EXTCODESIZE and
+     EXTCODECOPY) and `sdCreates_eq` (the same conjunction with its
+     operands the other way round). What is left is the **success**
+     outcome — four ways on the transfer (nonzero-and-distinct, self,
+     zero, zero-with-collapse, one `transfer_equiv*` each) and two ways on
+     the EIP-6780 mark, with the halt being the STOP/RETURN normal-halt
+     pairing (`running := false` ↔ `Halted HaltSelfDestruct`), not a new
+     `StepResultRel` case — and then the dispatcher that case-splits over
+     all six.
+  The register-file generalization that (2) needed is **done**: the whole
+  account-write chain (`runS_opt_step`,
+  `runS_store_account_info_hit`, `runS_k_transfer`, `runS_k_transfer_noop`)
+  now quantifies the register file *inside* its existential, and all four
+  `transfer_equiv*` results expose their extraction run as
+  `∀ ss, ss.regs.get? k_execution_profile = some prof → …`. That is what
+  lets the transfer be used after a state charge has moved the registers.
+  They also gained a `TransferFrame` clause — one frame equation saying a
+  transfer touches only `txState` and `evm.logs`, plus
+  `createdAccounts` being untouched — which is what lets SELFDESTRUCT read
+  `txState.createdAccounts` and clear `evm.running` *after* the transfer
+  without the existentially bound post-machine hiding those fields. All
+  four closed by `rfl`, so the clause is a real check, not a restatement.
+
+  The re-association that the SpecRef step was expected to need did not
+  arise:
+  rather than stepping over `specTransfer` as a unit, `sdChargeTail`
+  steps `moveEther` with a plain bind and the log with
+  `runR_sd_log_guard`, so the composition can consume each
+  `transfer_equiv*`'s run and post halves separately without a
+  `runR_specTransfer_inline` lemma. Step (2)'s remaining question is the
+  *order* of the two tracker reads (the extraction reads the
+  originator's balance before the beneficiary's emptiness, SpecRef the
+  other way round) — both record into a read set, so they commute, and
+  the audit is in `Opcodes/Selfdestruct.lean`'s docstring.
 - **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
   `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
   `partial mutual` block, so it is blocked by MM-3 exactly like the

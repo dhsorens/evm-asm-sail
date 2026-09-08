@@ -1,5 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
-import EvmSpecsVerify.Relations.Warm
+import EvmSpecsVerify.Relations.Storage
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
@@ -32,7 +32,7 @@ Reachable outcomes: success (warm/cold) / stack underflow / out-of-gas
 (warm/cold; overflow unreachable for 1-in/1-out).
 -/
 
-open private pcAdd isWarmStorageKey warmStorageKey from
+open private pcAdd warmStorageKey from
   EvmAsm.Stateless.SpecRef.InstructionsCore
 open private writeListAt assocGet assocPut from Evm.HostAxioms
 
@@ -64,6 +64,25 @@ def SloadAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     (∀ ws, (hostAfter ws).warmSlots = ws) ∧
     (∀ ws, (hostAfter ws).warmEpoch = hs.warmEpoch)
 
+/-- **`SloadAgree` on the transaction-overlay regime.** A slot the
+transaction has already written is a `storage_tx_get` hit, so `k_sload`
+returns the stored row without touching any state, and SpecRef's
+`getStorage` finds the same value in its first probe. Both misses (block
+overlay, witness trie) stay in the world tranche —
+see [`StorageRel`](../Relations/Storage.lean). -/
+theorem sloadAgree_of_storageRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (aV : Evm.Defs.address) (x : Nat) (hx : WordWf x)
+    (e : Evm.Defs.StorageValue) (hrow : hostStorageSlot hs aV x = some e)
+    (haddr : aV.toList = sRef.evm.message.currentTarget)
+    (hsr : StorageRel sRef.txState hs) :
+    SloadAgree sRef hs ss aV x := by
+  refine ⟨e.curr, specStorageReadOf sRef.txState aV.toList (toBeBytes32 x), e,
+    fun ws => { hs with warmSlots := ws }, hsr.wf aV x hx e hrow, rfl, ?_,
+    fun ws => runS_k_sload_hit aV x e _ ss hrow, fun _ => rfl, fun _ => rfl,
+    fun _ => rfl⟩
+  rw [← haddr]
+  exact runTx_getStorage_tx_hit _ _ _ _ (hsr.curr aV x hx e hrow)
+
 /-! ## Small warm-set helpers -/
 
 /-- Record-update projections (`show`-free to avoid whnf blowups). -/
@@ -78,11 +97,6 @@ private theorem hostState_set_stackFrames_warmEpoch (h : Evm.HostState)
   rfl
 
 /-! ## SpecRef run shapes -/
-
-theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
-    runR (isWarmStorageKey key) s =
-      .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
-  simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
 
 theorem runR_iSload_underflow (s : Machine) (hstack : s.evm.stack = []) :
     runR iSload s = .ok (.error .stackUnderflow, s) := by
@@ -186,26 +200,6 @@ theorem runR_iSload_cold_oog (s : Machine) (x : U256) (rest : List U256)
   exact runR_bind_err (runR_charge_gas_oog _ _ hgas)
 
 /-! ## `Evm` run shapes -/
-
-open Evm.Functions in
-theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_is_warm aV x) hs ss =
-      .ok (decide (hs.warmEpoch ≤ (assocGet hs.warmSlots
-          ({ addr := aV, slot := x } : Evm.Defs.StorageKey)).getD 0),
-        hs) ss := by
-  simp only [Evm.Functions.storage_is_warm, runS_bind, runS_get, runS_pure]
-
-open Evm.Functions in
-theorem runS_storage_mark_warm (aV : Evm.Defs.address) (x : Nat)
-    (hs : Evm.HostState) (ss : SeqState) :
-    runS (Evm.Functions.storage_mark_warm aV x) hs ss =
-      .ok ((),
-        { hs with warmSlots :=
-            assocPut hs.warmSlots ({ addr := aV, slot := x } :
-              Evm.Defs.StorageKey) hs.warmEpoch })
-        ss := by
-  simp only [Evm.Functions.storage_mark_warm, runS_modify]
 
 open Evm.Functions in
 /-- The Amsterdam SLOAD charge, warm or cold. -/

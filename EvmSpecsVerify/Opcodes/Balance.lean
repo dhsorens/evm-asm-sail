@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Relations.WarmAddr
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
@@ -63,6 +64,31 @@ def BalanceAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     (∀ ws, (hostAfter ws).stackFrames = hs.stackFrames) ∧
     (∀ ws, (hostAfter ws).warmAddresses = ws) ∧
     (∀ ws, (hostAfter ws).warmEpoch = hs.warmEpoch)
+
+/-- **`BalanceAgree` on the transaction-overlay regime.** An account the
+transaction has already written is an `acct_tx_get` hit, so `k_aload`
+returns the stored row without touching any state, and SpecRef's
+`getAccount` finds the same tuple in its first probe. The two miss
+regimes (the block overlay, the authenticated trie walk) stay in the
+world tranche — see [`AccountRel`](../Relations/Account.lean). -/
+theorem balanceAgree_of_accountRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (x : Nat) (v : Evm.Defs.AcctValue)
+    (hrow : hostAcctRow hs (Evm.Functions.word_to_address x) = some v)
+    (hrel : AccountRel sRef.txState hs) :
+    BalanceAgree sRef hs ss x := by
+  have hbal := accountRel_balance hrel _ v hrow
+  refine ⟨(hostAcctView v.curr).getD EMPTY_ACCOUNT,
+    specAccountReadOf sRef.txState (to_address_masked x),
+    fun ws => { hs with warmAddresses := ws }, ?_, ?_, ?_,
+    fun _ => rfl, fun _ => rfl, fun _ => rfl⟩
+  · rw [hbal]
+    exact hrel.wf _ v hrow
+  · refine runTx_getAccount_hit _ _ _ ?_
+    rw [← word_to_address_toList]
+    exact hrel.curr _ v hrow
+  · intro ws
+    rw [hbal]
+    exact runS_k_get_balance_hit _ v _ ss hrow
 
 /-- Record-update projections (whnf-safe `rfl` mini-lemmas). -/
 private theorem hostState_frames_warmAddresses (h : Evm.HostState)
@@ -191,47 +217,6 @@ theorem runR_iBalance_cold_oog (s : Machine) (x : U256) (rest : List U256)
   exact runR_bind_err (runR_charge_gas_oog _ _ hgas)
 
 /-! ## `Evm` run shapes -/
-
-/-- The warm-address table after `k_account_mark_warm`: precompiles are
-never stamped. (Named so structure-update literals stay single-line.) -/
-def wsAfterMark (pid : Evm.Defs.address → PrecompileId)
-    (aV : Evm.Defs.address) (hs : Evm.HostState) :
-    List (Evm.Defs.address × Nat) :=
-  if (pid aV != PrecompileId.NotPrecompile) then hs.warmAddresses
-  else assocPut hs.warmAddresses aV hs.warmEpoch
-
-open Evm.Functions in
-/-- `k_account_is_warm`: precompiles short-circuit warm, otherwise the
-epoch stamp decides. -/
-theorem runS_k_account_is_warm (pid : Evm.Defs.address → PrecompileId)
-    (aV : Evm.Defs.address) (hs : Evm.HostState) (ss : SeqState)
-    (hpid : runS (Evm.Functions.precompile_id_for_address aV) hs ss
-      = .ok (pid aV, hs) ss) :
-    runS (Evm.Functions.k_account_is_warm aV) hs ss =
-      .ok ((if (pid aV != PrecompileId.NotPrecompile) then true
-        else decide (hs.warmEpoch
-          ≤ (assocGet hs.warmAddresses aV).getD 0)), hs) ss := by
-  simp only [Evm.Functions.k_account_is_warm, runS_bind, hpid]
-  by_cases hp : (pid aV != PrecompileId.NotPrecompile) = true
-  · rw [if_pos hp, if_pos hp]
-    exact runS_pure _ _ _
-  · rw [if_neg hp, if_neg hp]
-    simp only [Evm.Functions.account_is_warm, runS_bind, runS_get, runS_pure]
-
-open Evm.Functions in
-/-- `k_account_mark_warm` stamps non-precompiles, skips precompiles. -/
-theorem runS_k_account_mark_warm (pid : Evm.Defs.address → PrecompileId)
-    (aV : Evm.Defs.address) (hs : Evm.HostState) (ss : SeqState)
-    (hpid : runS (Evm.Functions.precompile_id_for_address aV) hs ss
-      = .ok (pid aV, hs) ss) :
-    runS (Evm.Functions.k_account_mark_warm aV) hs ss =
-      .ok ((), { hs with warmAddresses := wsAfterMark pid aV hs }) ss := by
-  simp only [Evm.Functions.k_account_mark_warm, runS_bind, hpid, wsAfterMark]
-  by_cases hp : (pid aV != PrecompileId.NotPrecompile) = true
-  · rw [if_pos hp, if_pos hp]
-    exact runS_pure _ _ _
-  · rw [if_neg hp, if_neg hp]
-    simp only [Evm.Functions.account_mark_warm, runS_modify]
 
 open Evm.Functions in
 /-- The Amsterdam account-access charge, warm or cold. -/

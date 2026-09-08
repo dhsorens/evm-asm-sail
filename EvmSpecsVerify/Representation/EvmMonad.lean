@@ -58,6 +58,14 @@ theorem runS_bind_ok {m : Evm.SailM α} {k : α → Evm.SailM β}
     runS (m >>= k) hs ss = r := by
   rw [runS_bind, h1]; exact h2
 
+/-- Fused map: `f <$> m` on a success step. -/
+theorem runS_map (f : α → β) (m : Evm.SailM α) (a : α)
+    {hs hs' : HostState} {ss ss' : SeqState}
+    (h : runS m hs ss = .ok (a, hs') ss') :
+    runS (f <$> m) hs ss = .ok (f a, hs') ss' := by
+  refine runS_bind_ok (k := fun a => (pure (f a) : Evm.SailM β)) h ?_
+  exact runS_pure _ _ _
+
 /-- `StateT.lift` of a base action: the host state is untouched. -/
 @[simp]
 theorem runS_lift (m : Evm.Defs.SailM α) (hs : HostState) (ss : SeqState) :

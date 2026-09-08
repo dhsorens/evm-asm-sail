@@ -104,8 +104,51 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 - Prefer existing `Representation/` run-shape lemmas (`runR_bind_ok`,
   `runS` algebra, `charge`/`validate_stack` forms) over unfolding the whole
   handler in one `simp`.
+- **Grep the relation layer before proving any container law.**
+  `Relations/Assoc.lean` already holds the assoc-list/dict algebra both
+  sides need — `dictGet?_dictSet_self`/`_ne` and their `find?_*` helpers
+  for SpecRef's `dictSet`, alongside `assocGet_put_self`/`_ne` and
+  `assocPut_put_self` in `Relations/Warm.lean` for the extraction's
+  `assocPut`. A whole re-derivation of that file was written in one
+  session and caught only by a name clash. `grep -rn "dictSet\|assocPut"
+  EvmSpecsVerify/Relations/` first.
 - Heartbeats: large step theorems may need `set_option maxHeartbeats …`
   (see `Opcodes/Add.lean`). Raise deliberately; do not hide nontermination.
+- **`SailME.run do …` handlers** (`k_sload`, `execute_sstore`) are an
+  `ExceptT (Sail.Error ⊕ α)` early return: a `Sum.inr` is a deliberate
+  *value*, a `Sum.inl` a real error. Handing that to `simp` loops on the
+  `liftM`/`ExceptT`/`bindCont` unfolding (maxRecDepth). Use
+  `Representation/EvmSailME.lean` (`runE_bind_ok` / `runE_bind_throw` /
+  `runE_lift` / `runS_sailME_ok`/`_throw`); an arm that throws is reached
+  as `runE_bind_ok … (runE_bind_throw (runE_throw …))`, because the
+  statement-position `match` is bound and its continuation dropped.
+- When a fused run-shape lemma's own proof needs its hypothesis, `refine
+  runS_bind_ok h ?_` beats `rw [runS_bind, h]`: after a `show`, the goal's
+  `runE`-style **abbrev is already unfolded**, so `rw` cannot find the
+  pattern, while `refine`/`exact` unify up to `whnf` (this also
+  zeta-reduces the do-elaborator's `have key := …` / `__do_jp` prelude).
+- SpecRef's `TxM` is `StateT _ (Except _)`: after the `StateT.run_*` lemmas
+  the base bind reads `Except.ok a >>= f`, which `pure_bind` does **not**
+  match. Add a one-line `rfl` bridge (`except_ok_bind`,
+  `Relations/Storage.lean`) rather than fighting simp.
+
+## Reading the extraction
+
+- **Read `extraction/evm-sail/extractions/lean/src/`, never
+  `extractions/lean/.build/`.** The Lake `evm` require points at `src`
+  (`lakefile.toml`); `.build` is a stale generated tree that can be forks
+  behind. Symptom of getting it wrong: the handler you read charges
+  constants that no `Evm.Functions.*` lemma in the repo mentions
+  (e.g. a `G_newaccount` where the real source has
+  `G_amsterdam_state_new_account`), or it calls functions with no
+  counterpart at all. If a handler looks like it diverges wildly from
+  SpecRef, re-check the path *before* writing a mismatch entry.
+- **`execute` hoists `validate_stack` outside `execute_opcode`.** A
+  handler body's own first statement is *not* the first thing that runs.
+  This is what MM-14 is about, and it is easy to talk yourself out of
+  MM-14 by reading only the body (SELFDESTRUCT: `guard_static` does
+  precede `pop` inside `execute_selfdestruct`, and the crossing still
+  applies, because `validate_stack` is a level up).
 
 ## Dispatch and scope (MM-3)
 
@@ -118,9 +161,13 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
 ## Gas vocabularies (MM-2)
 
 - SpecRef uses `GasCosts.OPCODE_*`; `Evm` uses classic `G_*` plus Amsterdam
-  `G_amsterdam_*`. ALU constants verified equal for the current tranche.
-- Storage / account schedules are **not** yet verified equal once both gas
-  dimensions are summed — investigate before claiming SLOAD/SSTORE equivalence.
+  `G_amsterdam_*`. ALU, storage (SLOAD/SSTORE, both dimensions) and
+  account-read schedules are machine-checked equal; the CALL/CREATE-family
+  account writes are the remaining open subset.
+- Where the extraction computes a whole **cost record** (`amsterdam_sstore_costs`)
+  and SpecRef inlines the same quantities, prove one record equality field by
+  field (`sstoreCst_eq`) and state everything downstream once — do not carry
+  four parallel constant lemmas through the step proof.
 
 ## Assumptions and trust
 
@@ -154,6 +201,19 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   local `have hofNat : ∀ n : Nat, Int.ofNat n = (n : Int) := fun _ => rfl`
   to the simp set first; see `word_bit_length_eq`
   (`Representation/BitwiseWord.lean`).
+- **A projection of a `def`-wrapped record literal is not closed by `rw`'s
+  trailing `rfl`.** Trigger: `have h : (myRec a b).field = X := by rw [hEq]`
+  where `hEq : myRec a b = { field := X, … }` — the rewrite fires and leaves
+  `({ field := X, … }).field = X`, which `rw` cannot finish because its
+  closing `rfl` runs at *reducible* transparency and the wrapper is a plain
+  `def`. Right move: `by rw [hEq]; rfl`. Same cause as the `unfold`-leaves-`have`
+  trap below.
+- **`unfold` on a def written with `let`s leaves `have`-bound bodies that
+  `omega` treats as one atom.** Trigger: `unfold sstoreGasOut; omega` on a
+  goal about `(sstoreGasOut …).2.2` — the counterexample dump names the whole
+  `have back := …; …` block as a single variable. Right move: `show` the
+  projected expression in full (defeq, no tactic needed) and *then* `omega`;
+  see `sstoreGasOut_spill_le` (`Opcodes/Sstore.lean`).
 - **`omega` won't reduce tuple projections in `StepResultRel` post-state goals.**
   Trigger: after `refine StepResultRel.success ?_`, `BasePost`/`StateRel` goals
   mention the step tuple's projections (`(pc_in, top', mem, g').2.1.toNat`),
@@ -170,16 +230,36 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `refine runS_bind_ok … ?_` steps. Nesting is fine only when the inner
   application is fully concrete (no holes); see `runS_pop_body_ok`
   (`Opcodes/Pop.lean`).
-- **A structure-instance field value must fit on ONE physical line.**
+- **A structure-instance field value must fit on ONE physical line, and a
+  COMMA-separated field list must not wrap at all.**
   Trigger: any `{ x with field := v }` where `v` spans two lines — whether
   it starts inline after `:=` or on its own continuation line — dies with
   `unexpected token '('; expected '}'`. (Earlier wording claimed an
   own-continuation-line value is safe; STOP's `ss.regs.insert R\n (v…)`
   disproved it — only a value that also ENDS on that one line parses.)
-  Right move: make the value a single token/line — shorten with
-  `open … (name)` or a small named `def` (`returnedStatus`,
-  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). See also
-  `runS_exp_body_ok`.
+  The same error fires on a wrapped **comma**-separated list even when
+  every value is short (`{ nonce := a, balance := b,⏎ codeHash := c }`),
+  in a statement as readily as in a tactic. Right move: either the
+  whitespace-sensitive form — one field per line, **no commas**, aligned
+  (`hostAcctView`, `Relations/Account.lean`) — or a named `def` for the
+  whole row (`acctRowSet`/`acctRow1..3` there; `returnedStatus`,
+  `Opcodes/Return.lean`; `stoppedStatus`, `Opcodes/Stop.lean`). Hoist
+  BEFORE writing the proof: rows passed as lemma arguments hit this too.
+  The same whitespace sensitivity bites a **wrapped `show`**: in
+  `show A\n  = B`, the continuation line binds tighter than intended and
+  `show true = x || y` parses as `(true = x) || y`. Parenthesise the
+  right-hand side, or replace the `show` with a `simp only [theDef]`
+  that unfolds the projection you were trying to spell.
+- **`&&` is left-associative; the extraction's predicates often nest
+  right.** Trigger: a Bool-equality lemma that "obviously" matches the
+  goal fails with a type mismatch whose two sides differ only in
+  parenthesisation (`(a && b) && c` vs `a && (b && c)`) — SpecRef spells
+  `nonce == 0 && codeHash == … && balance == 0` (left), the extraction's
+  `account_info_empty` spells `code == … && (nonce == 0 && …)` (right).
+  Right move: state the bridge lemma in the spelling of the side you will
+  `rw`/`exact` against, and prove it by `cases` on each Bool operand
+  (`specAcctEmpty_eq`, `Relations/Account.lean`) so the nesting is
+  irrelevant to the proof.
 - **Sigma-packed extraction values (`Code`, `EvmMemorySlice`) leak `.2.2`
   projection atoms that omega/simp can't merge.**
   Trigger: stating a relation or lemma hypothesis over a whole sigma value
@@ -191,6 +271,17 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `some ⟨off, len, cf⟩`) so no goal ever carries a projection. See
   `JumpdestRel` (`Relations/Jumpdest.lean`). The memory tranche will face the
   same choice with `EvmMemorySlice`.
+- **`cases h : b` substitutes the value and breaks the `rw [if_pos h]` that
+  follows; `by_cases` does not.** Trigger: an extraction `if` guarded by a
+  `Bool` field (`v.curr.present`, `cold`, `found`) — after
+  `cases hp : v.curr.present`, the goal reads `if true = true then …` and
+  `rw [if_pos hp]` fails with "did not find the pattern" naming the
+  already-substituted term, while the RHS you wanted to rewrite in lockstep
+  is untouched. Right move: `by_cases hp : b = true` and
+  `rw [if_pos hp] / rw [if_neg hp]`, which keeps `b` in both sides and
+  rewrites them together (`accountRel_balance` / `accountRel_alive`,
+  Relations/Account.lean). Use `cases h :` only when you *want* the
+  substitution and both sides reduce by `rfl`.
 - **`simp [h]` misses Bool `contains`/`decide` hypotheses because it
   normalizes the goal past them.**
   Trigger: an `if`-condition goal like `¬((!l.contains x) = true)` with
@@ -229,12 +320,64 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   expressions are flattened by the do elaborator — chain
   `runS_readReg`/`runS_pure` directly; a compound `show`-lemma over-groups
   the binds and fails to unify (`execute_caller`, `Opcodes/Caller.lean`).
-- **Extraction types with derived `BEq` have no `LawfulBEq`** — `beq_iff_eq`
-  / `bne_iff_ne` / assoc-list lemmas stall with "failed to synthesize
-  LawfulBEq". Add a local instance: structures via field `beq_iff_eq`
-  (`StorageKey`, Relations/Warm.lean); enums via
+- **Extraction *and SpecRef* types with derived `BEq` have no `LawfulBEq`** —
+  `beq_iff_eq` / `bne_iff_ne` / `bne_self_eq_false` / assoc-list lemmas stall
+  with "failed to synthesize LawfulBEq". Add a local instance: structures via
+  field `beq_iff_eq` (`StorageKey`, Relations/Warm.lean); enums via
   `cases a <;> cases b <;> first | rfl | exact absurd h (by decide)`
-  (`PrecompileId`, Relations/WarmAddr.lean).
+  (`PrecompileId`, Relations/WarmAddr.lean). The `(a == b) = (…fields…)`
+  bridge lemma is `rfl` only if the derived `beq` is a projection
+  conjunction; when it is a `match` (SpecRef's `Account`, which derives
+  `BEq` *and* `DecidableEq`) a lemma stated over variables dies with "not a
+  definitional equality" — `#print <Type>.instBEq….beq` first, then state it
+  over **constructor applications** and `cases a; cases b` before rewriting
+  (`account_beq_eq`, Relations/Account.lean).
+- **`if c then act` with no `else`, followed by more statements,
+  duplicates the whole continuation into both branches.** Trigger: a
+  `runR`/`runS` chain that stalls on a huge goal after a guarded
+  statement — the elaborated term is
+  `if c then act >>= k else pure () >>= k`, not
+  `(if c then act else pure ()) >>= k`. `moveEther`'s `if … then throw`
+  and `iSelfdestruct`'s three guards are all this shape. Right move: a
+  generic stepper — `runR_guard_step` (`Representation/SpecRefLemmas.lean`)
+  takes the guarded action's own run shape and steps over the guard
+  without a case split; `runE_bind_cond` is the `SailME` analogue. The
+  same duplication is why a `def` you factored out (`specTransfer`) does
+  *not* appear as a subterm of the caller's chain: its statements are
+  inlined and re-associated, so it has to be stepped over rather than
+  rewritten.
+- **A `rfl` for `(bigStateUpdate …).field = hs.field` can hang when the
+  update's *arguments* are concrete constants.** Trigger: passing
+  `(show (logAppend hs2 EIP7708_SYSTEM_ADDRESS (topicWords …)
+  (toBeBytes32 v)).accountTx = hs2.accountTx from rfl)` to a frame lemma —
+  2 minutes and a heartbeat timeout, while the identical statement over
+  *variables* is instant. Cause: `isDefEq` on two projections of the same
+  field tries the **congruence route first** (`logAppend hs2 A B C =?= hs2`),
+  which fails, and while failing it whnfs the arguments at `all`
+  transparency — here `address_from_bits 0x…#256` and a keccak literal.
+  Right move: prove the field lemma **once, over variables**, next to the
+  state-update `def` (`logAppend_accountTx`, `Relations/Log.lean`) and apply
+  it; never leave the projection to `rfl` at a call site with concrete
+  constants in it.
+- **`String.toUTF8.toList` is opaque to `decide`.** Trigger: verifying a
+  SpecRef keccak constant (`TRANSFER_TOPIC = keccak256 "Transfer(…)"`)
+  against an extraction literal — `decide` reports "reduction got stuck"
+  on the constant itself. `keccak256`, `String.toUTF8` and
+  `ByteArray.data.toList` all reduce fine; `ByteArray.toList` is a
+  well-founded loop and does not. Right move: rewrite it to
+  `.data.toList` first (`byteArray_toList`, `Relations/Transfer.lean`) and
+  then `decide`. **Never** reach for `native_decide` — it adds
+  `Lean.ofReduceBool` to the axiom set. Check with `#print axioms`.
+- **Higher-order args to a run-shape lemma defeat `rw`/`simp`.** Trigger:
+  `runTx_modifyState_nonEmpty ts a ?f r h hne` where the do-elaborator
+  spelled `?f` as a full record literal — `?f` is solved from the
+  *hypothesis* by first-order approximation (`fun _ => …`), so the rewrite
+  no longer matches, and spelling the literal out hits the multi-line
+  record-literal parse trap. Right move: a fused-bind lemma in the
+  relevant monad (`runTx_bind_ok`, `Relations/Transfer.lean`, mirroring
+  `runR_bind_ok`) and `refine` — the conclusion is unified with the goal
+  first, so `?f` comes from the goal and the hypothesis only has to be
+  *defeq*, not syntactically equal.
 - **Never `rfl`/whnf through a chain of `Vector.set!`s** (extraction
   builders like `word_to_address`): 20 sets time out at any heartbeat
   budget. Right move: the simp set `vector_set!_eq` (a local
@@ -242,6 +385,63 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   `Vector.toList_replicate` + `List.replicate` reduces the whole builder's
   `toList` to a literal list in milliseconds
   (`Representation/AddressWord.lean`).
+
+- **`rw` fails on a tuple projection whose `if` branches were
+  type-ascribed** (`(if c then (A, B) else ((0 : Uint), (0 : Uint))).2`
+  prints identically to the goal but will not match). Don't hunt the
+  ascription. Name the handler's *raw* expression as a `def` spelled
+  exactly as the handler spells it, and hand it to the next lemma by
+  `exact` (delta) instead of rewriting; prove a separate `_eq` lemma
+  putting it in closed form for the arithmetic
+  (`sdChargeRaw`/`sdChargeRaw_eq`, `sdExecRaw`/`sdExecRaw_eq` in
+  `Opcodes/Selfdestruct.lean`).
+- **`refine runE_bind_ok ?_ ?_` (or `runS_`/`runR_`) can fail with "don't
+  know how to synthesize implicit argument"** — the intermediate value
+  and states are only determined by the *first* subgoal, which Lean has
+  not run yet. Pass them by name: `refine runE_bind_ok (b := …)
+  (hs' := …) (ss' := …) ?_ ?_`.
+- **A continuation-style step lemma (`… (hk : … → runE (k v) hs ssC = r)
+  → runE (m >>= k) hs ss = r`) cannot serve a caller whose conclusion is
+  `∃ ss', …`**: the caller must name its witness before entering the
+  chain, and the witness is what the lemma hides. Turn the lemma around —
+  hand the state back through an existential and curry the step
+  (`∃ ssC, (∀ k r, runE (k v) hs ssC = r → runE (m >>= k) hs ss = r) ∧ …`,
+  see `runE_sd_state_charge`).
+- **Affordability hypotheses for a *guarded* charge must be conditional
+  on the guard** (`hafford : creates = true → …`, not `hafford : …`).
+  Unconditional ones silently narrow the theorem's domain to states where
+  a charge that never runs would have succeeded — the theorem still
+  compiles and still looks complete. Same discipline as the unused-hyp
+  rule: an assumption the proof does not need on some branch is a claim
+  you did not mean to make.
+
+- **`!` binds looser than `=`: `!a = b` means `a ≠ b`.** A `Bool`-valued
+  equation written `!foo x = bar y` elaborates as `!(foo x = bar y)` and
+  coerces through `decide` to `(!decide (foo x = bar y)) = true`. For
+  `Bool`s that is *equivalent* to the intended `(!foo x) = bar y`, so the
+  mis-parsed statement is still true and usually still provable — it
+  compiles, it proves, and it is silently useless as a `rw`/`simp` lemma.
+  One survived review this way (`beneficiaryDead_eq`,
+  `Relations/Selfdestruct.lean`); with the parentheses added its proof got
+  *shorter*, because the trailing `simp` had only been bridging the wrong
+  form. **Always parenthesise the negated side**, and after adding any
+  `Bool` equation run `lake env lean scripts/audit-bool-not-precedence.lean`,
+  which scans every `EvmSpecsVerify` type for `Bool.not` applied to a
+  `Decidable.decide`. Signals to watch for without the script: `rw`
+  reporting a pattern of the shape `!decide (… = …)`, and a `Bool`
+  equation whose proof needs a `simp` you cannot explain.
+
+- **`omega` silently drops hypotheses** once the context carries enough
+  opaque atoms and `Nat` subtractions: it reports "could not prove the
+  goal" with a counterexample whose atom list is *missing* the very
+  hypothesis you need (and sometimes missing the goal's own atoms). It is
+  not that the hypothesis is malformed — it was never admitted. Don't
+  hunt for the malformed hypothesis; lift the arithmetic out to an
+  abstract helper over fresh variables and apply it:
+  `have key : ∀ a b n : Nat, a + b < n → a < n ∧ b < n - a := fun _ _ _ h
+  => ⟨by omega, by omega⟩`, then `obtain ⟨…⟩ := key …`. Two `omega`s on a
+  three-variable goal always succeed where one `omega` on the real
+  context silently gives up (`selfdestruct_equiv_state_oog`).
 
 ## Anti-patterns (stop and record)
 

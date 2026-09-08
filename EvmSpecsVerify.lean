@@ -67,6 +67,7 @@ import EvmSpecsVerify.Opcodes.Mstore
 import EvmSpecsVerify.Opcodes.Return
 import EvmSpecsVerify.Opcodes.Revert
 import EvmSpecsVerify.Relations.Warm
+import EvmSpecsVerify.Relations.Storage
 import EvmSpecsVerify.Opcodes.Sload
 import EvmSpecsVerify.Opcodes.Tload
 import EvmSpecsVerify.Opcodes.Stop
@@ -74,6 +75,7 @@ import EvmSpecsVerify.Representation.AddressWord
 import EvmSpecsVerify.Opcodes.Address
 import EvmSpecsVerify.Opcodes.Origin
 import EvmSpecsVerify.Relations.WarmAddr
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Opcodes.Balance
 import EvmSpecsVerify.Opcodes.Selfbalance
 import EvmSpecsVerify.Opcodes.Extcodesize
@@ -99,3 +101,6 @@ import EvmSpecsVerify.Opcodes.Shapes.EnvPusher
 import EvmSpecsVerify.Opcodes.BlockEnv
 import EvmSpecsVerify.Opcodes.Blockhash
 import EvmSpecsVerify.Opcodes.Jumpdest
+import EvmSpecsVerify.Relations.Transfer
+import EvmSpecsVerify.Relations.Selfdestruct
+import EvmSpecsVerify.Opcodes.Selfdestruct

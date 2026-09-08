@@ -46,6 +46,22 @@ EVM state can violate it, and whether it is eliminable by proving.
   theorems; eliminable only by bounding `g` globally (frame-entry invariant),
   future work.
 
+## Gas budget and refund range (SSTORE)
+
+* `hroom` / `hhead` on `sstore_step_equiv` (Opcodes/Sstore.lean) — the
+  two extraction-only hard aborts of the Amsterdam state-gas path
+  (mismatch ledger MM-17), the state-gas analogues of `MemGasSafe`:
+  `state_gas_spill_add` spec-aborts once the recorded spill passes `2^24`
+  (EIP-7825's transaction gas limit, the same constant on both sides) and
+  `validated_refund_add` spec-aborts outside `±gas_refund_bound`, while
+  SpecRef tracks both quantities as unbounded `Nat`/`Int`. Both
+  hypotheses are stated on the pre-state — the spill plus one
+  `STORAGE_SET`, the counter plus one step's worst-case refund movement —
+  so a caller establishes them from the frame it already has. Unreachable
+  for a well-formed transaction, but the argument is transaction-level
+  (`SstoreRefundHeadroom` records the arithmetic); eliminable only by a
+  frame-entry gas/refund invariant, as for `MemGasSafe`.
+
 ## Storage read agreement (SLOAD)
 
 * `SloadAgree` (Opcodes/Sload.lean) — the two sides' storage reads return
@@ -60,6 +76,17 @@ EVM state can violate it, and whether it is eliminable by proving.
   known; eliminable by the world-state tranche's `StorageRel` (the
   comparison-matrix "persistent storage" row).
 
+  **Reduced** (with `StorageRel`, Relations/Storage.lean):
+  `sloadAgree_of_storageRel` proves the hypothesis for any slot the
+  transaction has already written — that is a `storage_tx_get` hit, where
+  `k_sload` returns the stored row without touching state and SpecRef's
+  `getStorage` finds the same value in its first probe. What is left
+  assumed is the two miss regimes: the extraction's block overlay (which
+  doubles as its witness read-through cache) and the authenticated trie
+  walk below it, plus the `storageCleared` branch. So the row stays, but
+  it is now an assumption about the *base* storage layers rather than
+  about storage reads in general.
+
 * ~~`TloadAgree`~~ (Opcodes/Tload.lean) — **discharged**. It was the
   transient sibling of `SloadAgree`: SpecRef's `getTransientStorage` on
   the executing account and the extraction's `k_tload (self_addr ())`
@@ -73,6 +100,39 @@ EVM state can violate it, and whether it is eliminable by proving.
   it needs the persistent-storage relation rather than the transient
   one.
 
+* `StorageRel` (Relations/Storage.lean) — a *relation*, not an agreement
+  assumption: every row the extraction's `storageTx` overlay holds,
+  SpecRef's transaction-layer `storageWrites` holds with the same live
+  value, and the extraction's stored `orig` is the value SpecRef
+  recomputes with `getStorageOriginal`. **One-directional by design**
+  (mismatch ledger MM-16): an `SSTORE` that writes the value already
+  there records a row on SpecRef's side and none on the extraction's, so
+  the converse inclusion is false on a reachable state.
+  `storageRel_write` preserves it across a changing write,
+  `storageRel_write_noop` across that no-op, `storageRel_frame` across
+  the read bookkeeping every SpecRef probe performs, and
+  `storageRel_hostFrame` across host steps that leave the overlay alone.
+  Its `wf` field plays the role `TransientRel.wf` does. Consumed by
+  `sloadAgree_of_storageRel` above and by `sstore_step_equiv`.
+
+## Storage write agreement (SSTORE)
+
+* `SstoreAgree` (Opcodes/Sstore.lean) — the writer's sibling of
+  `SloadAgree`: SpecRef's `getStorageOriginal`/`getStorage` return the
+  `orig`/`curr` pair of the row the extraction's `k_sload` returns, and
+  SpecRef's `setStorage` succeeds. It also records `k_sload`'s framing —
+  it leaves the operand stack, the warm stamps and the `storageTx`
+  overlay alone (its caching is one layer down, in `storageBlock`), and
+  when the overlay already holds a row for the slot, that row is the one
+  it returns. Threaded on `sstore_step_equiv` only for the *values*: the
+  Amsterdam schedule (`sstoreCst_eq`), the warm/cold accounting
+  (`WarmRel`), the two-dimensional gas and the refund are proven
+  outright. `sstoreAgree_of_storageRel` reduces it, exactly as for
+  `SloadAgree`, to the transaction-overlay regime plus SpecRef's
+  account-existence check — that check has no counterpart in `k_sstore`
+  (SpecRef rejects a store to a non-existent account, the extraction
+  writes the row), so it stays a hypothesis rather than being derived.
+
 * `TransientRel` (Relations/Transient.lean) — a *relation*, threaded on
   `tstore_step_equiv` the way `LogRel` is on the LOG family, not an
   agreement assumption: the step theorem both consumes and re-establishes
@@ -82,10 +142,125 @@ EVM state can violate it, and whether it is eliminable by proving.
 
 ## Account/code read agreement + address warmth
 
+* `AccountRel` (Relations/Account.lean) — a *relation*, not an agreement
+  assumption, and the account sibling of `StorageRel`: every row the
+  extraction's `accountTx` overlay holds, SpecRef's `accountWrites` holds
+  as the row's **EIP-161 view** (`hostAcctView`: the three trie fields, or
+  `none` when the row is not `present`). Two of its four fields are the
+  host's EIP-161 discipline and are load-bearing, not cosmetic — an absent
+  row carries the empty tuple (`absentEmpty`) and a present row does not
+  (`presentNonEmpty`) — because the extraction's readers return `info`
+  fields straight out of the row where SpecRef substitutes `EMPTY_ACCOUNT`
+  for a deleted entry. They are also *preserved*, not merely assumed:
+  `specAcctEmpty_eq` proves SpecRef's `accountExistsAndIsEmpty` test —
+  which `modifyState` runs after every account write — and the
+  extraction's inline `account_info_empty` are the same function of the
+  tuple, and `accountRel_write` carries the relation across one
+  **non-collapsing** write (SpecRef's `modifyState` against the
+  extraction's `store_account_info`, whole-row install and scalar fast
+  paths alike). The collapsing write is deferred: it destroys storage on
+  both sides, so it waits on the `destroyStorage` ↔ `storage_tx_cleared`
+  correspondence that Relations/Storage.lean records as open. Nothing in
+  scope needs it — SELFDESTRUCT's two writes and a value-carrying CALL's
+  are all non-collapsing. `accountRel_frame`/`accountRel_hostFrame` carry
+  the relation across the read bookkeeping on either side. It **reduces the three
+  account-read hypotheses below** on the transaction-overlay regime, and
+  is the account-side prerequisite SELFDESTRUCT waits on.
+
+## The value transfer
+
+* `hsum` (`transfer_equiv`, Relations/Transfer.lean) — the destination's
+  post-transfer balance fits a word. Mismatch ledger MM-19: the
+  extraction credits with `alu_add` (`(l + r) % 2^256`), SpecRef with
+  unbounded `Nat` addition, so above the modulus they store different
+  balances — and SpecRef's is not a word, breaking `AccountRel.wf`. The
+  same class as `hwfg` (MM-8) and `hword` (MM-15): a modelling gap in
+  SpecRef's `U256 := Nat` alias rather than a coding slip. Unreachable in
+  a well-formed chain (the total ether supply is far below `2^256` and a
+  transfer is balance-preserving), but the witness is caller-supplied, so
+  nothing local rules the pre-state out. Eliminable only by a supply
+  invariant on the witness.
+* ~~`hne` / `hv`~~ (`transfer_equiv`) — **discharged.** These excluded
+  `k_transfer`'s two early-return branches (mismatch ledger MM-18), both
+  reachable through `SELFDESTRUCT`. `transfer_equiv_self`,
+  `transfer_equiv_zero` and `transfer_equiv_zero_collapse` now prove them
+  instead, through `accountRel_rowsFrame`: SpecRef writes where the
+  extraction does not, and every row it writes holds the value that was
+  already there — including the collapsing branch, where a dead
+  beneficiary is written empty and deleted again, landing back on the
+  `some none` entry the relation had. `transfer_equiv` keeps the
+  hypotheses; what changed is that a caller can now supply either case by
+  proof.
+* `hsne` / `hdne` (`transfer_equiv`) — neither write collapses. Not an
+  invariant: it is the `accountRel_write` scope restriction, stated on
+  the extraction's `account_info_empty` and transported to SpecRef's test
+  by `specAcctEmpty_eq`, so one hypothesis serves both sides. Both of
+  SELFDESTRUCT's writes and a value-carrying CALL's satisfy it, and
+  `hdne` is *automatic* for a nonzero transfer (the credited balance
+  cannot be zero). `hsne` survives in the degenerate theorems too, where
+  it says the source is not EIP-161-empty after the debit — true for any
+  account executing code.
+* `hstore` (`runTx_modifyState_collapse`, and through it
+  `transfer_equiv_zero_collapse`) — a collapsing account has no pending
+  storage writes, which is what confines `destroyStorage` to its identity
+  branch. Every reachable collapse satisfies it: `iSstore` writes storage
+  only to `message.currentTarget`, which is executing code, and an
+  account with code is never EIP-161-empty — so a collapsing account
+  never has a `storageWrites` entry. Without it SpecRef would move those
+  slots into `storageReads` (block-access-list observable) and delete
+  them, breaking `StorageRel` in the one direction that matters. The
+  argument is transaction-level, so it stays a hypothesis; eliminable by
+  a tx-level invariant tying `storageWrites` keys to code-bearing
+  accounts.
+* The EIP-7708 constants are **not** assumptions: `transferLogAddress_eq`
+  and `transferTopic_eq` are kernel computations, the second going
+  through `byteArray_toList` because `String.toUTF8.toList` is
+  well-founded and so opaque to `decide`.
+
+## The `SELFDESTRUCT` lifecycle
+
+* `LifecycleRel` (Relations/Selfdestruct.lean) — a *relation*: SpecRef's
+  `txState.createdAccounts` and `evm.accountsToDelete` against the
+  extraction's per-row `created`/`selfdestructed` flags. Its `outer`
+  parameter is the same device as [`LogRel`](Relations/Log.lean)'s
+  `base` and for the same reason: `accountsToDelete` is frame-local and
+  merged upward by `incorporate_child_on_success`, while the row flag is
+  global within the transaction, so no frame-local statement can pin one
+  to the other. `lifecycleRel_mark` preserves it across the opcode's
+  mark, and `accountRel_flagWrite` shows a lifecycle-flag write cannot
+  disturb `AccountRel` (which reads only `info` and `present`).
+  The `deleted` component is an equality — SpecRef discards a failed
+  child's whole `evm` and the extraction's journal restores the flag, so
+  both roll back together. The `created` component is
+  **one-directional**, and that is mismatch ledger MM-20.
+* `CreatedAgree` (Relations/Selfdestruct.lean) — the converse of
+  `LifecycleRel.created` at **one** address, needed because
+  `SELFDESTRUCT` *branches* on the EIP-6780 same-transaction test and a
+  branch needs both directions. What makes it an assumption rather than a
+  theorem is MM-20: `restoreTxState` keeps `createdAccounts` across a
+  revert (its own docstring says so) where the extraction's
+  `state_journal_revert` restores the whole row. The divergent state is
+  **unreachable** — the originator must be executing code when
+  `SELFDESTRUCT` runs, and the only creation of that address in this
+  transaction reverted, which rolled its code back too — but the argument
+  is transaction-level, so it cannot be discharged inside one step.
+  Eliminable by the CREATE family (M3), where reverted frames become
+  expressible. MM-20 also records the neighbouring worry that is *not*
+  real: `generic_create` runs its collision test before
+  `markAccountCreated`, so SpecRef never marks a pre-existing contract as
+  created this transaction.
+
 * `BalanceAgree` (Opcodes/Balance.lean) — the `SloadAgree` sibling for
   account reads: SpecRef's journalled `getAccount` and the kernel's
   `k_get_balance` return the same balance, quantified over the ambient
   address stamps. Eliminable by the world tranche's account relation.
+
+  **Reduced** (with `AccountRel`): `balanceAgree_of_accountRel` proves it
+  for any account the transaction has already written — an `acct_tx_get`
+  hit, where `k_aload` returns the stored row without touching state. What
+  stays assumed is the two miss regimes: the block overlay (which doubles
+  as the extraction's witness read-through cache) and the authenticated
+  trie walk below it.
 * `SelfBalanceAgree` (Opcodes/Selfbalance.lean) — the own-account form of
   `BalanceAgree`: SpecRef's journalled `getAccount message.currentTarget`
   and the extraction's `k_get_balance (self_addr ())` return the same
@@ -93,6 +268,9 @@ EVM state can violate it, and whether it is eliminable by proving.
   Strictly weaker than `BalanceAgree` — SELFBALANCE consults no access set,
   so nothing is quantified over ambient warm stamps. Eliminable by the
   world tranche's account relation.
+
+  **Reduced** (with `AccountRel`): `selfBalanceAgree_of_accountRel`, the
+  own-account form of the above.
 * `ExtcodesizeAgree` (Opcodes/Extcodesize.lean) — the external-code sibling:
   SpecRef's `getAccount` + `getCode` and the extraction's
   `k_get_code_size` return the same code length, quantified over ambient
@@ -102,6 +280,15 @@ EVM state can violate it, and whether it is eliminable by proving.
   missing-account-zero / account-code-hash result to the extraction's
   `k_get_codehash` plus `hash_to_word`, quantified over ambient address
   stamps. Eliminable by the world tranche's account/code-store relation.
+
+  **Reduced** (with `AccountRel`): `extcodehashAgree_of_accountRel`, via
+  `accountRel_codehash`. This one needs a constant identity beyond the
+  relation — SpecRef *computes* `keccak256 []` while the extraction
+  carries the digest as a literal — and that identity is a **theorem**
+  (`empty_code_hash_eq`, `decide`-checked by the kernel), not a trust
+  assumption: the `nativeAccelerateBytes` opacity below covers keccak on
+  general input, but the empty digest is evaluated. Without it the two
+  sides' notion of "codeless account" would not be comparable at all.
 * `ExternalCodeRel` (Relations/ExternalCode.lean) — the byte-level external
   code sibling used by `extcodecopy_step_equiv`: SpecRef's journalled
   `getAccount`/`getCode` result is the exact zero-padded byte source written by

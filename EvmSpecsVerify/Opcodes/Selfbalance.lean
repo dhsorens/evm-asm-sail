@@ -1,4 +1,5 @@
 import EvmSpecsVerify.Opcodes.Shapes.Alu
+import EvmSpecsVerify.Relations.Account
 import EvmSpecsVerify.Representation.EvmGas
 import EvmSpecsVerify.Representation.EvmStack
 import EvmSpecsVerify.Representation.SpecRefLemmas
@@ -53,6 +54,28 @@ def SelfBalanceAgree (sRef : Machine) (hs : Evm.HostState) (ss : SeqState)
     runS (Evm.Functions.k_get_balance a) hs ss
       = .ok (acct.balance, hostAfter) ss ∧
     hostAfter.stackFrames = hs.stackFrames
+
+/-- **`SelfBalanceAgree` on the transaction-overlay regime**, the
+own-account form of [`balanceAgree_of_accountRel`](Balance.lean): a row
+the transaction has already written is an `acct_tx_get` hit, and `haddr`
+ties the extraction's own-address vector to SpecRef's storage owner. -/
+theorem selfBalanceAgree_of_accountRel (sRef : Machine) (hs : Evm.HostState)
+    (ss : SeqState) (aV : Evm.Defs.address) (v : Evm.Defs.AcctValue)
+    (hrow : hostAcctRow hs aV = some v)
+    (haddr : aV.toList = sRef.evm.message.currentTarget)
+    (hrel : AccountRel sRef.txState hs) :
+    SelfBalanceAgree sRef hs ss aV := by
+  have hbal := accountRel_balance hrel aV v hrow
+  refine ⟨(hostAcctView v.curr).getD EMPTY_ACCOUNT,
+    specAccountReadOf sRef.txState sRef.evm.message.currentTarget, hs, ?_,
+    ?_, ?_, rfl⟩
+  · rw [hbal]
+    exact hrel.wf aV v hrow
+  · refine runTx_getAccount_hit _ _ _ ?_
+    rw [← haddr]
+    exact hrel.curr aV v hrow
+  · rw [hbal]
+    exact runS_k_get_balance_hit aV v hs ss hrow
 
 /-! ## SpecRef run shapes -/
 

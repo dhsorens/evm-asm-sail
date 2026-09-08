@@ -1,5 +1,6 @@
 import EvmSpecsVerify.Relations.State
 import EvmSpecsVerify.Representation.EvmMemory
+import EvmSpecsVerify.Representation.SpecRefLemmas
 import Batteries.Tactic.OpenPrivate
 
 /-!
@@ -21,6 +22,7 @@ proven here.
 -/
 
 open private assocGet assocPut from Evm.HostAxioms
+open private isWarmStorageKey from EvmAsm.Stateless.SpecRef.InstructionsCore
 
 set_option maxHeartbeats 1000000
 
@@ -102,6 +104,79 @@ theorem bytesBEtoNat_natToBytesBE (w : Nat) :
         = 2 ^ (8 * w) * (x / 2 ^ (8 * w)) := Nat.mul_comm _ _
     omega
 
+/-- **Encode after decode**: the fixed-width encoder inverts the
+big-endian decoder at the list's own length. Companion to
+`bytesBEtoNat_natToBytesBE`, and what turns a host address or hash vector
+back into itself after a trip through a word. -/
+theorem natToBytesBE_bytesBEtoNat : ∀ bs : Bytes,
+    natToBytesBE bs.length (bytesBEtoNat bs) = bs := by
+  intro bs
+  induction bs with
+  | nil => rfl
+  | cons b bs ih =>
+    have hlt : bytesBEtoNat bs < 256 ^ bs.length :=
+      EvmAsm.EL.RLP.Nat.fromBytesBE_lt bs
+    have hpow : (256 : Nat) ^ bs.length = 2 ^ (8 * bs.length) := by
+      rw [show (256 : Nat) = 2 ^ 8 from by decide, ← Nat.pow_mul]
+    have hcons : ∀ x, natToBytesBE (bs.length + 1) x
+        = BitVec.ofNat 8 (x >>> (8 * bs.length))
+            :: natToBytesBE bs.length x := by
+      intro x
+      unfold EvmAsm.Stateless.SpecRef.natToBytesBE
+      rw [List.range_succ, List.reverse_append]
+      rfl
+    have hval : bytesBEtoNat (b :: bs)
+        = b.toNat * 256 ^ bs.length + bytesBEtoNat bs := rfl
+    show natToBytesBE (bs.length + 1) (bytesBEtoNat (b :: bs)) = _
+    rw [hcons, hval]
+    refine List.cons_eq_cons.mpr ⟨?_, ?_⟩
+    · apply BitVec.eq_of_toNat_eq
+      rw [BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, ← hpow,
+        Nat.mul_comm, Nat.mul_add_div (Nat.pow_pos (by omega)),
+        Nat.div_eq_of_lt hlt, Nat.add_zero]
+      exact Nat.mod_eq_of_lt b.isLt
+    · rw [← natToBytesBE_mod, Nat.mul_comm (BitVec.toNat b), Nat.mul_add_mod,
+        Nat.mod_eq_of_lt hlt]
+      exact ih
+
+/-- **Zero extension**: a value that fits in `b` bytes encodes at width
+`a + b` as `a` zero bytes followed by its `b`-byte encoding. The
+address-in-a-topic padding both specifications spell by hand. -/
+theorem natToBytesBE_pad (a b x : Nat) (hx : x < 256 ^ b) :
+    natToBytesBE (a + b) x = List.replicate a 0 ++ natToBytesBE b x := by
+  have hzero : ∀ k, b ≤ k → BitVec.ofNat 8 (x >>> (8 * k)) = 0 := by
+    intro k hk
+    have hdiv : x / 2 ^ (8 * k) = 0 := by
+      refine Nat.div_eq_of_lt ?_
+      calc x < 256 ^ b := hx
+        _ = 2 ^ (8 * b) := by
+            rw [show (256 : Nat) = 2 ^ 8 from by decide, ← Nat.pow_mul]
+        _ ≤ 2 ^ (8 * k) := Nat.pow_le_pow_right (by omega) (by omega)
+    apply BitVec.eq_of_toNat_eq
+    rw [BitVec.toNat_ofNat, Nat.shiftRight_eq_div_pow, hdiv]
+    rfl
+  have hlenb : (natToBytesBE b x).length = b := by
+    simp [EvmAsm.Stateless.SpecRef.natToBytesBE]
+  apply List.ext_getElem
+  · simp [EvmAsm.Stateless.SpecRef.natToBytesBE]
+  · intro i h1 h2
+    simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.length_map,
+      List.length_reverse, List.length_range] at h1
+    rw [show (natToBytesBE (a + b) x)[i]
+        = BitVec.ofNat 8 (x >>> (8 * (a + b - 1 - i))) from by
+      simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.getElem_map,
+        List.getElem_reverse, List.length_range, List.getElem_range]]
+    by_cases hi : i < a
+    · rw [List.getElem_append_left (by simpa using hi),
+        List.getElem_replicate, hzero _ (by omega)]
+    · rw [List.getElem_append_right (by simpa using hi)]
+      simp only [List.length_replicate]
+      rw [show (natToBytesBE b x)[i - a]
+          = BitVec.ofNat 8 (x >>> (8 * (b - 1 - (i - a)))) from by
+        simp only [EvmAsm.Stateless.SpecRef.natToBytesBE, List.getElem_map,
+          List.getElem_reverse, List.length_range, List.getElem_range]]
+      rw [show b - 1 - (i - a) = a + b - 1 - i from by omega]
+
 /-- `toBeBytes32` is injective on well-formed words. -/
 theorem toBeBytes32_inj {a b : Nat} (ha : WordWf a) (hb : WordWf b)
     (h : toBeBytes32 a = toBeBytes32 b) : a = b := by
@@ -121,6 +196,31 @@ structure WarmRel (sRef : Machine) (hs : Evm.HostState) : Prop where
       ↔ hs.warmEpoch
           ≤ (assocGet hs.warmSlots
               ({ addr := aV, slot := w } : Evm.Defs.StorageKey)).getD 0)
+
+/-- SpecRef's warm-set test is a pure read of the access set. Shared by
+SLOAD and SSTORE, which is why it lives with the relation. -/
+theorem runR_isWarmStorageKey (key : Address × Bytes32) (s : Machine) :
+    runR (isWarmStorageKey key) s =
+      .ok (.ok (s.evm.accessedStorageKeys.contains key), s) := by
+  simp only [isWarmStorageKey, runR_bind, runR_getEvm, runR_pure]
+
+theorem runS_storage_is_warm (aV : Evm.Defs.address) (x : Nat)
+    (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.storage_is_warm aV x) hs ss =
+      .ok (decide (hs.warmEpoch ≤ (assocGet hs.warmSlots
+          ({ addr := aV, slot := x } : Evm.Defs.StorageKey)).getD 0),
+        hs) ss := by
+  simp only [Evm.Functions.storage_is_warm, runS_bind, runS_get, runS_pure]
+
+theorem runS_storage_mark_warm (aV : Evm.Defs.address) (x : Nat)
+    (hs : Evm.HostState) (ss : SeqState) :
+    runS (Evm.Functions.storage_mark_warm aV x) hs ss =
+      .ok ((),
+        { hs with warmSlots :=
+            assocPut hs.warmSlots ({ addr := aV, slot := x } :
+              Evm.Defs.StorageKey) hs.warmEpoch })
+        ss := by
+  simp only [Evm.Functions.storage_mark_warm, runS_modify]
 
 /-! ## `assocGet` / `assocPut` characterization -/
 
@@ -166,11 +266,42 @@ theorem assocGet_put_ne {κ ν : Type} [BEq κ] [LawfulBEq κ]
           List.find?_cons_of_neg (by simpa using hk')]
         exact ihs
 
+/-- Two writes at the same key collapse to the later one. The account
+write lemmas need it: the extraction's `store_account_info` reaches its
+scalar fast paths through up to three consecutive `acct_tx_set_*`. -/
+theorem assocPut_put_self {κ ν : Type} [BEq κ] [LawfulBEq κ]
+    (s : List (κ × ν)) (k : κ) (v w : ν) :
+    assocPut (assocPut s k v) k w = assocPut s k w := by
+  unfold assocPut
+  rw [List.filter_cons_of_neg (by simp)]
+  congr 1
+  rw [List.filter_filter]
+  simp
+
 /-- `setAdd` of a present key is the identity. -/
 theorem setAdd_eq_of_contains [BEq α] (s : List α) (x : α)
     (h : s.contains x = true) : setAdd s x = s := by
   unfold EvmAsm.Stateless.SpecRef.setAdd
   rw [if_pos h]
+
+/-- Membership after `setAdd`, at the added key and away from it. Both
+branches of `setAdd` have to be checked, so these do not follow from
+`List.contains_append` alone. -/
+theorem setAdd_contains_self {α : Type} [BEq α] [LawfulBEq α]
+    (s : List α) (x : α) : (setAdd s x).contains x = true := by
+  unfold EvmAsm.Stateless.SpecRef.setAdd
+  split
+  · rename_i hc; exact hc
+  · simp
+
+theorem setAdd_contains_ne {α : Type} [BEq α] [LawfulBEq α]
+    (s : List α) (x y : α) (h : y ≠ x) :
+    (setAdd s x).contains y = s.contains y := by
+  unfold EvmAsm.Stateless.SpecRef.setAdd
+  split
+  · rfl
+  · rw [List.contains_append]
+    simp [h]
 
 /-- The cold-path update preserves the relation: SpecRef `setAdd` vs the
 extraction's fresh epoch stamp. -/
