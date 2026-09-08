@@ -443,6 +443,19 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   three-variable goal always succeed where one `omega` on the real
   context silently gives up (`selfdestruct_equiv_state_oog`).
 
+- **A `fun _ => rfl` frame hypothesis collapses the states it was meant to
+  relate.** Applying a frame lemma
+  (`… (hflag : Frame hs hs') (hrel : Rel sRef hs …) : Rel sR' hs' …`) with
+  `hflag := fun _ => rfl` makes unification pick `hs' := hs` before the
+  `hrel` argument can pin them, and the error blames `hrel`
+  ("has type `Rel sRef hs outer` but is expected to have type
+  `Rel sRef (f hs) outer`"). **Named arguments do not fix it** — they do
+  not reorder elaboration. Use `refine lemma ?_ ?_ ?_ h`: the term
+  argument in the last slot pins the implicits from its own type, and the
+  goal pins the rest, leaving the frame obligations fully determined
+  (`selfdestruct_equiv_ok`'s three uses of
+  `lifecycleRel_transferFrame`).
+
 ## Anti-patterns (stop and record)
 
 | temptation | do this instead |
