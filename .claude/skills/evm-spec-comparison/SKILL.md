@@ -185,6 +185,20 @@ scope restriction.
 For each: why required, who guarantees it, reachable violation?, part of intended
 statement?, eliminable by proving?
 
+**A citation that resolves to the wrong model is worse than an invented
+one.** The ledger claimed register presence was "guaranteed by
+`sail_model_init`" — real, but only in `EvmAsm/Rv64/SailEquiv/`, a
+different Sail model. It resolves, so it reads as checked. When citing a
+guarantee, confirm the name is in `Stateless/SpecRef` or the `Evm`
+extraction, not merely somewhere in the `EvmAsm` package.
+
+**Check the direction of drift both ways.** The ledger's stale entries
+*understated* what was proven — memory "not yet related" against a
+`proven-memory-ops` matrix row, world state "out of scope" against five
+landed relations. An assumptions file that overstates is dangerous and an
+audit looks for that; one that understates makes the tranche look weaker
+than it is and quietly misdirects the next slice.
+
 ## Mismatch ledger
 
 When specs disagree, do not “fix the proof” first. Record area, both behaviors,
