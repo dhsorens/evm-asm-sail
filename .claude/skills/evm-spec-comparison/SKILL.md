@@ -158,6 +158,17 @@ theorem add_equiv (h : StateRel sRef sEvm) :
 Critically examine every added precondition. Prefer inductive `StepResultRel`
 covering success / revert / OOG / exceptional over “if both succeed, agree.”
 
+**`partial` blocks what it names, not what it encloses.** Before writing an
+opcode off as MM-3-blocked, check what its dispatch arm's body actually
+*names*. A `partial def` handler (`iCreate`, `iCall`, …) is a real
+blocker: there is no equation to run. An arm whose body names nothing in
+the `mutual` block is not blocked, even though it sits inside one —
+INVALID's `throw (.invalidOpcode op)` is total, runs, and carries only
+the byte-to-handler exposure every other row already has. "The dispatch
+match is `partial`" and "the handler is `partial`" are different facts,
+and MM-3 had them collapsed for several milestones. The check is one
+`grep` at the arm.
+
 ## Symmetry vs refinement
 
 Do not assume the final relation is symmetric. Full equivalence only where both
