@@ -724,6 +724,66 @@ and the upstream comment says it is deliberate.
   Closing it needs the CREATE family (M3), where the reverted-frame
   states become expressible.
 
+## MM-21: the EIP-161 collapse marks storage cleared on the extraction's side and not on SpecRef's
+
+Found while pairing the collapsing account write
+(`accountRel_write_collapse` ↔ `runS_store_account_info_clear`). The
+account halves agree; the storage halves do not.
+
+- **Area**: `store_account_info`'s EIP-161 branch (Kernel/Accounts.lean:114)
+  vs SpecRef's `modifyState` → `destroyAccount` (StateTracker.lean:274);
+  reached wherever an account write leaves an empty tuple.
+- **`Evm`**: `storage_tx_clear` (HostAxioms.lean:2085) **unconditionally**
+  drops the address' `storageTx` rows *and* records the address in
+  `storageCleared`. That list is a clear generation: `storage_tx_get`
+  (HostAxioms.lean:2067) returns `StorageTxCleared` instead of
+  `StorageTxMiss` for a listed address, and `k_sload`
+  (Kernel/Storage.lean:832) answers `StorageTxCleared` with
+  `{ curr := 0, orig := 0 }` — **without consulting the block overlay or
+  the witness**. `account_set_info` also sets the row's own
+  `storage_cleared := true`, which forces zero again at the witness level.
+- **SpecRef**: `destroyAccount` runs `destroyStorage` then
+  `setAccount … none`. `destroyStorage` is the *identity* on an account
+  with no pending storage writes (the `none` branch of its match —
+  `runTx_destroyStorage_none`), and SpecRef has **no notion of a cleared
+  generation at all**: `getStorage` (StateTracker.lean:179) reads the
+  transaction writes, then the parent block's writes, then the witness
+  pre-state, with nothing able to short-circuit that read-through.
+- **Trigger**: an account that (a) becomes EIP-161-empty by a write and
+  (b) has a nonzero value in the *block* overlay or the witness. A later
+  `SLOAD` on it would read `0` from the extraction and the base value
+  from SpecRef.
+- **Fork**: all (the clear generation is not fork-gated).
+  **Reachability**: **none**. An account holding storage is never
+  EIP-161-empty, so (a) and (b) cannot hold together. Storage at an
+  address is written only by code executing there, which requires
+  `code_hash ≠ KECCAK_EMPTY`; and an account created by init code that
+  wrote storage and returned empty code still carries `nonce ≥ 1`
+  (EIP-161 sets the nonce on creation). Either field alone defeats
+  `account_info_empty`. Nothing in scope resets a nonce to zero or clears
+  a code hash mid-step — Amsterdam's EIP-6780 `SELFDESTRUCT` marks rather
+  than deletes, and the tx-end deletion path
+  (`clearAccountPreservingBalance` ↔ `account_clear_preserving_balance` +
+  `storage_tx_clear`) clears on **both** sides.
+  **Severity**: none.
+- **Likely cause**: the extraction carries an explicit clear generation
+  because its storage reads are authenticated MPT point-gets that must
+  not walk into a destroyed subtree; SpecRef's journal has no such
+  read-through to guard.
+- **Disposition**: *unreachable*, and **structurally visible rather than
+  assumed**. `HostAcctClearWritten` is defined as `HostAcctWritten`
+  against `hostStorageClear hs aV`, so the clearing write's frame clause
+  states that the storage overlay moved. A caller therefore cannot carry
+  a `StorageRel` across it by accident; closing the pair needs the
+  storage side, which is where the CREATE family's `destroyStorage`
+  correspondence will land.
+- **Distinct from MM-18**, which is the mirror: there the question was
+  SpecRef's `destroyStorage` moving `storageWrites` into `storageReads`
+  (an extra *read* mark). Here it is the extraction recording a clear
+  that SpecRef's identity branch does not. MM-18's `hstore` hypothesis is
+  what confines SpecRef to that branch, so the two entries meet exactly
+  at the same case and say opposite halves of it.
+
 ## MM-4: Step-boundary pc convention
 
 - **Area**: program-counter advancement.

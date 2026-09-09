@@ -60,6 +60,23 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   mid-bracket — keep in-`rw` proofs single-line (`by tac₁; tac₂`) or hoist a
   `have` above the `rw`.
 
+## `do`-block join points defeat term-level factoring
+
+Two shapes of an extraction function that share a tail cannot share a
+Lean lemma about that tail. The Sail→Lean `do` blocks elaborate through
+`have`-bound join points (`__do_jp`) and `have`-bound `let`s, so the tail
+is **not** definitionally equal to a hand-written `storeInfoTail`
+factoring — `rfl` rejects the bridge, and raising `maxRecDepth` only
+changes the error from "maximum recursion depth" to "not a definitional
+equality". Seen on `store_account_info`, whose EIP-161 clear is a prefix
+over a branch shared with the non-clearing case.
+
+Do not spend attempts on the bridge. Either duplicate the branch
+analysis, or — better — look for a hypothesis that collapses one branch:
+`store_account_info`'s clearing fast path is a complete no-op under
+`AccountRel.absentEmpty`, which turned ~60 lines of duplicated
+`runS_opt_step` plumbing into three `if_neg`s.
+
 ## Stack geometry
 
 - SpecRef stack is **head = top** (`List U256`). Host stack is **bottom-indexed**

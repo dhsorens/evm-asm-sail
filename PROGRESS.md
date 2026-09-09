@@ -130,6 +130,41 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
+- [x] The EIP-161 **collapsing** account write, the half `AccountRel`
+      had deferred since #62. `runS_store_account_info_clear` pairs the
+      extraction's clearing shape and `accountRel_write_collapse` carries
+      the relation across it. Shorter than the non-collapsing case: both
+      sides land "no account" at the address, so an absent row's EIP-161
+      view is `none` unconditionally and the written tuple is not
+      observable (SpecRef overwrites it with `none` in the same
+      `modifyState`) — no `hval` counterpart is needed. The scalar
+      fast-path branch is discharged by `absentEmpty` itself: an absent
+      row already carries the empty tuple, so all three tests fail and
+      the write is a complete no-op. That is the field earning its keep a
+      second time.
+
+      Two readings of the extraction were wrong and are corrected. The
+      storage clear is a **prefix**, not one of three alternative shapes:
+      `store_account_info` clears and *then* takes the same branch it
+      would otherwise, so there are two shapes under an optional prefix.
+      And the branch cannot share a Lean lemma with the non-clearing one
+      — the `do` block elaborates through `have`-bound join points
+      (`__do_jp`), so its tail is not definitionally equal to any
+      hand-written factoring; `rfl` rejects the bridge even with
+      `maxRecDepth` raised.
+
+      **MM-21** is the new finding, and it is the mirror of MM-18. The
+      extraction's `storage_tx_clear` unconditionally records the address
+      in a clear generation, and `k_sload` answers a listed address with
+      a hard zero *without* consulting the block overlay or the witness;
+      SpecRef's `destroyStorage` is the identity there and has no notion
+      of a cleared generation at all. Unreachable — an account holding
+      storage is never EIP-161-empty, since storage implies either code
+      or a nonzero creation nonce — and `HostAcctClearWritten` is framed
+      against `hostStorageClear` so a caller cannot cross it with a
+      `StorageRel` by accident. Also fixed a `StateTracker.lean:273`
+      citation for `modifyState`, which is at :274.
+
 - [x] `docs/comparison-matrix.md` audited against the landed proofs, and
       guarded. Seven corrections, five of them on rows that claimed a
       proof: `transient storage` was `unrelated` though `TransientRel` is
