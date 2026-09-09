@@ -431,6 +431,14 @@ the emission's concrete address and topic constants through `whnf`. -/
     (a : Evm.Defs.address) (ts : List word) (d : List byte) :
     (logAppend hs a ts d).warmSlots = hs.warmSlots := rfl
 
+@[simp] theorem logAppend_warmAddresses (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List (BitVec 8)) :
+    (logAppend hs a ts d).warmAddresses = hs.warmAddresses := rfl
+
+@[simp] theorem logAppend_stackFrames (hs : Evm.HostState)
+    (a : Evm.Defs.address) (ts : List word) (d : List (BitVec 8)) :
+    (logAppend hs a ts d).stackFrames = hs.stackFrames := rfl
+
 @[simp] theorem logAppend_warmEpoch (hs : Evm.HostState)
     (a : Evm.Defs.address) (ts : List word) (d : List byte) :
     (logAppend hs a ts d).warmEpoch = hs.warmEpoch := rfl

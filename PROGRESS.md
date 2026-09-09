@@ -665,7 +665,23 @@ Residual for the remaining `unstated` rows:
      the EIP-6780 mark, with the halt being the STOP/RETURN normal-halt
      pairing (`running := false` ↔ `Halted HaltSelfDestruct`), not a new
      `StepResultRel` case — and then the dispatcher that case-splits over
-     all six.
+     all six. Its groundwork is in: `runR_sd_transfer_step` resolves the
+     re-association (`sdChargeTail`'s two transfer statements *are*
+     `specTransfer`, with the rest of the handler duplicated into the log
+     guard's branches, so `bind_assoc` plus the guard's if-distribution
+     turns them into `specTransfer >>= k`);
+     `runR_iSelfdestruct_success_xfer` is SpecRef's success in the form
+     that consumes `transfer_equiv*`'s composite conclusion;
+     `sdChargedEvm_gas` matches SpecRef's two charges against the
+     extraction's `sdGasOut`/`sdResOut`/`sdSpillOut` in one lemma, over
+     the promoted `chargeStateEvm_proj` (moved out of `Opcodes/Sstore.lean`
+     — projecting the concrete composition instead blows the recursion
+     depth, so it has to be stated over a variable frame); and
+     `TransferHostFrame` exports the access-set and stack equalities
+     `WarmAddrRel` needs to cross a transfer. What remains is the
+     post-relation discharge itself: `accountRel_flagWrite` and
+     `logRel_frame` across the EIP-6780 row write, `warmaddr_after_mark`
+     across the whole step, and `lifecycleRel_mark` with `CreatedAgree`.
   The register-file generalization that (2) needed is **done**: the whole
   account-write chain (`runS_opt_step`,
   `runS_store_account_info_hit`, `runS_k_transfer`, `runS_k_transfer_noop`)

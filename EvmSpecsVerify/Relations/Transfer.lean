@@ -566,9 +566,18 @@ theorem runTx_moveEther_zero_collapse (ts : TransactionState)
 def TransferPost (base : Nat) (sR' : Machine) (hs' : Evm.HostState) : Prop :=
   AccountRel sR'.txState hs' ∧ LogRel sR'.evm.logs hs' base
 
-/-- **What a transfer leaves alone.** `specTransfer` writes the tracker
-and appends at most one log record, and nothing else — so a caller that
-continues past the transfer (SELFDESTRUCT reads
+/-- **What a transfer leaves alone on the extraction's side.** It writes
+two account rows and appends one log record, so the access sets and the
+stack cross it unchanged — which is what `WarmAddrRel` and `StackRel`
+need in order to survive a step that transfers. -/
+def TransferHostFrame (hs hs' : Evm.HostState) : Prop :=
+  hs'.warmAddresses = hs.warmAddresses
+    ∧ hs'.warmEpoch = hs.warmEpoch
+    ∧ hs'.stackFrames = hs.stackFrames
+
+/-- **What a transfer leaves alone on SpecRef's side.** `specTransfer`
+writes the tracker and appends at most one log record, and nothing else —
+so a caller that continues past the transfer (SELFDESTRUCT reads
 `txState.createdAccounts`, marks `evm.accountsToDelete` and clears
 `evm.running`) can carry every other field across it without the
 existentially bound post-machine hiding them. Stated as one frame
@@ -614,7 +623,8 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
       ∧ TransferPost base sR' hs'
       ∧ sR'.evm.logs
           = sRef.evm.logs ++ [specTransferLog srcV.toList dstV.toList v]
-      ∧ TransferFrame sRef sR' := by
+      ∧ TransferFrame sRef sR'
+      ∧ TransferHostFrame hs hs' := by
   -- The SpecRef rows, and the tuples they read back as.
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
@@ -665,7 +675,7 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
     rw [if_pos (show (dstV.toList != srcV.toList) = true from
       bne_iff_ne.mpr hlistne)]
     exact runR_emit_transfer_log _ _ v _ hv
-  refine ⟨_, _, hspec, hrun, ⟨?_, ?_⟩, ?_, rfl, rfl⟩
+  refine ⟨_, _, hspec, hrun, ⟨?_, ?_⟩, ?_, ⟨rfl, rfl⟩, ?_⟩
   · -- the account overlay
     have hwfs : WordWf (transferSrcInfo sv.curr.info v).balance := by
       have hw : sv.curr.info.balance < 2 ^ 256 := harel.wf srcV sv hsrc
@@ -704,6 +714,16 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
       exact logRel_append _ hs2 base _ _ _ hbase
     exact hfinal
   · rfl
+  · -- the extraction's access sets and stack, across the two row writes
+    -- and the log append
+    have hf1 := hostAcctWritten_frame hw1
+    have hf2 := hostAcctWritten_frame hw2
+    exact ⟨by simp only [logAppend_warmAddresses]
+              exact hf2.2.1.trans hf1.2.1,
+           by simp only [logAppend_warmEpoch]
+              exact hf2.2.2.1.trans hf1.2.2.1,
+           by simp only [logAppend_stackFrames]
+              exact hf2.1.trans hf1.1⟩
 
 /-! ## The degenerate pairings
 
@@ -738,7 +758,8 @@ theorem transfer_equiv_self (aV : Evm.Defs.address) (v : U256)
           runS (Evm.Functions.k_transfer aV aV v) hs ss = .ok ((), hs) ss)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
-      ∧ TransferFrame sRef sR' := by
+      ∧ TransferFrame sRef sR'
+      ∧ TransferHostFrame hs hs := by
   have hrowR := harel.curr aV av hrow
   have hview := accountRel_view_eq harel aV av hrow
   have hsneR : (((hostAcctView av.curr).getD EMPTY_ACCOUNT).nonce == 0
@@ -772,7 +793,7 @@ theorem transfer_equiv_self (aV : Evm.Defs.address) (v : U256)
     rw [if_neg (by simp)]
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop aV aV v av av hs hrow hrow
-      (by simp), ⟨?_, hlrel⟩, rfl, rfl, rfl⟩
+      (by simp), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specSelfTransferOut sRef.txState aV.toList _ _) b
     = specAcctRow sRef.txState b
@@ -802,7 +823,8 @@ theorem transfer_equiv_zero (srcV dstV : Evm.Defs.address)
           runS (Evm.Functions.k_transfer srcV dstV 0) hs ss = .ok ((), hs) ss)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
-      ∧ TransferFrame sRef sR' := by
+      ∧ TransferFrame sRef sR'
+      ∧ TransferHostFrame hs hs := by
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
   have hsview := accountRel_view_eq harel srcV sv hsrc
@@ -839,7 +861,7 @@ theorem transfer_equiv_zero (srcV dstV : Evm.Defs.address)
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs hsrc hdst
       (by simp [Evm.Functions.word_is_zero,
-        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, rfl, rfl⟩
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specZeroTransferOut sRef.txState srcV.toList dstV.toList _ _) b
     = specAcctRow sRef.txState b
@@ -876,7 +898,8 @@ theorem transfer_equiv_zero_collapse (srcV dstV : Evm.Defs.address)
           runS (Evm.Functions.k_transfer srcV dstV 0) hs ss = .ok ((), hs) ss)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
-      ∧ TransferFrame sRef sR' := by
+      ∧ TransferFrame sRef sR'
+      ∧ TransferHostFrame hs hs := by
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
   have hsview := accountRel_view_eq harel srcV sv hsrc
@@ -923,7 +946,7 @@ theorem transfer_equiv_zero_collapse (srcV dstV : Evm.Defs.address)
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs hsrc hdst
       (by simp [Evm.Functions.word_is_zero,
-        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, rfl, rfl⟩
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specZeroTransferCollapseOut sRef.txState srcV.toList
       dstV.toList _ _) b = specAcctRow sRef.txState b

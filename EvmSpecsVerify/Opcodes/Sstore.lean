@@ -781,22 +781,6 @@ private theorem creditEvm_proj (e : Evm) (cond : Bool) (amount : Uint) :
   · exact ⟨⟨rfl, rfl⟩, rfl⟩
   · exact ⟨⟨by simp, by simp⟩, by simp⟩
 
-private theorem chargeStateEvm_proj (e : Evm) (amount : Uint) :
-    ((chargeStateEvm e amount).gasLeft
-        = e.gasLeft - (amount - min amount e.stateGasLeft)
-      ∧ (chargeStateEvm e amount).stateGasLeft
-        = e.stateGasLeft - min amount e.stateGasLeft)
-      ∧ (chargeStateEvm e amount).stateGasSpilled
-        = e.stateGasSpilled + (amount - min amount e.stateGasLeft) := by
-  unfold chargeStateEvm
-  split
-  · rename_i h
-    rw [Nat.min_eq_left h]
-    exact ⟨⟨by simp, rfl⟩, by simp⟩
-  · rename_i h
-    rw [Nat.min_eq_right (Nat.le_of_lt (Nat.lt_of_not_le h))]
-    exact ⟨⟨rfl, by simp⟩, rfl⟩
-
 /-- The gas triple SpecRef's frame ends up with. -/
 theorem sstorePostEvm_gas (e : Evm) (rest : List U256)
     (key : Address × Bytes32) (v o c : U256) (cold : Bool) :

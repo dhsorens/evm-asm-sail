@@ -285,6 +285,33 @@ def sdChargeTail (chargeAmt stateAmt : Uint) (o b : Address) : EvmM Unit := do
       { e with accountsToDelete := setAdd e.accountsToDelete o })
   EvmM.modifyEvm (fun e => { e with running := false })
 
+/-- `sdChargeTail`'s two transfer statements **are** `specTransfer`, with
+the handler's remaining statements duplicated into the log guard's
+branches. Re-associating lets `transfer_equiv*`'s bundled conclusion be
+consumed as a unit, instead of splitting it into a tracker run and a log
+effect. -/
+theorem runR_sd_transfer_step {α : Type} (s s' : Machine) (o b : Address)
+    (v : U256) (k : PUnit → EvmM α)
+    {r : Except SpecError (Except EvmError α × Machine)}
+    (htr : runR (specTransfer o b v) s = .ok (.ok PUnit.unit, s'))
+    (hk : runR (k PUnit.unit) s' = r) :
+    runR (EvmM.liftTx (moveEther o b v) >>= fun _ =>
+        if (b != o) = true then emit_transfer_log o b v >>= k
+        else (pure PUnit.unit : EvmM PUnit) >>= k) s = r := by
+  have hact : (EvmM.liftTx (moveEther o b v) >>= fun _ =>
+        if (b != o) = true then emit_transfer_log o b v >>= k
+        else (pure PUnit.unit : EvmM PUnit) >>= k)
+      = specTransfer o b v >>= k := by
+    unfold specTransfer
+    rw [bind_assoc]
+    congr 1
+    funext _
+    cases b != o
+    · rw [if_neg (by simp), if_neg (by simp)]
+    · rw [if_pos rfl, if_pos rfl]
+  rw [hact]
+  exact runR_bind_ok htr hk
+
 /-- **The shared prefix.** From `iSelfdestruct` to the first charge: the
 static test, the pop, the warm test, the sentry, the cold marking, and
 the liveness and balance reads that decide the account-write surcharge.
@@ -536,6 +563,56 @@ theorem runR_iSelfdestruct_success (s : Machine) (x : U256)
   refine runR_sd_log_guard _ _ _ acct₂.balance _ ?_
   refine runR_sd_mark_guard _ _ _ ?_
   simp only [sdSuccessOut, sdHaltEvm]
+  exact runR_modifyEvm _ _
+
+/-- **Success, with the transfer stepped as a unit.** The form the step
+theorem consumes: `transfer_equiv*` hands over the composite
+`specTransfer` run, so this takes that rather than the tracker run and
+the log effect separately (`runR_iSelfdestruct_success` is the other
+factoring, useful when the transfer's two halves are known). -/
+theorem runR_iSelfdestruct_success_xfer (s : Machine) (x : U256)
+    (rest : List U256) (cold alive : Bool)
+    (acct acct₂ : EvmAsm.Stateless.SpecRef.Account)
+    (ts₁ ts₂ ts₃ : TransactionState) (sR' : Machine)
+    (hstack : s.evm.stack = x :: rest)
+    (hstatic : s.evm.message.isStatic = false)
+    (hcold : cold = !s.evm.accessedAddresses.contains (to_address_masked x))
+    (hsentry : selfdestructAccessCost cold ≤ s.evm.gasLeft)
+    (halive : (isAccountAlive (to_address_masked x)).run s.txState
+      = .ok (alive, ts₁))
+    (hacct : (getAccount s.evm.message.currentTarget).run ts₁ = .ok (acct, ts₂))
+    (hcharge : selfdestructCost cold (sdCreates alive acct.balance)
+      ≤ s.evm.gasLeft)
+    (hstate : (if sdCreates alive acct.balance then StateGasCosts.NEW_ACCOUNT
+          else 0)
+      ≤ s.evm.stateGasLeft
+        + (s.evm.gasLeft
+            - selfdestructCost cold (sdCreates alive acct.balance)))
+    (hacct₂ : (getAccount s.evm.message.currentTarget).run ts₂
+      = .ok (acct₂, ts₃))
+    (hxfer : runR (specTransfer s.evm.message.currentTarget
+          (to_address_masked x) acct₂.balance)
+        { s with
+            txState := ts₃
+            evm := sdChargedEvm s.evm rest cold
+              (sdCreates alive acct.balance) (to_address_masked x) }
+      = .ok (.ok (), sR')) :
+    runR iSelfdestruct s
+      = .ok (.ok (),
+          { sR' with evm := sdHaltEvm (sdMarkEvm sR'.evm
+              (sR'.txState.createdAccounts.contains
+                s.evm.message.currentTarget)
+              s.evm.message.currentTarget) }) := by
+  refine runR_iSelfdestruct_prefix s x rest cold alive acct ts₁ ts₂
+    hstack hstatic hcold hsentry halive hacct ?_
+  simp only [sdChargeTail]
+  rw [sdChargeRaw_eq, sdStateRaw_eq]
+  refine runR_bind_ok (runR_charge_gas_ok _ _ (by simpa using hcharge)) ?_
+  refine runR_bind_ok (runR_charge_state_gas_ok _ _ (by simpa using hstate)) ?_
+  refine runR_bind_ok (runR_liftTx_ok _ _ acct₂ ts₃ (by simpa using hacct₂)) ?_
+  refine runR_sd_transfer_step _ sR' _ _ _ _ hxfer ?_
+  refine runR_sd_mark_guard _ _ _ ?_
+  simp only [sdMarked, sdHaltEvm]
   exact runR_modifyEvm _ _
 
 /-! ## The extraction's side
@@ -1159,6 +1236,7 @@ def SelfdestructTransfer (sRef : Machine) (hs : Evm.HostState) (base : Nat)
           runS (Evm.Functions.k_transfer oV bV v) hs ss = .ok ((), hs') ss)
       ∧ TransferPost base sR' hs'
       ∧ TransferFrame M sR'
+      ∧ TransferHostFrame hs hs'
 
 /-- Success post-relation for SELFDESTRUCT. The gas clauses mirror
 [`StopPost`](Stop.lean) — a halted frame's pc, stack and memory are not
@@ -1178,6 +1256,56 @@ def SelfdestructPost (pid : Evm.Defs.address → PrecompileId) (base : Nat)
   ∧ LogRel sR'.evm.logs hs' base
   ∧ WarmAddrRel pid sR' hs'
   ∧ LifecycleRel sR' hs' outer
+
+/-! ### The two gas dimensions, matched
+
+Both sides split on whether the reservoir covers `NEW_ACCOUNT`;
+`chargeStateEvm` and `sdGasOut`/`sdResOut`/`sdSpillOut` each already
+carry the split, so this is one lemma rather than a case analysis at
+every use. No affordability hypothesis: `chargeStateEvm` is total, and
+for `creates = false` the amount is zero and both sides are identities. -/
+
+@[simp] theorem sdWarmedEvm_stateGasSpilled (e : Evm) (rest : List U256)
+    (cold : Bool) (b : Address) :
+    (sdWarmedEvm e rest cold b).stateGasSpilled = e.stateGasSpilled := by
+  unfold sdWarmedEvm sdWarmEvm sdPoppedEvm
+  cases cold <;> rfl
+
+@[simp] theorem chargeEvm_stateGasSpilled (e : Evm) (amount : Uint) :
+    (chargeEvm e amount).stateGasSpilled = e.stateGasSpilled := rfl
+
+/-- **The two gas dimensions agree after both charges.** SpecRef's
+`chargeEvm` then `chargeStateEvm` against the extraction's
+`sdGasOut`/`sdResOut`/`sdSpillOut`. Both sides split on whether the
+reservoir covers `NEW_ACCOUNT` and both closed forms already carry the
+split, so no affordability hypothesis is needed: `chargeStateEvm` is
+total, and for `creates = false` the amount is zero and every leg is an
+identity. -/
+theorem sdChargedEvm_gas (e : Evm) (rest : List U256) (cold creates : Bool)
+    (b : Address) :
+    (sdChargedEvm e rest cold creates b).gasLeft
+        = sdGasOut (e.gasLeft - selfdestructCost cold creates) e.stateGasLeft
+            creates
+      ∧ (sdChargedEvm e rest cold creates b).stateGasLeft
+        = sdResOut e.stateGasLeft creates
+      ∧ (sdChargedEvm e rest cold creates b).stateGasSpilled
+        = sdSpillOut e.stateGasLeft e.stateGasSpilled creates := by
+  obtain ⟨⟨hg, hr⟩, hsp⟩ := chargeStateEvm_proj
+    (chargeEvm (sdWarmedEvm e rest cold b) (selfdestructCost cold creates))
+    (if creates then StateGasCosts.NEW_ACCOUNT else 0)
+  unfold sdChargedEvm sdGasOut sdResOut sdSpillOut
+  refine ⟨?_, ?_, ?_⟩
+  · rw [hg]
+    simp only [chargeEvm_gasLeft, chargeEvm_stateGasLeft,
+      sdWarmedEvm_gasLeft, sdWarmedEvm_stateGasLeft]
+    cases creates <;> simp
+  · rw [hr]
+    simp only [chargeEvm_stateGasLeft, sdWarmedEvm_stateGasLeft]
+    cases creates <;> simp
+  · rw [hsp]
+    simp only [chargeEvm_stateGasLeft, chargeEvm_stateGasSpilled,
+      sdWarmedEvm_stateGasLeft, sdWarmedEvm_stateGasSpilled]
+    cases creates <;> simp
 
 /-! ### The outcomes, paired
 
