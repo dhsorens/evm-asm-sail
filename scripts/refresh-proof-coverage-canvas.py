@@ -966,17 +966,38 @@ PLANNED = (
     "does not exist",
     "no such",
 )
-# The two trees the comparison is actually against, plus our own. Scoped
-# to `Stateless` on the EvmAsm side because that is all this project
-# imports: `EvmAsm/Rv64/` is a *different* Sail model (RISC-V), and a
-# ledger citation resolving there is a citation to the wrong model —
-# `sail_model_init` was exactly that, real in `Rv64/SailEquiv/` and
-# absent from the EVM extraction.
+# The two trees the comparison is actually against, plus our own.
+#
+# The extraction root is `…/lean/src`, **not** `…/lean/src/Evm`. The
+# package's top-level module is the *sibling file* `src/Evm.lean`, so a
+# root of `src/Evm` silently excludes it — and that file holds
+# `sail_model_init`, the model's register initialiser. Rooting at the
+# directory produced a false negative, and this guard then confirmed it:
+# the ledger asserted "the EVM extraction has no model-init entry point"
+# and `check_assumptions` agreed, because both were looking in a tree
+# that could not contain the answer. Rooting one level up also brings in
+# the vendored lean-sail runtime under `src/.lake/packages/Sail`, which is
+# correct: it is a real dependency of this model, so citing it is legitimate.
+#
+# `EvmAsm` stays scoped to `Stateless`, which is all this project imports.
+# `EvmAsm/Rv64/` is a genuinely different Sail model (RISC-V), so a
+# citation resolving only there is a citation to the wrong model.
 LEAN_ROOTS = (
     "EvmSpecsVerify",
-    "extraction/evm-sail/extractions/lean/src/Evm",
+    "extraction/evm-sail/extractions/lean/src",
     ".lake/packages/EvmAsm/EvmAsm/Stateless",
 )
+
+
+def _flat(lines: list[str]) -> str:
+    """One paragraph as a single lower-cased line, whitespace collapsed.
+
+    Collapsing matters: a marker phrase wraps. Joining the raw lines left
+    `"does not" + "   exist"` and the marker `"does not exist"` failed to
+    match, so the guard fired on a paragraph that had qualified its own
+    citation correctly.
+    """
+    return re.sub(r"\s+", " ", " ".join(lines)).strip().lower()
 
 
 def _mentioned(name: str, exclude: Path | None = None) -> bool:
@@ -1036,10 +1057,10 @@ def check_assumptions() -> None:
                 starts.append(i)
             buf.append(line)
         elif buf:
-            paras[starts[-1]] = " ".join(buf).lower()
+            paras[starts[-1]] = _flat(buf)
             buf = []
     if buf:
-        paras[starts[-1]] = " ".join(buf).lower()
+        paras[starts[-1]] = _flat(buf)
 
     def context_of(i: int) -> str:
         best = ""
