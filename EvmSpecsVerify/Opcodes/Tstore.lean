@@ -155,16 +155,9 @@ theorem runS_execute_tstore_underflow (pc_in : Nat) (top : StackTop)
     (hunder : top.toNat < 2) :
     runS (Evm.Functions.execute (.TSTORE ()) pc_in top mem g) hs ss =
       .ok ((pc_in, top, mem, GAS_ZERO), hs)
-        { ss with regs := haltRegs ss msg .StackUnderflow } := by
-  simp only [Evm.Functions.execute,
-    show Evm.Functions.opcode_stack_effect (.TSTORE ()) = pure (2, 0)
-      from rfl]
-  refine runS_bind_ok (runS_pure _ _ _) ?_
-  refine runS_bind_ok
-    (runS_validate_stack_underflow g top 2 0 hs ss prof sp msg hprof hsp
-      hmsg hfork hunder) ?_
-  rw [dif_neg (by simp)]
-  exact runS_pure _ _ _
+        { ss with regs := haltRegs ss msg .StackUnderflow } :=
+  runS_execute_underflow (.TSTORE ()) 2 0 pc_in top g _ hs ss prof sp
+    msg rfl hprof hsp hmsg hfork hunder
 
 open Evm.Functions in
 theorem runS_execute_tstore_static (pc_in : Nat) (top : StackTop)

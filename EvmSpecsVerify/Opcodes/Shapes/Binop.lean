@@ -221,14 +221,9 @@ theorem runS_execute_binop_underflow (op : ast) (cost : Nat)
     (hunder : top.toNat < 2) :
     runS (Evm.Functions.execute op pc_in top mem g) hs ss =
       .ok ((pc_in, top, mem, GAS_ZERO), hs)
-        { ss with regs := haltRegs ss msg .StackUnderflow } := by
-  simp only [Evm.Functions.execute, hop.1]
-  refine runS_bind_ok (runS_pure _ _ _) ?_
-  refine runS_bind_ok
-    (runS_validate_stack_underflow g top 2 1 hs ss prof sp msg hprof hsp hmsg
-      hfork hunder) ?_
-  rw [dif_neg (by simp)]
-  exact runS_pure _ _ _
+        { ss with regs := haltRegs ss msg .StackUnderflow } :=
+  runS_execute_underflow _ 2 1 pc_in top g _ hs ss prof sp
+    msg hop.1 hprof hsp hmsg hfork hunder
 
 open Evm.Functions in
 theorem runS_execute_binop_oog (op : ast) (cost : Nat)

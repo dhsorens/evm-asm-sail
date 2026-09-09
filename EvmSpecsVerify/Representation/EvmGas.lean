@@ -255,7 +255,17 @@ its `opcode_stack_effect` alone, and a slice needs only that equation.
 This is the lemma form of what MM-11/MM-14 keep pointing at: the stack
 check is hoisted above the handler, so it fires before any handler-local
 guard. Stated over `op` because that is exactly the generality the
-hoisting gives. -/
+hoisting gives.
+
+**Scope.** `heff` is what limits this, and it excludes exactly the EIP-663
+trio. For every other opcode `opcode_stack_effect` is a `pure` pair, but
+`DUPN`/`SWAPN`/`EXCHANGE` compute theirs in `SailM`: they test
+`deep_stack_immediate_valid` and decode the immediate
+(Execute.lean:2947-2973). An **invalid** immediate yields `(0, 0)`, which
+*passes* `validate_stack` deliberately, so the fault surfaces as the
+handler's `InvalidOpcode` rather than as a stack fault — which is the
+mechanism MM-10 records. Those three keep their own underflow lemmas,
+conditioned on the immediate being valid. -/
 theorem runS_execute_underflow (op : Evm.Defs.ast) (inputs outputs : Nat)
     (pc_in : Nat) (top : StackTop) (g : Nat) (mem : EvmMemorySlice)
     (hs : HostState) (ss : SeqState)
