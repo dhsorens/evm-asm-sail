@@ -246,6 +246,37 @@ theorem runS_validate_stack_underflow (g : Nat) (top : StackTop)
     runS_exc_halt g .StackUnderflow hs ss prof sp msg hprof hsp hmsg hfork,
     runS_pure]
 
+/-- **Every opcode's underflow outcome, proven once.** `execute` reads the
+stack effect, runs the hoisted `validate_stack`, and on failure returns
+the carried tuple with the gas `exc_halt` zeroed — and none of that
+depends on which opcode it is. So an opcode's underflow shape is fixed by
+its `opcode_stack_effect` alone, and a slice needs only that equation.
+
+This is the lemma form of what MM-11/MM-14 keep pointing at: the stack
+check is hoisted above the handler, so it fires before any handler-local
+guard. Stated over `op` because that is exactly the generality the
+hoisting gives. -/
+theorem runS_execute_underflow (op : Evm.Defs.ast) (inputs outputs : Nat)
+    (pc_in : Nat) (top : StackTop) (g : Nat) (mem : EvmMemorySlice)
+    (hs : HostState) (ss : SeqState)
+    (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Message)
+    (heff : Evm.Functions.opcode_stack_effect op = pure (inputs, outputs))
+    (hprof : ss.regs.get? Register.k_execution_profile = some prof)
+    (hsp : ss.regs.get? Register.state_gas_spilled = some sp)
+    (hmsg : ss.regs.get? Register.message = some msg)
+    (hfork : Amsterdam ≤ prof.1)
+    (hunder : top.toNat < inputs) :
+    runS (Evm.Functions.execute op pc_in top mem g) hs ss
+      = .ok ((pc_in, top, mem, GAS_ZERO), hs)
+          { ss with regs := haltRegs ss msg .StackUnderflow } := by
+  simp only [Evm.Functions.execute, heff]
+  refine runS_bind_ok (runS_pure _ _ _) ?_
+  refine runS_bind_ok
+    (runS_validate_stack_underflow g top inputs outputs hs ss prof sp msg
+      hprof hsp hmsg hfork hunder) ?_
+  rw [dif_neg (by simp)]
+  exact runS_pure _ _ _
+
 /-- `validate_stack`, overflow. -/
 theorem runS_validate_stack_overflow (g : Nat) (top : StackTop)
     (inputs outputs : Nat) (hs : HostState) (ss : SeqState)
