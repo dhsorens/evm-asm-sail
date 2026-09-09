@@ -55,6 +55,13 @@ python3 scripts/refresh-proof-coverage-canvas.py
 - Comparison-matrix statuses: `unrelated` · `related` · `proven-<scope>` ·
   `n/a`. Add rows rather than hiding components in prose.
 - When markdown and canvas disagree, **markdown wins** — regenerate.
+- **Two open PRs conflict on `docs/index.html` by construction.** It is a
+  ~270KB generated file that almost every slice regenerates, so the second
+  PR to merge will conflict there (and often in `PROGRESS.md` too). Never
+  hand-merge the generated file: take **either** side wholesale, then
+  re-run the refresh script and commit what it writes — the markdown is
+  the source of truth and the script is deterministic given it. Resolve
+  the markdown conflicts first, for the same reason.
 - Do not hardcode next-opcode names in canvas UI copy. The suggested-next
   queue lives in `scripts/refresh-proof-coverage-canvas.py`
   (`NEXT_SLICE_PREFERRED` / `next_slice`); landed rows drop out automatically.
