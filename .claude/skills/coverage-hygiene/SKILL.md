@@ -73,7 +73,19 @@ For an opcode that just landed `full`:
 
    Do not leave a bare ``add_step_equiv`` in the status column. Take the
    `#L` number from `grep -n "theorem <name>"` **after** the final build —
-   never from memory; nothing validates a stale anchor.
+   never from memory.
+
+   `check_anchors` in the refresh script now validates every
+   `[name](*.lean#Lnnn)` in the three living docs against the declaration
+   line, so a stale anchor fails the refresh with exit 1 instead of
+   shipping. Two consequences: an anchor you *don't* touch can start
+   failing because your slice inserted lines above it (adding one
+   `ErrorRel` constructor moved `RevertResultRel` six lines), and fixing
+   it is part of the slice — re-`grep` and re-run, don't work around the
+   guard. Anchors inside a status *note* matter as much as the row's
+   primary theorem link: `parse_proof` recomputes the latter through
+   `find_decl_line`, but note text is rendered verbatim into
+   `docs/index.html`.
 2. Run the refresh script.
 3. If the theorem newly ties a machine-frame component, bump that row in
    `docs/comparison-matrix.md` to `proven-<scope>` with the theorem name.

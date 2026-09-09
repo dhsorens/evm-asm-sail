@@ -134,13 +134,14 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 
 ### M2 — Shape validators across machinery (next tranche)
 
-**Where M2 stands (2026-09-03): 79 of 88 AST constructors are `full`.**
+**Where M2 stands (2026-09-08): 81 of 88 AST constructors are `full`.**
 Every opcode that does not need the world-state tranche or is not blocked
-by MM-3 now has a full-outcome step theorem. The eight that remain are
-exactly those two classes: SELFDESTRUCT needs the account side of the
-world relation, and INVALID plus the six-member CREATE/CALL family have
-no SpecRef `def` to target while dispatch is `partial` (MM-3). The
-residual notes at the end of this section scope each one.
+by MM-3 now has a full-outcome step theorem. SELFDESTRUCT landed with the
+account side of the world relation, and INVALID landed once it turned out
+not to be MM-3-blocked after all (its catch-all `throw` names nothing in
+the `partial mutual` block — see the residual note below). The six that
+remain are one class: the CREATE/CALL family, whose *handlers* are
+`partial def`. The residual notes at the end of this section scope them.
 
 - [x] `Opcodes/Dup.lean` — DUP1–DUP16 (`dup_step_equiv`, full `StepResultRel`):
       first reachable stack overflow and first charge-first SpecRef handler.
@@ -624,8 +625,8 @@ Residual for the remaining `unstated` rows:
 - **SELFDESTRUCT** is **done** — `selfdestruct_step_equiv`
   (Opcodes/Selfdestruct.lean), six outcomes through one dispatcher:
   success, static, underflow, sentry-OOG, execution-OOG, state-gas-OOG.
-  It was the last row outside the MM-3-blocked CALL/CREATE family, so M1's
-  opcode-by-opcode work is complete apart from that family and INVALID.
+  It was the last *handler* row outside the MM-3-blocked CALL/CREATE
+  family (INVALID, below, has no handler to be a row for).
 
   What it closes. **MM-14** is now a closed class: SELFDESTRUCT was its
   third and last member, and the underflow outcome pairs SpecRef's
@@ -662,11 +663,27 @@ Residual for the remaining `unstated` rows:
   all cross a transfer; and `lifecycleRel_transferFrame` /
   `createdAgree_transferFrame`.
 
-- **INVALID** (0xfe) has no SpecRef handler at all: the byte falls into
-  `opImplementation`'s catch-all `throw (.invalidOpcode op)` inside the
-  `partial mutual` block, so it is blocked by MM-3 exactly like the
-  CALL/CREATE family — there is no `def` to target. Its row should become
-  `n/a (MM-3)` rather than `unstated` once that is confirmed with upstream.
+- **INVALID** (0xfe) is **done** — `invalid_step_equiv`
+  (Opcodes/Invalid.lean). The earlier reading here was wrong: it said the
+  byte was MM-3-blocked like the CALL/CREATE family because
+  `opImplementation`'s catch-all throws inside the `partial mutual` block
+  and there is "no `def` to target". But `throw (.invalidOpcode op)` names
+  nothing in that block — it is a total expression, so it runs and the
+  theorem targets it inline. What blocks the CALL/CREATE family is that
+  their *handlers* are `partial def`, which is a different fact from the
+  dispatch match being `partial`. The row is `full`, not `n/a (MM-3)`.
+
+  One reachable outcome, and the double-fault class is empty **by proof**
+  rather than by case split: `opcode_stack_effect (.INVALID ()) = pure
+  (0, 0)`, so `execute`'s hoisted `validate_stack` cannot fire, and
+  SpecRef reads nothing and charges nothing before throwing. MM-4 is
+  vacuous (neither side moves the pc), and there are no new assumptions —
+  `StateRel` is the only hypothesis. The theorem quantifies the byte, so
+  it covers the whole undefined range: the extraction's decoder collapses
+  every byte with no `ast` constructor onto this node.
+
+  M1's opcode-by-opcode work is now complete apart from the six-member
+  MM-3-blocked CALL/CREATE family.
 - [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
       measure from gas)
 

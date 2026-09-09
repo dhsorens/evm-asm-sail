@@ -904,6 +904,18 @@ and the upstream comment says it is deliberate.
 - **`Evm`**: fully total (`whileFuelM` with computed fuel; zero `partial def`).
 - **Impact**: theorems must target SpecRef handler `def`s directly; dispatch-level and
   loop-level equivalence are blocked on the SpecRef side.
+- **Not a blocker for a handler-less arm.** INVALID has no handler `def`
+  at all — `opImplementation`'s catch-all throws inline
+  (Interpreter.lean:360) — and this entry was read for a while as putting
+  it out of reach alongside the CALL/CREATE family. It does not:
+  `throw (.invalidOpcode op)` names nothing in the `partial mutual`
+  block, so it runs and `invalid_step_equiv` targets it written out
+  inline. The residual exposure is the same one every row carries
+  (`opImplementation … 0xfe = throw …` is exactly as unprovable as
+  `… 0x01 = iAdd`), not a larger one. What genuinely blocks the
+  CALL/CREATE family is that their *handlers* are `partial def`
+  (`iCreate` :612, `iCall` :703, and four more), which is a different
+  fact from the dispatch match being `partial`.
 - **Disposition**: *deliberate scope restriction* here + candidate upstream request to
   evm-asm (the fuel is already threaded; de-partialing looks mechanical). Recorded in
   `EvmSpecsVerify/Assumptions.lean`.
