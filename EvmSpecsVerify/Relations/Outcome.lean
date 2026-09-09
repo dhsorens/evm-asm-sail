@@ -107,14 +107,20 @@ inductive StepResultRel
       StepResultRel Post (.ok (.error .outOfGas, sR'))
         (.ok ((pc', top', mem', 0), hs') ss')
   /-- Mismatch ledger MM-14: the mirror image of MM-11. SpecRef's write
-  handlers that test `isStatic` **before** popping (`iTstore`, `iSstore`,
-  `iSelfdestruct`) report `.writeInStaticContext` on a state that is
-  simultaneously static-protected and stack-invalid, where the
-  extraction's hoisted `validate_stack` — which runs before
-  `execute_opcode` and therefore before `guard_static` — reports the
-  stack fault. Both are exceptional halts with all gas consumed. Only
-  `StackUnderflow` is admitted: every opcode in this class is
-  `n`-in/0-out, so overflow is unreachable. -/
+  handlers that test `isStatic` **before** popping report
+  `.writeInStaticContext` on a state that is simultaneously
+  static-protected and stack-invalid, where the extraction's hoisted
+  `validate_stack` — which runs before `execute_opcode` and therefore
+  before `guard_static` — reports the stack fault. Both are exceptional
+  halts with all gas consumed.
+
+  The class has five members: `iTstore`, `iSstore` and `iSelfdestruct`,
+  proven here, and `iCreate` / `iCreate2`, whose crossing is the same but
+  which are MM-3-blocked (`partial def`, no equation to run). Only
+  `StackUnderflow` is admitted, which holds for all five: every member is
+  net stack-decreasing (`n`-in/0-out for the three proven, 3-in/1-out and
+  4-in/1-out for the two blocked), so `validate_stack` cannot report an
+  overflow. -/
   | haltedStaticFirst {sR' : Machine}
       {pc' : Nat} {top' : StackTop} {mem' : EvmMemorySlice}
       {hs' : Evm.HostState} {ss' : SeqState}

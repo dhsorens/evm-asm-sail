@@ -437,9 +437,12 @@ theorem runS_charge_log_gas_oog_data (g n size : Nat) (hs : HostState)
 
 open Evm.Functions in
 /-- The static-context guard halts with `WriteProtection`, carrying the
-frame's full gas into `exc_halt`. It is the first statement of every
-write handler on this side, which is where MM-11 (LOG) and MM-14
-(TSTORE/SSTORE/SELFDESTRUCT) come from. -/
+frame's full gas into `exc_halt`. It leads the three single-opcode write
+handlers (`execute_log`, `execute_sstore`, `execute_tstore`) and
+`execute_selfdestruct`, which is where MM-11 (LOG) and MM-14
+(TSTORE/SSTORE/SELFDESTRUCT) come from — but *not* every write handler:
+`run_create` calls it after four pops and `run_call` does not call it at
+all, inlining the conditional test. See the ledger's MM-11 table. -/
 theorem runS_guard_static_halt (g : Nat) (hs : Evm.HostState)
     (ss : SeqState)
     (prof : ExecutionProfile) (sp : state_gas_spill) (msg : Evm.Defs.Message)

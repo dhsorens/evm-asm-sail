@@ -27,7 +27,8 @@ narrower than `haltedChargeFirst`, since every opcode in this class is
 
 Where LOG puts SpecRef's guard too *late* (after the charge, MM-11),
 TSTORE puts it too *early* (before the stack validation). The same
-crossing applies to SSTORE and SELFDESTRUCT.
+crossing applies to SSTORE and SELFDESTRUCT, and to CREATE/CREATE2 —
+whose handlers are `partial def`, so they stay MM-3-blocked.
 
 ## MM-13: the zero write
 
