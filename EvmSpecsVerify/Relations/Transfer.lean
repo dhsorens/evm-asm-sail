@@ -575,6 +575,18 @@ def TransferHostFrame (hs hs' : Evm.HostState) : Prop :=
     ∧ hs'.warmEpoch = hs.warmEpoch
     ∧ hs'.stackFrames = hs.stackFrames
 
+/-- **A transfer preserves every row's lifecycle flags.** Both of its
+writes go through `acctRowSet`, which replaces `info` and `present` and
+nothing else. This is what lets `LifecycleRel` cross a transfer — and
+what lets a caller's EIP-6780 test *after* the transfer read the same
+flag it would have read before. -/
+def TransferFlagFrame (hs hs' : Evm.HostState) : Prop :=
+  ∀ aV : Evm.Defs.address,
+    (hostAcctRow hs' aV).map
+        (fun v => (v.curr.created, v.curr.selfdestructed))
+      = (hostAcctRow hs aV).map
+          (fun v => (v.curr.created, v.curr.selfdestructed))
+
 /-- **What a transfer leaves alone on SpecRef's side.** `specTransfer`
 writes the tracker and appends at most one log record, and nothing else —
 so a caller that continues past the transfer (SELFDESTRUCT reads
@@ -624,7 +636,8 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
       ∧ sR'.evm.logs
           = sRef.evm.logs ++ [specTransferLog srcV.toList dstV.toList v]
       ∧ TransferFrame sRef sR'
-      ∧ TransferHostFrame hs hs' := by
+      ∧ TransferHostFrame hs hs'
+      ∧ TransferFlagFrame hs hs' := by
   -- The SpecRef rows, and the tuples they read back as.
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
@@ -675,7 +688,7 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
     rw [if_pos (show (dstV.toList != srcV.toList) = true from
       bne_iff_ne.mpr hlistne)]
     exact runR_emit_transfer_log _ _ v _ hv
-  refine ⟨_, _, hspec, hrun, ⟨?_, ?_⟩, ?_, ⟨rfl, rfl⟩, ?_⟩
+  refine ⟨_, _, hspec, hrun, ⟨?_, ?_⟩, ?_, ⟨rfl, rfl⟩, ?_, ?_⟩
   · -- the account overlay
     have hwfs : WordWf (transferSrcInfo sv.curr.info v).balance := by
       have hw : sv.curr.info.balance < 2 ^ 256 := harel.wf srcV sv hsrc
@@ -724,6 +737,24 @@ theorem transfer_equiv (srcV dstV : Evm.Defs.address) (v : U256)
               exact hf2.2.2.1.trans hf1.2.2.1,
            by simp only [logAppend_stackFrames]
               exact hf2.1.trans hf1.1⟩
+  · -- the lifecycle flags, across the same two writes
+    intro aV
+    have hf1 := hostAcctFlags_of_written hsrc
+      (show HostAcctWritten hs hs1 srcV
+          { sv with curr := acctRowSet sv.curr (transferSrcInfo sv.curr.info v) }
+        from hw1) aV
+    have hf2 := hostAcctFlags_of_written
+      (hostAcctWritten_of_ne hw1 hne dv hdst)
+      (show HostAcctWritten hs1 hs2 dstV
+          { dv with curr := acctRowSet dv.curr (transferDstInfo dv.curr.info v) }
+        from hw2) aV
+    show (hostAcctRow (logAppend hs2 _ _ _) aV).map _ = _
+    rw [show hostAcctRow (logAppend hs2 Evm.Functions.EIP7708_SYSTEM_ADDRESS
+        (topicWords (transferTopics srcV dstV)) (toBeBytes32 v)) aV
+      = hostAcctRow hs2 aV from by
+        unfold hostAcctRow
+        rw [logAppend_accountTx]]
+    exact hf2.trans hf1
 
 /-! ## The degenerate pairings
 
@@ -759,7 +790,8 @@ theorem transfer_equiv_self (aV : Evm.Defs.address) (v : U256)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
       ∧ TransferFrame sRef sR'
-      ∧ TransferHostFrame hs hs := by
+      ∧ TransferHostFrame hs hs
+      ∧ TransferFlagFrame hs hs := by
   have hrowR := harel.curr aV av hrow
   have hview := accountRel_view_eq harel aV av hrow
   have hsneR : (((hostAcctView av.curr).getD EMPTY_ACCOUNT).nonce == 0
@@ -793,7 +825,7 @@ theorem transfer_equiv_self (aV : Evm.Defs.address) (v : U256)
     rw [if_neg (by simp)]
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop aV aV v av av hs hrow hrow
-      (by simp), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
+      (by simp), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩, fun _ => rfl⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specSelfTransferOut sRef.txState aV.toList _ _) b
     = specAcctRow sRef.txState b
@@ -824,7 +856,8 @@ theorem transfer_equiv_zero (srcV dstV : Evm.Defs.address)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
       ∧ TransferFrame sRef sR'
-      ∧ TransferHostFrame hs hs := by
+      ∧ TransferHostFrame hs hs
+      ∧ TransferFlagFrame hs hs := by
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
   have hsview := accountRel_view_eq harel srcV sv hsrc
@@ -861,7 +894,7 @@ theorem transfer_equiv_zero (srcV dstV : Evm.Defs.address)
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs hsrc hdst
       (by simp [Evm.Functions.word_is_zero,
-        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩, fun _ => rfl⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specZeroTransferOut sRef.txState srcV.toList dstV.toList _ _) b
     = specAcctRow sRef.txState b
@@ -899,7 +932,8 @@ theorem transfer_equiv_zero_collapse (srcV dstV : Evm.Defs.address)
       ∧ TransferPost base sR' hs
       ∧ sR'.evm.logs = sRef.evm.logs
       ∧ TransferFrame sRef sR'
-      ∧ TransferHostFrame hs hs := by
+      ∧ TransferHostFrame hs hs
+      ∧ TransferFlagFrame hs hs := by
   have hsrcR := harel.curr srcV sv hsrc
   have hdstR := harel.curr dstV dv hdst
   have hsview := accountRel_view_eq harel srcV sv hsrc
@@ -946,7 +980,7 @@ theorem transfer_equiv_zero_collapse (srcV dstV : Evm.Defs.address)
     rfl
   refine ⟨_, hspec, runS_k_transfer_noop srcV dstV 0 sv dv hs hsrc hdst
       (by simp [Evm.Functions.word_is_zero,
-        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩⟩
+        show Evm.Functions.WORD_ZERO = 0 from rfl]), ⟨?_, hlrel⟩, rfl, ⟨rfl, rfl⟩, ⟨rfl, rfl, rfl⟩, fun _ => rfl⟩
   refine accountRel_rowsFrame (fun b => ?_) harel
   show specAcctRow (specZeroTransferCollapseOut sRef.txState srcV.toList
       dstV.toList _ _) b = specAcctRow sRef.txState b

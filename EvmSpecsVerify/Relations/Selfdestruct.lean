@@ -349,6 +349,64 @@ def CreatedAgree (sRef : Machine) (hs : Evm.HostState)
   ∀ v : Evm.Defs.AcctValue, hostAcctRow hs aV = some v →
     v.curr.created = sRef.txState.createdAccounts.contains aV.toList
 
+/-- **`LifecycleRel` crosses a transfer.** The relation reads only the
+rows' two lifecycle flags, SpecRef's `accountsToDelete` and its
+`createdAccounts` — and a transfer leaves all four alone
+([`TransferFlagFrame`](Transfer.lean) and
+[`TransferFrame`](Transfer.lean) are those four facts). -/
+theorem lifecycleRel_transferFrame {sRef sR' : Machine}
+    {hs hs' : Evm.HostState} {outer : List Address}
+    (hflag : TransferFlagFrame hs hs')
+    (hdel : sR'.evm.accountsToDelete = sRef.evm.accountsToDelete)
+    (hcre : sR'.txState.createdAccounts = sRef.txState.createdAccounts)
+    (hrel : LifecycleRel sRef hs outer) : LifecycleRel sR' hs' outer := by
+  have hrow : ∀ (aV : Evm.Defs.address) (v' : Evm.Defs.AcctValue),
+      hostAcctRow hs' aV = some v' →
+        ∃ v, hostAcctRow hs aV = some v
+          ∧ v'.curr.created = v.curr.created
+          ∧ v'.curr.selfdestructed = v.curr.selfdestructed := by
+    intro aV v' hv'
+    have h := hflag aV
+    rw [hv'] at h
+    match hv : hostAcctRow hs aV with
+    | none => rw [hv] at h; exact absurd h (by simp)
+    | some v =>
+      refine ⟨v, rfl, ?_, ?_⟩
+      · rw [hv] at h
+        exact (Prod.mk.injEq _ _ _ _).mp (Option.some.inj h) |>.1
+      · rw [hv] at h
+        exact (Prod.mk.injEq _ _ _ _).mp (Option.some.inj h) |>.2
+  constructor
+  case created =>
+    intro aV v' hv' hc
+    obtain ⟨v, hv, hcr, -⟩ := hrow aV v' hv'
+    rw [hcre]
+    exact hrel.created aV v hv (by rw [← hcr]; exact hc)
+  case deleted =>
+    intro aV v' hv'
+    obtain ⟨v, hv, -, hsd⟩ := hrow aV v' hv'
+    rw [hsd, hdel]
+    exact hrel.deleted aV v hv
+
+/-- **`CreatedAgree` crosses a transfer**, for the same reason. This is
+the direction the relation cannot supply, so it has to be transported
+rather than re-derived. -/
+theorem createdAgree_transferFrame {sRef sR' : Machine}
+    {hs hs' : Evm.HostState} {aV : Evm.Defs.address}
+    (hflag : TransferFlagFrame hs hs')
+    (hcre : sR'.txState.createdAccounts = sRef.txState.createdAccounts)
+    (hrel : CreatedAgree sRef hs aV) : CreatedAgree sR' hs' aV := by
+  intro v' hv'
+  have h := hflag aV
+  rw [hv'] at h
+  match hv : hostAcctRow hs aV with
+  | none => rw [hv] at h; exact absurd h (by simp)
+  | some v =>
+    rw [hv] at h
+    have hcr := (Prod.mk.injEq _ _ _ _).mp (Option.some.inj h) |>.1
+    rw [hcr, hcre]
+    exact hrel v hv
+
 /-- SpecRef's mark: one `evm` field. -/
 def specMarkDeleted (e : Evm) (a : Address) : Evm :=
   { e with accountsToDelete := setAdd e.accountsToDelete a }

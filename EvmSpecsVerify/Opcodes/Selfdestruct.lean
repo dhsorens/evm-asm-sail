@@ -1237,6 +1237,7 @@ def SelfdestructTransfer (sRef : Machine) (hs : Evm.HostState) (base : Nat)
       ∧ TransferPost base sR' hs'
       ∧ TransferFrame M sR'
       ∧ TransferHostFrame hs hs'
+      ∧ TransferFlagFrame hs hs'
 
 /-- Success post-relation for SELFDESTRUCT. The gas clauses mirror
 [`StopPost`](Stop.lean) — a halted frame's pc, stack and memory are not
@@ -1256,6 +1257,104 @@ def SelfdestructPost (pid : Evm.Defs.address → PrecompileId) (base : Nat)
   ∧ LogRel sR'.evm.logs hs' base
   ∧ WarmAddrRel pid sR' hs'
   ∧ LifecycleRel sR' hs' outer
+
+/-! ### The frame's other fields, across the whole step
+
+Everything the post-relation reads that is *not* gas: the access set
+(`WarmAddrRel`), the log store (`LogRel`), the deletion list
+(`LifecycleRel`) and `running`. Each is a projection of the composition,
+so each is one `rfl`-or-`cases` lemma rather than a record unfolding at
+the use site. -/
+
+@[simp] theorem sdWarmedEvm_accessedAddresses (e : Evm) (rest : List U256)
+    (cold : Bool) (b : Address) :
+    (sdWarmedEvm e rest cold b).accessedAddresses
+      = if cold then setAdd e.accessedAddresses b else e.accessedAddresses := by
+  unfold sdWarmedEvm sdWarmEvm sdPoppedEvm
+  cases cold <;> rfl
+
+@[simp] theorem sdWarmedEvm_accountsToDelete (e : Evm) (rest : List U256)
+    (cold : Bool) (b : Address) :
+    (sdWarmedEvm e rest cold b).accountsToDelete = e.accountsToDelete := by
+  unfold sdWarmedEvm sdWarmEvm sdPoppedEvm
+  cases cold <;> rfl
+
+@[simp] theorem chargeEvm_accessedAddresses (e : Evm) (amount : Uint) :
+    (chargeEvm e amount).accessedAddresses = e.accessedAddresses := rfl
+
+@[simp] theorem chargeEvm_accountsToDelete (e : Evm) (amount : Uint) :
+    (chargeEvm e amount).accountsToDelete = e.accountsToDelete := rfl
+
+@[simp] theorem chargeEvm_logs (e : Evm) (amount : Uint) :
+    (chargeEvm e amount).logs = e.logs := rfl
+
+@[simp] theorem chargeStateEvm_accessedAddresses (e : Evm) (amount : Uint) :
+    (chargeStateEvm e amount).accessedAddresses = e.accessedAddresses := by
+  unfold chargeStateEvm
+  split <;> rfl
+
+@[simp] theorem chargeStateEvm_accountsToDelete (e : Evm) (amount : Uint) :
+    (chargeStateEvm e amount).accountsToDelete = e.accountsToDelete := by
+  unfold chargeStateEvm
+  split <;> rfl
+
+@[simp] theorem chargeStateEvm_logs (e : Evm) (amount : Uint) :
+    (chargeStateEvm e amount).logs = e.logs := by
+  unfold chargeStateEvm
+  split <;> rfl
+
+@[simp] theorem sdHaltEvm_running (e : Evm) : (sdHaltEvm e).running = false := rfl
+
+@[simp] theorem sdHaltEvm_gasLeft (e : Evm) :
+    (sdHaltEvm e).gasLeft = e.gasLeft := rfl
+
+@[simp] theorem sdHaltEvm_stateGasLeft (e : Evm) :
+    (sdHaltEvm e).stateGasLeft = e.stateGasLeft := rfl
+
+@[simp] theorem sdHaltEvm_stateGasSpilled (e : Evm) :
+    (sdHaltEvm e).stateGasSpilled = e.stateGasSpilled := rfl
+
+@[simp] theorem sdHaltEvm_logs (e : Evm) : (sdHaltEvm e).logs = e.logs := rfl
+
+@[simp] theorem sdHaltEvm_accessedAddresses (e : Evm) :
+    (sdHaltEvm e).accessedAddresses = e.accessedAddresses := rfl
+
+@[simp] theorem sdHaltEvm_accountsToDelete (e : Evm) :
+    (sdHaltEvm e).accountsToDelete = e.accountsToDelete := rfl
+
+@[simp] theorem sdMarkEvm_gasLeft (e : Evm) (mark : Bool) (a : Address) :
+    (sdMarkEvm e mark a).gasLeft = e.gasLeft := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
+
+@[simp] theorem sdMarkEvm_stateGasLeft (e : Evm) (mark : Bool) (a : Address) :
+    (sdMarkEvm e mark a).stateGasLeft = e.stateGasLeft := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
+
+@[simp] theorem sdMarkEvm_stateGasSpilled (e : Evm) (mark : Bool)
+    (a : Address) :
+    (sdMarkEvm e mark a).stateGasSpilled = e.stateGasSpilled := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
+
+@[simp] theorem sdMarkEvm_logs (e : Evm) (mark : Bool) (a : Address) :
+    (sdMarkEvm e mark a).logs = e.logs := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
+
+@[simp] theorem sdMarkEvm_accessedAddresses (e : Evm) (mark : Bool)
+    (a : Address) :
+    (sdMarkEvm e mark a).accessedAddresses = e.accessedAddresses := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
+
+@[simp] theorem sdMarkEvm_accountsToDelete (e : Evm) (mark : Bool)
+    (a : Address) :
+    (sdMarkEvm e mark a).accountsToDelete
+      = if mark then setAdd e.accountsToDelete a else e.accountsToDelete := by
+  unfold sdMarkEvm specMarkDeleted
+  cases mark <;> rfl
 
 /-! ### The two gas dimensions, matched
 
@@ -1306,6 +1405,94 @@ theorem sdChargedEvm_gas (e : Evm) (rest : List U256) (cold creates : Bool)
     simp only [chargeEvm_stateGasLeft, chargeEvm_stateGasSpilled,
       sdWarmedEvm_stateGasLeft, sdWarmedEvm_stateGasSpilled]
     cases creates <;> simp
+
+/-! ### `SelfdestructTransfer` is reducible, in all four shapes
+
+The hypothesis is not an article of faith: each of the four transfer
+pairings discharges it, so what actually stays assumed is only *which*
+shape a given state is in, plus the side conditions those pairings
+already ledger (MM-19's non-wrap bound, MM-18's collapse tests). The
+frame conditions on `M` are exactly what re-derives `AccountRel` and
+`LogRel` at the machine the handler reaches the transfer at. -/
+
+theorem selfdestructTransfer_nondegenerate (sRef : Machine)
+    (hs : Evm.HostState) (base : Nat) (prof : ExecutionProfile)
+    (oV bV : Evm.Defs.address) (v : U256) (sv dv : Evm.Defs.AcctValue)
+    (hfork : AmsterdamProfile prof)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hsrc : hostAcctRow hs oV = some sv)
+    (hdst : hostAcctRow hs bV = some dv)
+    (hne : bV ≠ oV) (hv : v ≠ 0)
+    (hbal : v ≤ sv.curr.info.balance)
+    (hsum : dv.curr.info.balance + v < 2 ^ 256)
+    (hsne : Evm.Functions.account_info_empty (transferSrcInfo sv.curr.info v)
+      = false)
+    (hdne : Evm.Functions.account_info_empty (transferDstInfo dv.curr.info v)
+      = false) :
+    SelfdestructTransfer sRef hs base prof oV bV v := by
+  intro M hfa _ hfl
+  obtain ⟨sR', hs', hspec, hrunS, hpost, -, hfr, hhf, hflag⟩ :=
+    transfer_equiv oV bV v M hs base sv dv prof hfork
+      (accountRel_frame hfa harel) (by rw [hfl]; exact hlrel)
+      hsrc hdst hne hv hbal hsum hsne hdne
+  exact ⟨sR', hs', hspec, hrunS, hpost, hfr, hhf, hflag⟩
+
+theorem selfdestructTransfer_self (sRef : Machine) (hs : Evm.HostState)
+    (base : Nat) (prof : ExecutionProfile) (aV : Evm.Defs.address) (v : U256)
+    (av : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hrow : hostAcctRow hs aV = some av)
+    (hv : v ≠ 0) (hbal : v ≤ av.curr.info.balance)
+    (hsne : Evm.Functions.account_info_empty (transferSrcInfo av.curr.info v)
+      = false) :
+    SelfdestructTransfer sRef hs base prof aV aV v := by
+  intro M hfa _ hfl
+  obtain ⟨sR', hspec, hrunS, hpost, -, hfr, hhf, hflag⟩ :=
+    transfer_equiv_self aV v M hs base av
+      (accountRel_frame hfa harel) (by rw [hfl]; exact hlrel)
+      hrow hv hbal hsne
+  exact ⟨sR', hs, hspec, fun _ _ => hrunS _, hpost, hfr, hhf, hflag⟩
+
+theorem selfdestructTransfer_zero (sRef : Machine) (hs : Evm.HostState)
+    (base : Nat) (prof : ExecutionProfile) (oV bV : Evm.Defs.address)
+    (sv dv : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hsrc : hostAcctRow hs oV = some sv)
+    (hdst : hostAcctRow hs bV = some dv)
+    (hne : bV ≠ oV)
+    (hsne : Evm.Functions.account_info_empty sv.curr.info = false)
+    (hdne : Evm.Functions.account_info_empty dv.curr.info = false) :
+    SelfdestructTransfer sRef hs base prof oV bV 0 := by
+  intro M hfa _ hfl
+  obtain ⟨sR', hspec, hrunS, hpost, -, hfr, hhf, hflag⟩ :=
+    transfer_equiv_zero oV bV M hs base sv dv
+      (accountRel_frame hfa harel) (by rw [hfl]; exact hlrel)
+      hsrc hdst hne hsne hdne
+  exact ⟨sR', hs, hspec, fun _ _ => hrunS _, hpost, hfr, hhf, hflag⟩
+
+theorem selfdestructTransfer_zero_collapse (sRef : Machine)
+    (hs : Evm.HostState) (base : Nat) (prof : ExecutionProfile)
+    (oV bV : Evm.Defs.address) (sv dv : Evm.Defs.AcctValue)
+    (harel : AccountRel sRef.txState hs)
+    (hlrel : LogRel sRef.evm.logs hs base)
+    (hsrc : hostAcctRow hs oV = some sv)
+    (hdst : hostAcctRow hs bV = some dv)
+    (hne : bV ≠ oV)
+    (hsne : Evm.Functions.account_info_empty sv.curr.info = false)
+    (hdemp : Evm.Functions.account_info_empty dv.curr.info = true)
+    (hstore : ∀ M : Machine,
+      M.txState.accountWrites = sRef.txState.accountWrites →
+      dictGet? M.txState.storageWrites bV.toList = none) :
+    SelfdestructTransfer sRef hs base prof oV bV 0 := by
+  intro M hfa _ hfl
+  obtain ⟨sR', hspec, hrunS, hpost, -, hfr, hhf, hflag⟩ :=
+    transfer_equiv_zero_collapse oV bV M hs base sv dv
+      (accountRel_frame hfa harel) (by rw [hfl]; exact hlrel)
+      hsrc hdst hne hsne hdemp (hstore M hfa)
+  exact ⟨sR', hs, hspec, fun _ _ => hrunS _, hpost, hfr, hhf, hflag⟩
 
 /-! ### The outcomes, paired
 
@@ -1596,5 +1783,423 @@ theorem selfdestruct_equiv_state_oog (sRef : Machine) (top : StackTop)
         (by rw [hgasR.live]; exact hcharge) hshort hoog')]
   exact StepResultRel.halted ErrorRel.outOfGas
     (haltRegs_frame_status ss msg .OutOfGas)
+
+open Evm.Functions in
+/-- **Success.** Both charges are afforded, the balance moves, the
+EIP-6780 mark fires exactly when the originator was created this
+transaction, and the frame halts with `HaltSelfDestruct`.
+
+`hroom` is the EIP-7825 cap on the recorded spill, an extraction-only
+hard abort with no SpecRef counterpart — threaded rather than
+eliminated, exactly as `sstore_step_equiv` threads its own. `hxfer` is
+the transfer, in whichever of its four shapes applies; see
+`SelfdestructTransfer`. -/
+theorem selfdestruct_equiv_ok (sRef : Machine) (top : StackTop)
+    (g : Nat) (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice)
+    (pc_in : Nat) (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address) (x : U256) (rest : List U256)
+    (ov bv : Evm.Defs.AcctValue)
+    (hrel : StateRel sRef top g hs ss)
+    (hwrel : WarmAddrRel pid sRef hs)
+    (harel : AccountRel sRef.txState hs)
+    (hlfrel : LifecycleRel sRef hs outer)
+    (hpid : ∀ aV, runS (precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss)
+    (haddr : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.address.toList = sRef.evm.message.currentTarget)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hrows : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      hostAcctRow hs m.address = some ov)
+    (hbrow : hostAcctRow hs (word_to_address x) = some bv)
+    (hcreated : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m → CreatedAgree sRef hs m.address)
+    (hxfer : ∀ (m : Evm.Defs.Message) (prof : ExecutionProfile),
+      ss.regs.get? Register.message = some m →
+      ss.regs.get? Register.k_execution_profile = some prof →
+      SelfdestructTransfer sRef (sdHostWarm pid (word_to_address x) hs) base
+        prof m.address (word_to_address x)
+        ((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance)
+    (hstat : sRef.evm.message.isStatic = false)
+    (hstack : sRef.evm.stack = x :: rest)
+    (hsentry : selfdestructAccessCost
+      (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+      ≤ sRef.evm.gasLeft)
+    (hcharge : selfdestructCost
+        (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+        (sdCreatesS ov bv) ≤ sRef.evm.gasLeft)
+    (hstate : (if sdCreatesS ov bv then StateGasCosts.NEW_ACCOUNT else 0)
+      ≤ sRef.evm.stateGasLeft
+        + (sRef.evm.gasLeft - selfdestructCost
+            (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+            (sdCreatesS ov bv)))
+    (hroom : sdCreatesS ov bv = true →
+      sRef.evm.stateGasSpilled + (StateGasCosts.NEW_ACCOUNT
+        - min StateGasCosts.NEW_ACCOUNT sRef.evm.stateGasLeft) ≤ 2 ^ 24) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨hstackR, hgasR, -, -, ⟨prof, hprof, hfork⟩, ⟨msg, hmsg⟩⟩ := hrel
+  obtain ⟨⟨l, frest, hframe, hpfx, hlen⟩, htop, hlim, -⟩ := hstackR
+  rw [hstack] at hpfx htop hlim
+  have hlive := hgasR.live
+  have horow := hrows msg hmsg
+  have hax := haddr msg hmsg
+  have hwb := warm_of_warmAddrRel pid hwrel (word_to_address x)
+  rw [word_to_address_toList] at hwb
+  -- SpecRef's three reads, from the extraction's rows
+  have hbrowR : specAcctRow sRef.txState (to_address_masked x)
+      = some (hostAcctView bv.curr) := by
+    have h := harel.curr (word_to_address x) bv hbrow
+    rwa [word_to_address_toList] at h
+  have halive := runTx_isAccountAlive_hit sRef.txState (to_address_masked x)
+    _ hbrowR
+  have horowR : specAcctRow
+      (specAccountReadOf sRef.txState (to_address_masked x))
+      sRef.evm.message.currentTarget = some (hostAcctView ov.curr) := by
+    rw [specAcctRow_specAccountReadOf, ← hax]
+    exact harel.curr msg.address ov horow
+  have hacct := runTx_getAccount_hit _ sRef.evm.message.currentTarget _ horowR
+  have horowR2 : specAcctRow (specAccountReadOf
+      (specAccountReadOf sRef.txState (to_address_masked x))
+      sRef.evm.message.currentTarget) sRef.evm.message.currentTarget
+      = some (hostAcctView ov.curr) := by
+    rw [specAcctRow_specAccountReadOf]
+    exact horowR
+  have hacct₂ := runTx_getAccount_hit _ sRef.evm.message.currentTarget _
+    horowR2
+  have hcr := sdCreates_eq harel msg.address (word_to_address x) ov bv horow
+    hbrow
+  -- the transfer, at the machine the handler reaches it
+  obtain ⟨sR', hs', hspec, hrunS, ⟨hpa, hpl⟩, ⟨hfr, hfrc⟩, hhf, hflag⟩ :=
+    hxfer msg prof hmsg hprof
+      { sRef with
+          txState := specAccountReadOf (specAccountReadOf
+            (specAccountReadOf sRef.txState (to_address_masked x))
+            sRef.evm.message.currentTarget) sRef.evm.message.currentTarget
+          evm := sdChargedEvm sRef.evm rest
+            (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+            (sdCreatesS ov bv) (to_address_masked x) }
+      rfl rfl (by simp only [sdChargedEvm, chargeStateEvm_logs, chargeEvm_logs,
+        sdWarmedEvm_logs])
+  -- the originator's row survives the transfer
+  obtain ⟨ovT, hoT⟩ : ∃ ovT, hostAcctRow hs' msg.address = some ovT := by
+    have h := hflag msg.address
+    rw [show hostAcctRow (sdHostWarm pid (word_to_address x) hs) msg.address
+      = some ov from horow] at h
+    match hv : hostAcctRow hs' msg.address with
+    | none => rw [hv] at h; exact absurd h (by simp)
+    | some w => exact ⟨w, rfl⟩
+  -- and its `created` flag with it, so the two mark tests agree
+  have hcrT : ovT.curr.created
+      = sR'.txState.createdAccounts.contains msg.address.toList :=
+    createdAgree_transferFrame hflag (by rw [hfrc]; rfl) (hcreated msg hmsg)
+      ovT hoT
+  -- the extraction's affordability form, from SpecRef's
+  have key : ∀ n r q : Nat, n ≤ r + q → n - min n r ≤ q :=
+    fun _ _ _ h => by omega
+  have hafford : sdCreatesS ov bv = true →
+      StateGasCosts.NEW_ACCOUNT
+          - min StateGasCosts.NEW_ACCOUNT sRef.evm.stateGasLeft
+        ≤ g - selfdestructCost
+            (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+            (sdCreatesS ov bv) := by
+    intro hc
+    rw [hlive, hc]
+    rw [hc, if_pos rfl] at hstate
+    exact key _ _ _ hstate
+  have hbal := accountRel_balance harel msg.address ov horow
+  rw [hax, word_to_address_toList, ← hcr] at hspec
+  obtain ⟨hsOut, ss', hrunE, hmarkW, hOres, hOsp, hOstatus, hOprof, hOmsg⟩ :=
+    runS_selfdestruct_body_ok top g hs hs' ss prof sRef.evm.stateGasLeft
+      sRef.evm.stateGasSpilled msg l frest x rest pid _ ov bv ovT
+      hprof hgasR.reservoir hgasR.spilled hmsg hfork hframe hpfx htop
+      (by rw [hstatic msg hmsg]; exact hstat) (hpid _) hwb.symm
+      (by rw [hlive]; exact hsentry) horow hbrow
+      (by rw [hlive]; exact hcharge) hafford (by rw [hlive] at *; exact hroom)
+      (by rw [← hbal]; exact hrunS) hoT
+  rw [runR_iSelfdestruct_success_xfer sRef x rest _ _ _ _ _ _ _ sR'
+      hstack hstat rfl hsentry halive hacct
+      (by rw [hcr]; exact hcharge) (by rw [hcr]; exact hstate) hacct₂ hspec,
+    runS_execute_selfdestruct_of_body pc_in top g mem hs _ ss _ _ _
+      (by rw [htop]; simp) (by simp at htop hlim; omega) hrunE]
+  -- `sR'` differs from the charged machine only in `txState` and `logs`
+  have hE : sR'.evm = { sdChargedEvm sRef.evm rest
+        (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+        (sdCreatesS ov bv) (to_address_masked x) with
+      logs := sR'.evm.logs } := congrArg Machine.evm hfr
+  obtain ⟨hGgas, hGres, hGsp⟩ := sdChargedEvm_gas sRef.evm rest
+    (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+    (sdCreatesS ov bv) (to_address_masked x)
+  have hPgas : sR'.evm.gasLeft = sdGasOut
+      (sRef.evm.gasLeft - selfdestructCost
+        (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+        (sdCreatesS ov bv)) sRef.evm.stateGasLeft (sdCreatesS ov bv) := by
+    rw [show sR'.evm.gasLeft = _ from congrArg Evm.gasLeft hE]
+    exact hGgas
+  have hPres : sR'.evm.stateGasLeft
+      = sdResOut sRef.evm.stateGasLeft (sdCreatesS ov bv) := by
+    rw [show sR'.evm.stateGasLeft = _ from congrArg Evm.stateGasLeft hE]
+    exact hGres
+  have hPsp : sR'.evm.stateGasSpilled
+      = sdSpillOut sRef.evm.stateGasLeft sRef.evm.stateGasSpilled
+          (sdCreatesS ov bv) := by
+    rw [show sR'.evm.stateGasSpilled = _ from congrArg Evm.stateGasSpilled hE]
+    exact hGsp
+  have hPaa : sR'.evm.accessedAddresses
+      = setAdd sRef.evm.accessedAddresses (to_address_masked x) := by
+    rw [show sR'.evm.accessedAddresses = _
+      from congrArg Evm.accessedAddresses hE]
+    simp only [sdChargedEvm, chargeStateEvm_accessedAddresses,
+      chargeEvm_accessedAddresses, sdWarmedEvm_accessedAddresses]
+    cases hc : sRef.evm.accessedAddresses.contains (to_address_masked x)
+    · rw [if_pos (by simp)]
+    · rw [if_neg (by simp), setAdd_eq_of_contains _ _ hc]
+  have hPad : sR'.evm.accountsToDelete = sRef.evm.accountsToDelete := by
+    rw [show sR'.evm.accountsToDelete = _
+      from congrArg Evm.accountsToDelete hE]
+    simp only [sdChargedEvm, chargeStateEvm_accountsToDelete,
+      chargeEvm_accountsToDelete, sdWarmedEvm_accountsToDelete]
+  have hPcre : sR'.txState.createdAccounts = sRef.txState.createdAccounts := by
+    rw [hfrc]; rfl
+  -- `LifecycleRel` at the post-transfer state, before the mark
+  have hlfW : LifecycleRel sRef (sdHostWarm pid (word_to_address x) hs) outer :=
+    by refine lifecycleRel_transferFrame ?_ ?_ ?_ hlfrel
+       · exact fun _ => rfl
+       · rfl
+       · rfl
+  have hlfT : LifecycleRel sR' hs' outer :=
+    lifecycleRel_transferFrame hflag hPad hPcre hlfW
+  rw [hax] at hcrT
+  refine StepResultRel.success ⟨rfl, ?_, ?_, ?_, hOstatus, ?_, ?_, ?_, ?_⟩
+  · -- the live execution gas
+    simp only [sdHaltEvm_gasLeft, sdMarkEvm_gasLeft, hPgas, hlive]
+  · -- the state-gas reservoir
+    rw [hOres]
+    simp only [sdHaltEvm_stateGasLeft, sdMarkEvm_stateGasLeft, hPres]
+  · -- the recorded spill
+    rw [hOsp]
+    simp only [sdHaltEvm_stateGasSpilled, sdMarkEvm_stateGasSpilled, hPsp]
+  · -- the account overlay, across the EIP-6780 row write
+    show AccountRel sR'.txState hsOut
+    unfold SdMarkWritten at hmarkW
+    cases hc : ovT.curr.created
+    · rw [hc, if_neg (by simp)] at hmarkW
+      rw [hmarkW]
+      exact hpa
+    · rw [hc, if_pos rfl] at hmarkW
+      exact accountRel_flagWrite hpa msg.address ovT hmarkW hoT
+  · -- the log store, across the same write
+    simp only [sdHaltEvm_logs, sdMarkEvm_logs]
+    unfold SdMarkWritten at hmarkW
+    cases hc : ovT.curr.created
+    · rw [hc, if_neg (by simp)] at hmarkW
+      rw [hmarkW]
+      exact hpl
+    · rw [hc, if_pos rfl] at hmarkW
+      obtain ⟨-, -, -, -, hlogs, hbytes, -⟩ := hostAcctWritten_frame hmarkW
+      exact logRel_frame _ base hlogs hbytes hpl
+  · -- the access list
+    intro aV
+    have hOaa : hsOut.warmAddresses = wsAfterMark pid (word_to_address x) hs := by
+      unfold SdMarkWritten at hmarkW
+      cases hc : ovT.curr.created
+      · rw [hc, if_neg (by simp)] at hmarkW
+        rw [hmarkW, hhf.1]
+        rfl
+      · rw [hc, if_pos rfl] at hmarkW
+        rw [(hostAcctWritten_frame hmarkW).2.1, hhf.1]
+        rfl
+    have hOep : hsOut.warmEpoch = hs.warmEpoch := by
+      unfold SdMarkWritten at hmarkW
+      cases hc : ovT.curr.created
+      · rw [hc, if_neg (by simp)] at hmarkW
+        rw [hmarkW, hhf.2.1]
+        rfl
+      · rw [hc, if_pos rfl] at hmarkW
+        rw [(hostAcctWritten_frame hmarkW).2.2.1, hhf.2.1]
+        rfl
+    simp only [sdHaltEvm_accessedAddresses, sdMarkEvm_accessedAddresses, hPaa,
+      hOaa, hOep]
+    by_cases hp : (pid (word_to_address x) != PrecompileId.NotPrecompile) = true
+    · rw [show wsAfterMark pid (word_to_address x) hs = hs.warmAddresses
+        from by unfold wsAfterMark; rw [if_pos hp]]
+      rw [show setAdd sRef.evm.accessedAddresses (to_address_masked x)
+          = sRef.evm.accessedAddresses from by
+        refine setAdd_eq_of_contains _ _ ?_
+        rw [← word_to_address_toList]
+        exact (hwrel (word_to_address x)).mpr (Or.inl (by simpa using hp))]
+      exact hwrel aV
+    · rw [show wsAfterMark pid (word_to_address x) hs
+          = assocPut hs.warmAddresses (word_to_address x) hs.warmEpoch
+        from by unfold wsAfterMark; rw [if_neg hp]]
+      have hmark := warmaddr_after_mark pid sRef.evm.accessedAddresses
+        hs.warmAddresses hs.warmEpoch (word_to_address x) hwrel aV
+      rw [word_to_address_toList] at hmark
+      exact hmark
+  · -- the EIP-6780 lifecycle flags
+    unfold SdMarkWritten at hmarkW
+    cases hc : ovT.curr.created
+    · rw [hc, if_neg (by simp)] at hmarkW
+      rw [hmarkW]
+      have hdel : (sdHaltEvm (sdMarkEvm sR'.evm
+            (sR'.txState.createdAccounts.contains
+              sRef.evm.message.currentTarget)
+            sRef.evm.message.currentTarget)).accountsToDelete
+          = sR'.evm.accountsToDelete := by
+        simp only [sdHaltEvm_accountsToDelete, sdMarkEvm_accountsToDelete]
+        rw [if_neg (by rw [← hcrT, hc]; simp)]
+      refine lifecycleRel_transferFrame ?_ hdel ?_ hlfT
+      · exact fun _ => rfl
+      · rfl
+    · rw [hc, if_pos rfl] at hmarkW
+      have hmk := lifecycleRel_mark hlfT msg.address ovT hoT hmarkW
+      rw [hax] at hmk
+      have hdel : (sdHaltEvm (sdMarkEvm sR'.evm
+            (sR'.txState.createdAccounts.contains
+              sRef.evm.message.currentTarget)
+            sRef.evm.message.currentTarget)).accountsToDelete
+          = (specMarkDeleted sR'.evm
+              sRef.evm.message.currentTarget).accountsToDelete := by
+        simp only [sdHaltEvm_accountsToDelete, sdMarkEvm_accountsToDelete]
+        rw [if_pos (by rw [← hcrT, hc])]
+        rfl
+      refine lifecycleRel_transferFrame ?_ hdel ?_ hmk
+      · exact fun _ => rfl
+      · rfl
+
+/-! ### The step theorem -/
+
+/-- Everything the step theorem needs at the popped beneficiary beyond
+the relations: the two account rows in the transaction-overlay regime,
+the EIP-6780 converse the relation cannot supply (MM-20), the transfer in
+whichever of its four shapes applies, and the EIP-7825 spill cap — an
+extraction-only hard abort with no SpecRef counterpart. -/
+def SelfdestructAgree (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (sRef : Machine) (hs : Evm.HostState) (ss : SeqState) : Prop :=
+  ∀ (m : Evm.Defs.Message) (prof : ExecutionProfile) (x : U256)
+    (rest : List U256),
+    ss.regs.get? Register.message = some m →
+    ss.regs.get? Register.k_execution_profile = some prof →
+    sRef.evm.stack = x :: rest →
+    ∃ ov bv : Evm.Defs.AcctValue,
+      hostAcctRow hs m.address = some ov
+      ∧ hostAcctRow hs (Evm.Functions.word_to_address x) = some bv
+      ∧ CreatedAgree sRef hs m.address
+      ∧ SelfdestructTransfer sRef
+          (sdHostWarm pid (Evm.Functions.word_to_address x) hs) base prof
+          m.address (Evm.Functions.word_to_address x)
+          ((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance
+      ∧ (sdCreatesS ov bv = true →
+          sRef.evm.stateGasSpilled + (StateGasCosts.NEW_ACCOUNT
+            - min StateGasCosts.NEW_ACCOUNT sRef.evm.stateGasLeft) ≤ 2 ^ 24)
+
+open Evm.Functions in
+/-- **`SELFDESTRUCT`, all reachable outcomes.** The Amsterdam schedule is
+proven outright (`selfdestructCost`, `sdChargedEvm_gas`), the warm/cold
+accounting against `WarmAddrRel` (`warm_of_warmAddrRel`), the
+`creates_account` predicate against `AccountRel` (`sdCreates_eq`), the
+value transfer and its EIP-7708 log by `transfer_equiv` and its three
+degenerate siblings, and the EIP-6780 mark by `LifecycleRel`. The reads
+and the transfer's case are behind the ledgered `SelfdestructAgree`
+hypothesis.
+
+MM-14 is discharged by the underflow outcome, which pairs SpecRef's
+`.writeInStaticContext` with the extraction's `StackUnderflow` through
+`haltedStaticFirst` — `execute` hoists `validate_stack` above
+`guard_static`, so an empty stack in a static frame reaches different
+diagnostics on the two sides. MM-1's halt-kind discipline covers the
+other four halts. -/
+theorem selfdestruct_step_equiv (sRef : Machine) (top : StackTop) (g : Nat)
+    (hs : Evm.HostState) (ss : SeqState) (mem : EvmMemorySlice) (pc_in : Nat)
+    (pid : Evm.Defs.address → PrecompileId) (base : Nat)
+    (outer : List Address)
+    (hrel : StateRel sRef top g hs ss)
+    (hwrel : WarmAddrRel pid sRef hs)
+    (harel : AccountRel sRef.txState hs)
+    (hlfrel : LifecycleRel sRef hs outer)
+    (hpid : ∀ aV, runS (precompile_id_for_address aV) hs ss
+      = .ok (pid aV, hs) ss)
+    (haddr : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.address.toList = sRef.evm.message.currentTarget)
+    (hstatic : ∀ m : Evm.Defs.Message,
+      ss.regs.get? Register.message = some m →
+      m.is_static = sRef.evm.message.isStatic)
+    (hagree : SelfdestructAgree pid base sRef hs ss) :
+    StepResultRel (SelfdestructPost pid base outer) (runR iSelfdestruct sRef)
+      (runS (Evm.Functions.execute (.SELFDESTRUCT ()) pc_in top mem g) hs ss)
+      := by
+  obtain ⟨prof, hprof, hfork⟩ := hrel.profile
+  obtain ⟨msg, hmsg⟩ := hrel.message
+  match hS : sRef.evm.stack with
+  | [] =>
+    exact selfdestruct_equiv_underflow sRef top g hs ss mem pc_in pid base
+      outer hrel hS
+  | x :: rest =>
+    by_cases hstat : sRef.evm.message.isStatic = true
+    · exact selfdestruct_equiv_static sRef top g hs ss mem pc_in pid base
+        outer hrel hstatic hstat (by rw [hS]; simp)
+    · have hstat0 : sRef.evm.message.isStatic = false := by simpa using hstat
+      obtain ⟨ov, bv, horow, hbrow, hcre, hxf, hroom⟩ :=
+        hagree msg prof x rest hmsg hprof hS
+      -- the specific facts, in the ∀-over-`message` form the outcome
+      -- lemmas take (the register read pins `m`)
+      have hpin : ∀ m : Evm.Defs.Message,
+          ss.regs.get? Register.message = some m → m = msg :=
+        fun m hm => Option.some.inj (hm.symm.trans hmsg)
+      have hrows : ∀ m : Evm.Defs.Message,
+          ss.regs.get? Register.message = some m →
+          hostAcctRow hs m.address = some ov := by
+        intro m hm; rw [hpin m hm]; exact horow
+      have hcreated : ∀ m : Evm.Defs.Message,
+          ss.regs.get? Register.message = some m →
+          CreatedAgree sRef hs m.address := by
+        intro m hm; rw [hpin m hm]; exact hcre
+      have hxfer : ∀ (m : Evm.Defs.Message) (p : ExecutionProfile),
+          ss.regs.get? Register.message = some m →
+          ss.regs.get? Register.k_execution_profile = some p →
+          SelfdestructTransfer sRef (sdHostWarm pid (word_to_address x) hs)
+            base p m.address (word_to_address x)
+            ((hostAcctView ov.curr).getD EMPTY_ACCOUNT).balance := by
+        intro m p hm hp
+        rw [hpin m hm, Option.some.inj (hp.symm.trans hprof)]
+        exact hxf
+      by_cases hsen : sRef.evm.gasLeft < selfdestructAccessCost
+          (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+      · exact selfdestruct_equiv_sentry_oog sRef top g hs ss mem pc_in pid
+          base outer x rest hrel hwrel hpid hstatic hstat0 hS hsen
+      · push Not at hsen
+        by_cases hchg : sRef.evm.gasLeft < selfdestructCost
+            (!sRef.evm.accessedAddresses.contains (to_address_masked x))
+            (sdCreatesS ov bv)
+        · exact selfdestruct_equiv_charge_oog sRef top g hs ss mem pc_in pid
+            base outer x rest ov bv hrel hwrel harel hpid haddr hstatic hrows
+            hbrow hstat0 hS hsen hchg
+        · push Not at hchg
+          by_cases hst : (if sdCreatesS ov bv then StateGasCosts.NEW_ACCOUNT
+                else 0)
+              ≤ sRef.evm.stateGasLeft
+                + (sRef.evm.gasLeft - selfdestructCost
+                    (!sRef.evm.accessedAddresses.contains
+                      (to_address_masked x)) (sdCreatesS ov bv))
+          · exact selfdestruct_equiv_ok sRef top g hs ss mem pc_in pid base
+              outer x rest ov bv hrel hwrel harel hlfrel hpid haddr hstatic
+              hrows hbrow hcreated hxfer hstat0 hS hsen hchg hst hroom
+          · -- the state charge fails, which forces `creates_account`
+            have hc : sdCreatesS ov bv = true := by
+              cases hcv : sdCreatesS ov bv
+              · rw [hcv, if_neg (by simp)] at hst
+                exact absurd (Nat.zero_le _) hst
+              · rfl
+            rw [hc, if_pos rfl] at hst
+            push Not at hst
+            rw [hc] at hchg
+            exact selfdestruct_equiv_state_oog sRef top g hs ss mem pc_in pid
+              base outer x rest ov bv hrel hwrel harel hpid haddr hstatic
+              hrows hbrow hstat0 hS hsen hc hchg hst
 
 end EvmSpecsVerify

@@ -261,6 +261,26 @@ EVM state can violate it, and whether it is eliminable by proving.
   stays assumed is the two miss regimes: the block overlay (which doubles
   as the extraction's witness read-through cache) and the authenticated
   trie walk below it.
+* `SelfdestructAgree` (Opcodes/Selfdestruct.lean) — the widest of the
+  read-agreement bundles, because `SELFDESTRUCT` reads two rows and then
+  *writes* through them. It carries: the originator's and beneficiary's
+  rows in the transaction overlay (the `BalanceAgree` domain restriction),
+  `CreatedAgree` at the originator (MM-20's converse), the transfer in
+  whichever of its four shapes applies, and the EIP-7825 spill cap — an
+  extraction-only hard abort with no SpecRef counterpart, threaded exactly
+  as `sstore_step_equiv` threads its own `hroom`.
+
+  **Reduced** (with `AccountRel` + `LogRel`): the transfer clause is
+  discharged in *all four* shapes —
+  `selfdestructTransfer_nondegenerate`, `_self`, `_zero`,
+  `_zero_collapse`. So what stays assumed there is only which shape a
+  given state is in, plus those pairings' own ledger conditions: MM-19's
+  non-wrap bound on the beneficiary's balance, and MM-18's collapse tests.
+  Two of `transfer_equiv`'s side conditions are *automatic* for
+  `SELFDESTRUCT` and are noted rather than assumed: the originator cannot
+  EIP-161-collapse, because it is executing code, and a nonzero-value
+  beneficiary cannot either, because the credit leaves it a nonzero
+  balance.
 * `SelfBalanceAgree` (Opcodes/Selfbalance.lean) — the own-account form of
   `BalanceAgree`: SpecRef's journalled `getAccount message.currentTarget`
   and the extraction's `k_get_balance (self_addr ())` return the same
