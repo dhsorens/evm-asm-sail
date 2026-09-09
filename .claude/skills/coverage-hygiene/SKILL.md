@@ -98,6 +98,18 @@ For an opcode that just landed `full`:
 2. Run the refresh script.
 3. If the theorem newly ties a machine-frame component, bump that row in
    `docs/comparison-matrix.md` to `proven-<scope>` with the theorem name.
+   **This step gets skipped**, and the matrix drifts *understated*:
+   TSTORE's row sat at `unrelated` for many slices while `TransientRel`
+   was defined, consumed and re-established, and LOG's carried a status
+   word that isn't in the legend. When a slice puts a relation in a Post,
+   the component row is part of the slice.
+
+   The relation column may name a relation that does not exist yet —
+   that is how the matrix records intent — but only while the status is
+   `unrelated`. Once a row claims `related`/`proven-*`, naming a
+   nonexistent relation says a nonexistent artifact is doing the work
+   (`PcRel`, `StatusRel`, `BlockEnvRel` all did). `check_matrix` enforces
+   exactly that line.
 
 ## End-of-session gate
 
