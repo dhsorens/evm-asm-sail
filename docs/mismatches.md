@@ -520,8 +520,16 @@ all and SpecRef produces a stack entry that is not a word.
   `eip7825_transaction_gas_limit`); under that same cap a transaction
   affords at most `2^24 / G_sstore_sentry ≈ 7291` `SSTORE`s
   (`G_sstore_sentry = 2301`), each moving the refund by at most
-  `R_amsterdam_storage_clear + G_amsterdam_storage_write = 22480` — three
-  orders of magnitude below the bound.
+  `R_amsterdam_storage_clear + G_amsterdam_storage_write = 22480`, so the
+  whole transaction moves it by at most `7291 · 22480 = 163_901_680` —
+  thirteen orders of magnitude below `gas_refund_bound = 199 · (2^64 − 1)
+  ≈ 3.67 · 10^21`. (Revisions of this entry before 2026-09-08 said "three
+  orders of magnitude" here. That is the ratio of the *per-step refund
+  delta* to the `2^24` **spill** ceiling — the entry's other guard, and a
+  different quantity. The correction only widens the margin, so the
+  unreachability conclusion is unaffected. The spill leg needs no headroom
+  figure of its own: it is bounded by the gas actually spent, hence by the
+  very cap it is tested against.)
 - **Fork**: Amsterdam (both guards are Amsterdam-era).
   **Reachability**: unreachable for a well-formed transaction, but the
   argument is a *transaction-level* invariant, not a step-level one.
