@@ -30,6 +30,7 @@ REPO = Path(__file__).resolve().parents[1]
 OPCODE_DOC = REPO / "docs" / "opcode-coverage.md"
 COMPARISON_DOC = REPO / "docs" / "comparison-matrix.md"
 MISMATCH_DOC = REPO / "docs" / "mismatches.md"
+REGISTRY = REPO / "EvmSpecsVerify" / "Coverage" / "Registry.lean"
 HTML_OUT = REPO / "docs" / "index.html"
 SITE_URL = "https://derekhsorensen.com/evm-asm-sail/"
 GITHUB_BLOB = "https://github.com/dhsorens/evm-asm-sail/blob/main/"
@@ -923,6 +924,104 @@ DOC_LINK = re.compile(
 )
 
 
+def check_row_theorems(data: dict) -> None:
+    """Fail loudly when a row claims a proof but yields no theorem metadata.
+
+    `parse_proof` only reads the theorem link out of a *parenthesised*
+    status body, and its `\\((.*)\\)` has to run to the end of the cell.
+    A cell that closes its parenthesis early and then keeps writing —
+    `**full** ([`thm`](f#L1) — outcomes). More prose here` — parses as a
+    bare note: the row keeps its status, and the theorem name, line and
+    deep link silently vanish from `docs/index.html`. SELFDESTRUCT shipped
+    that way, the only `full` row on the site with no link to its own
+    theorem, and nothing complained because the status column still said
+    `full`. Keep the whole note inside one pair of parentheses.
+    """
+    problems = [
+        f"  {o['opcode']} ({o['byte']}): status is {o['statusKind']} but no "
+        "theorem parsed — check the status cell's parentheses close at the end"
+        for o in data["opcodes"]
+        if o["statusKind"] in ("full", "stated", "success-proven")
+        and "theorem" not in (o.get("proof") or {})
+    ]
+    if problems:
+        raise SystemExit(
+            "docs/opcode-coverage.md rows claim a proof with no theorem:\n"
+            + "\n".join(problems)
+            + "\nFix the status cell and re-run."
+        )
+
+
+REGISTRY_COUNT = re.compile(
+    r"^theorem astStatusCount_(\w+)\s*:\s*astStatusCount \.\w+ = (\d+)",
+    re.M,
+)
+REGISTRY_LEN = re.compile(r"^theorem astCtors_length : astCtors.length = (\d+)", re.M)
+REGISTRY_ARM = re.compile(r"^  \| \.(\w+) _ => \.(\w+)$", re.M)
+
+# Doc status kind -> `Coverage.Status` constructor.
+REGISTRY_KIND = {
+    "full": "full",
+    "stated": "stated",
+    "success-proven": "successProven",
+    "unstated": "unstated",
+    "n/a": "naOpaqueHash",
+}
+# The one row whose name is not its constructor's.
+REGISTRY_RENAME = {"CREATE": "opcode_CREATE"}
+
+
+def check_registry(data: dict) -> None:
+    """Fail loudly when `Coverage/Registry.lean` and the doc rows disagree.
+
+    The registry is the machine-checked side of the same classification:
+    `astStatus` is total over `Evm.Defs.ast`, so it cannot miss a
+    constructor, and its counts are computed rather than transcribed.
+    Seeding it from these rows made the two agree once; this keeps them
+    agreeing, the same bargain `check_counts` makes inside the markdown.
+    """
+    if not REGISTRY.is_file():
+        return
+    text = REGISTRY.read_text()
+    problems: list[str] = []
+
+    lean_counts = {k: int(v) for k, v in REGISTRY_COUNT.findall(text)}
+    lm = REGISTRY_LEN.search(text)
+    if lm:
+        lean_counts["total"] = int(lm.group(1))
+    for label, count in data["opcodeCounts"].items():
+        key = "total" if label == "total" else REGISTRY_KIND.get(label)
+        if key is None or key not in lean_counts:
+            continue
+        if lean_counts[key] != count:
+            problems.append(
+                f"  count {label}: docs say {count}, "
+                f"Registry.lean proves {lean_counts[key]}"
+            )
+
+    arms = dict(REGISTRY_ARM.findall(text))
+    for o in data["opcodes"]:
+        name = REGISTRY_RENAME.get(
+            o["opcode"].split()[0], o["opcode"].split()[0]
+        )
+        want = REGISTRY_KIND.get(o["statusKind"])
+        if name not in arms:
+            problems.append(f"  {o['opcode']}: no `astStatus` arm for `.{name}`")
+        elif want is not None and arms[name] != want:
+            problems.append(
+                f"  {o['opcode']}: docs say {o['statusKind']}, "
+                f"Registry.lean says .{arms[name]}"
+            )
+
+    if problems:
+        raise SystemExit(
+            "docs/opcode-coverage.md disagrees with "
+            "EvmSpecsVerify/Coverage/Registry.lean:\n"
+            + "\n".join(problems)
+            + "\nFix whichever is wrong and re-run (`lake build` the registry)."
+        )
+
+
 def check_anchors() -> None:
     """Fail loudly on a `[name](file.lean#Lnnn)` whose line is not the decl.
 
@@ -984,6 +1083,8 @@ def main() -> int:
     data = load_data()
     check_counts(data)
     check_anchors()
+    check_row_theorems(data)
+    check_registry(data)
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(
