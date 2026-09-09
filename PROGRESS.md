@@ -869,8 +869,59 @@ Residual for the remaining `unstated` rows:
 
   M1's opcode-by-opcode work is now complete apart from the six-member
   MM-3-blocked CALL/CREATE family.
-- [ ] Then: exhaustive opcode theorem → step simulation → execution equivalence (fuel
-      measure from gas)
+
+- [x] `Coverage/Exhaustive.lean` — the exhaustive step theorem's first
+      tranche, and the first statement in the tree quantified over
+      `Evm.Defs.ast` rather than written per opcode.
+
+      The gap it closes is one nothing had named. Every opcode theorem
+      states its *own* AST-constructor-to-handler pairing, and nothing
+      compares those statements: `add_step_equiv` would be exactly as
+      green if it related `iMul` to `.ADD ()`, because the two sides only
+      ever meet inside the statement a human wrote. The intended pairing
+      lived in a `docs/opcode-coverage.md` column that nothing read.
+      `baseHandler` makes it a table and `baseHandler_step_equiv`
+      discharges all 28 entries from it, so a mistranscribed arm is a
+      failed `exact` — checked by canary, which is the only way to know a
+      guard of this kind actually bites.
+
+      **The tranche is chosen by signature, not by confidence.** It is
+      the 28 opcodes whose theorem needs nothing beyond `StateRel` and the
+      MM-4 pc convention and whose post is `BasePost`: the ALU core
+      (binops, unops, ternops, EXP), POP and JUMPDEST. Surveying all 87
+      landed step theorems is what identified it — 62 land in
+      `BasePost mem`, but only 30 carry no further hypothesis, and STOP
+      (`StopPost`, no pc hypothesis) and INVALID (its post is a variable
+      and its handler an inline `throw`) leave 28 sharing a statement
+      exactly. The other 53 need an opcode-indexed pre/post family, which
+      is the next installment rather than this one.
+
+      **What it does not close is MM-3**, and the entry now says so
+      precisely. The theorem relates `runR (baseHandler op)` to
+      `runS (execute op …)`; it does not say SpecRef's dispatch sends `op`
+      to `baseHandler op`, and nothing can while `opImplementation` is a
+      `partial def`. So the transcription is still a reading — but one
+      reviewable object instead of 28 uncompared statements, and the
+      object that becomes a theorem the day upstream de-partials.
+      Ledgered as **Dispatch fidelity** in `Assumptions.lean`.
+
+      Two facts are computed rather than asserted: `baseOps_length = 28`
+      (from the registry's verified `astCtors`, so the docstring's number
+      cannot go stale and the theorem is visibly non-vacuous) and
+      `baseHandler_full` (everything the table claims is already `full` in
+      `astStatus` — the direction that matters, since it cannot quietly
+      promote a row). Axioms: the usual three.
+
+      One deliberate asymmetry with `astStatus`, argued in the docstring:
+      `baseHandler` *does* close with a catch-all. Its default is
+      `none` — not claiming — so a constructor added upstream silently
+      leaves the tranche instead of silently joining it, and claiming
+      still requires writing the constructor down. The totality discipline
+      stays where it bites.
+
+- [ ] Then: the rest of the exhaustive opcode theorem (an opcode-indexed
+      pre/post family for the other 53 `full` rows) → step simulation →
+      execution equivalence (fuel measure from gas)
 
 ### M3 — Transaction level
 

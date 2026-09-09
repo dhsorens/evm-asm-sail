@@ -997,3 +997,14 @@ account halves agree; the storage halves do not.
 - **Disposition**: *deliberate scope restriction* here + candidate upstream request to
   evm-asm (the fuel is already threaded; de-partialing looks mechanical). Recorded in
   `EvmSpecsVerify/Assumptions.lean`.
+
+  The reading is now **one object rather than many**.
+  `EvmSpecsVerify/Coverage/Exhaustive.lean` holds `baseHandler`, a table
+  transcribing `opImplementation`'s arms, and `baseHandler_step_equiv`
+  quantifies over it to discharge 28 opcodes at once. That does not make
+  the dispatch provable — nothing can, while the block is `partial` — but
+  it moves the transcription out of 28 separate theorem statements that
+  nothing cross-checked (a theorem pairing `iMul` with `.ADD ()` would
+  have been just as green) into a single reviewable table where a wrong
+  arm fails to elaborate. It is also the object that becomes a theorem
+  the day upstream de-partials.

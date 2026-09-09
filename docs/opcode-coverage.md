@@ -15,6 +15,20 @@ unnoticed, and the counts are computed from a verified enumeration
 transcribed. The refresh script checks these rows and this table against that
 file, in both directions, and refuses to regenerate on disagreement.
 
+The **SpecRef handler** column is prose for most rows — nothing checks that the
+handler named beside a constructor is the handler its theorem actually relates.
+[`EvmSpecsVerify/Coverage/Exhaustive.lean`](../EvmSpecsVerify/Coverage/Exhaustive.lean)
+closes that for 28 of them: [`baseHandler`](../EvmSpecsVerify/Coverage/Exhaustive.lean#L98)
+is the pairing as a table and
+[`baseHandler_step_equiv`](../EvmSpecsVerify/Coverage/Exhaustive.lean#L138)
+discharges every entry in one theorem quantified over `Evm.Defs.ast`, so a wrong
+pair fails to elaborate. The tranche is the opcodes whose step theorem needs
+nothing beyond `StateRel` and the MM-4 pc convention; its size is computed
+([`baseOps_length`](../EvmSpecsVerify/Coverage/Exhaustive.lean#L186)) and
+[`baseHandler_full`](../EvmSpecsVerify/Coverage/Exhaustive.lean#L191) keeps it a
+subset of the `full` rows. What none of this closes is MM-3 — that SpecRef's
+`partial` dispatch actually reaches those handlers.
+
 Statuses: `unstated` · `stated` (theorem exists, may cite pending lemmas) ·
 `success-proven` (success path only — not acceptable as final) ·
 `full` (full `StepResultRel`: success + every reachable failure — or, for
