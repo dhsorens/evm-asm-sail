@@ -185,6 +185,30 @@ scope restriction.
 For each: why required, who guarantees it, reachable violation?, part of intended
 statement?, eliminable by proving?
 
+**A negative claim needs a search whose root can contain the answer.**
+"`X` does not exist" is a much stronger assertion than "I did not find
+`X`", and the ledger has already been wrong this way once: it said the
+EVM extraction had no model-init entry point, having grepped the
+*directory* `extractions/lean/src/Evm` — which excludes the package's
+top-level module, the sibling file `src/Evm.lean`, where
+`sail_model_init` actually lives. The mechanised guard then agreed,
+because it shared the same root, so the false negative looked
+corroborated. Before writing a negative: root the search where a
+top-level module would sit, and treat a guard that shares your search as
+one observation rather than two.
+
+**A citation resolving in a different model still needs checking**, for
+the weaker reason that it resolves and therefore reads as checked:
+`EvmAsm/Rv64/` is RISC-V, not this comparison. Confirm the name is in
+`Stateless/SpecRef` or the `Evm` extraction.
+
+**Check the direction of drift both ways.** The ledger's stale entries
+*understated* what was proven — memory "not yet related" against a
+`proven-memory-ops` matrix row, world state "out of scope" against five
+landed relations. An assumptions file that overstates is dangerous and an
+audit looks for that; one that understates makes the tranche look weaker
+than it is and quietly misdirects the next slice.
+
 ## Mismatch ledger
 
 When specs disagree, do not “fix the proof” first. Record area, both behaviors,

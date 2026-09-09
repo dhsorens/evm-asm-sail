@@ -130,6 +130,46 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
+- [x] `EvmSpecsVerify/Assumptions.lean` audited and guarded. It is the
+      trust base — what the comparison still rests on, and what
+      discharges each item — and it was the last living artifact nothing
+      checked. Seven corrections.
+
+      Two citations named nothing real, both on the *same* load-bearing
+      bullet: the register hypotheses were attributed to a `StepRel`
+      structure (they live on `StateRel`, whose fields are literally
+      `profile`/`message`/`gas`), guaranteed by a `sail_model_init`.
+      `sail_model_init` is the sharper find — it *does* exist, but only
+      in `EvmAsm/Rv64/SailEquiv/`, a **different Sail model** (RISC-V).
+      A citation to the wrong model resolves, so it reads as checked. The
+      bullet now says what is actually true: `SeqState.regs` is a plain
+      `Std.ExtDHashMap` with **no totality invariant**, so a missing
+      register is expressible; the writers sit above the step boundary
+      (`decode_stateless_input`, `enter_transaction_frame`,
+      `restore_frame`); and presence is a genuine assumption discharged
+      at M3, taken as an explicit hypothesis by every step theorem.
+      `StepRel` had also propagated into the `opcode-slice` skill.
+
+      Three "deliberate scope restrictions" were stale, two of them
+      contradicting the comparison matrix while citing it. Memory was
+      described as "not yet related (matrix row: unrelated)" — the rows
+      are `proven-memory-ops`. World state was "out of scope" — five
+      relations have landed and every world-reading opcode is `full`;
+      what is actually scoped out is the transaction-level tower. And
+      `n/a` rows were plural where there is exactly one (KECCAK256);
+      precompiles have no row at all, not being `ast` constructors.
+      Plus a `SELFDESTRUCT waits on` that landed in #72, and the same
+      shorthand-suffix citation style the matrix audit fixed.
+
+      `check_assumptions` guards it: a citation must name something in
+      the three Lean trees unless its own paragraph says it is not
+      written yet. Two things worth recording about building it —
+      the first version was **self-referential** and passed its own
+      canary, because the ledger explaining its retired phantoms vouched
+      for them; and the `EvmAsm` root is now scoped to `Stateless`,
+      since `Rv64/` is a different model and resolving there is the
+      wrong-model defect this slice found.
+
 - [x] The EIP-161 **collapsing** account write, the half `AccountRel`
       had deferred since #62. `runS_store_account_info_clear` pairs the
       extraction's clearing shape and `accountRel_write_collapse` carries

@@ -68,8 +68,10 @@ Requirements:
   keeps getting rediscovered one parse error at a time — pre-empt it at
   drafting time.
 - Full inductive `StepResultRel` — not success-only.
-- Thread `AmsterdamProfile` / register hypotheses as in existing `StateRel` /
-  `StepRel` usage.
+- Thread `AmsterdamProfile` / register hypotheses as in existing `StateRel`
+  usage — its `profile` and `message` fields are the register carriers.
+  (There is no `StepRel`; the name was a phantom in this file and in the
+  assumptions ledger.)
 - Respect MM-1 (halt observation) and MM-4 (pc convention) for ALU-like ops;
   revisit both for JUMP/PUSH/memory.
 
