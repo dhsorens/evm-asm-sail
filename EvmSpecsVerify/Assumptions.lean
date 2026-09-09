@@ -504,11 +504,36 @@ EVM state can violate it, and whether it is eliminable by proving.
   the `StepResultRel` observation boundary. Eliminable only by widening the
   outcome relation to pair spec aborts.
 
+## Dispatch fidelity (the exhaustive tranche)
+
+* `baseHandler` (`Coverage/Exhaustive.lean`) is a transcription of
+  `opImplementation`'s dispatch arms, **checked by reading**, and
+  `baseHandler_step_equiv` quantifies over it. That the table is SpecRef's
+  dispatch is the assumption; MM-3 is why it has to be one, since
+  `opImplementation` is a `partial def` with no equation lemmas and
+  `opImplementation … 0x01 = iAdd` is not provable.
+
+  What the table changes is the *shape* of the assumption, not its
+  presence. Before it, each of the 28 opcode theorems separately asserted
+  its own AST-constructor-to-handler pairing in its own statement, and
+  nothing compared them; a theorem relating `iMul` to `.ADD ()` would have
+  been just as green. Now one table carries all 28 pairings and one
+  theorem discharges them, so a mistranscribed arm is a failed `exact`.
+  The reading is still a reading — but it is one reviewable object rather
+  than 28 statements nobody cross-checks, and it is the object that
+  becomes a *theorem* the day upstream de-partials the interpreter block.
+
+  `baseHandler_full` ties the table to `astStatus`, so the tranche cannot
+  claim an opcode the coverage registry does not already call `full`.
+
 ## Deliberate scope restrictions (this tranche)
 
 * SpecRef dispatch (`opImplementation`) is `partial` — theorems target the
   handler `def`s directly (mismatch ledger MM-3). Lifts if upstream
-  de-partials the interpreter block.
+  de-partials the interpreter block. The 28-opcode base tranche now routes
+  that reading through one table (`baseHandler`, above) instead of 28
+  independent statements; the other 53 `full` opcodes still assert their
+  own pairing, because their step theorems do not share a signature.
 * The `mem` slice is a pass-through for the **ALU** family — that family's
   theorems relate no memory content. Memory itself is related and
   preserved: `MemoryRel` with `mload_step_equiv`/`mstore_step_equiv`/
