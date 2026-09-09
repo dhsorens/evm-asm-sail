@@ -27,24 +27,38 @@ EVM state can violate it, and whether it is eliminable by proving.
   at frame entry (`stack_reset`) and preserved by the step lemmas.
 * `StateRel`'s register fields (`profile`, `message`, and `gas`'s
   reservoir/spill reads) — the registers a step reads are present in the
-  register file. Nothing in the extracted Lean establishes this: `SeqState`
-  is `PreSail.SequentialState`, whose `regs` is a plain
-  `Std.ExtDHashMap Register RegisterType` with **no totality invariant**, so
-  a missing register is expressible. What actually writes them sits above
-  the step boundary — `decode_stateless_input` for `k_execution_profile`
-  (Lib/Ssz/StatelessInput.lean:1462), `enter_transaction_frame` for
-  `message` (Evm/Transaction.lean:1167), `restore_frame` on frame return
-  (Evm/Machine.lean:501) — so presence is a genuine assumption of this
-  tranche, discharged at M3 rather than here. Every step theorem takes it
-  as an explicit hypothesis (`hprof`/`hmsg`/`hsp`) or through `StateRel`.
+  register file. `SeqState` is `PreSail.SequentialState`, whose `regs` is a
+  plain `Std.ExtDHashMap Register RegisterType` with **no totality
+  invariant**, so a missing register is expressible; that is what makes
+  this an assumption rather than a triviality.
 
-  (Earlier revisions named a `StepRel` structure and a `sail_model_init`
-  function. `StepRel` does not exist — the register hypotheses live on
-  `StateRel`, whose fields are literally `profile`/`message`/`gas`.
-  `sail_model_init` does exist, but only in `EvmAsm/Rv64/SailEquiv/`,
-  which is a **different Sail model** (RISC-V); the EVM extraction has no
-  model-init entry point. A citation to the wrong model is worse than an
-  invented name: it resolves, so it reads as checked.)
+  Presence *is* established somewhere, but every writer sits above the
+  step boundary: `sail_model_init` (Evm.lean:68) writes
+  `k_execution_profile` (:73) and `k_header` (:74) and is composed into
+  the binary's entry point as `sail_model_init >=> sail_main` (:116);
+  `decode_stateless_input` rewrites the profile from the decoded input
+  (Lib/Ssz/StatelessInput.lean:1462); `enter_transaction_frame` writes
+  `message` (Evm/Transaction.lean:1167); `restore_frame` restores it on
+  frame return (Evm/Machine.lean:501). Nothing in this tranche connects a
+  step's `SeqState` to any of them — three layers of context away — which
+  is what keeps presence an assumption here and a theorem at M3. Every
+  step theorem takes it as an explicit hypothesis (`hprof`/`hmsg`/`hsp`)
+  or through `StateRel`.
+
+  (An earlier revision named a `StepRel` structure, which does not
+  exist — the register hypotheses live on `StateRel`, whose fields are
+  literally `profile`/`message`/`gas`. The same revision then claimed the
+  EVM extraction had no model-init entry point at all, having found
+  `sail_model_init` only under `EvmAsm/Rv64/SailEquiv/` — a genuinely
+  different Sail model. That negative was false, and false for an
+  instructive reason: the search was rooted at the *directory*
+  `extractions/lean/src/Evm`, which excludes the package's top-level
+  module, the sibling file `src/Evm.lean` — exactly where
+  `sail_model_init` lives. `check_assumptions` then confirmed the false
+  negative, because `LEAN_ROOTS` had the same root. Both are fixed. The
+  lesson is narrower than "beware the wrong model": **a negative claim
+  needs a search whose root can contain the answer**, and a guard sharing
+  that search is not independent evidence.)
 * `ReturnDataRel` (Relations/ReturnData.lean) — SpecRef's inline returndata
   equals the extraction's `returndata` output-slice window. Established when
   CALL-family frames return and consumed by RETURNDATASIZE/RETURNDATACOPY;
