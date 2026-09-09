@@ -213,8 +213,37 @@ than it is and quietly misdirects the next slice.
 
 When specs disagree, do not “fix the proof” first. Record area, both behaviors,
 triggering state, expected EVM behavior + source, fork, reachability, severity,
-likely cause, disposition (`evm-asm` / `evm-sail` / extraction / relation / fork /
-intentional abstraction / unreachable / ambiguity / needs investigation).
+likely cause, disposition. The disposition vocabulary is the legend at the top of
+[`docs/mismatches.md`](../../../docs/mismatches.md) — read it there rather than
+from memory; `check_mismatch_dispositions` fails the refresh on a word that is not
+in it, and on a legend row no entry uses.
+
+**Count a population from the source, not from the opcodes you have proofs for.**
+MM-11 claimed LOG was the only outlier among "four write-guarded opcodes" and
+MM-14 that its class was closed at three members. SpecRef guards seven handlers;
+the three that were missed (`iCreate`, `iCreate2`, `iCall`) are MM-3-blocked, so
+an opcode-by-opcode sweep never reaches them and the miscount looked complete. It
+had propagated into four Lean docstrings and `PROGRESS.md`. Before writing "the
+only", "all N of its members" or "the class is closed", grep both models for the
+construct itself (here `isStatic` / `writeInStaticContext` and `guard_static`),
+and count the hits.
+
+**A crossing claim must name the mechanism, not just the two orders.** Which
+entry a handler belongs to is decided by what actually produces the observable
+divergence. For the static guards that is SpecRef's guard position alone, because
+the extraction's order is fixed by `execute`'s hoisted `validate_stack` — so
+`run_create` popping before its own `guard_static` is a real correction to "the
+guard leads every write handler" but adds *no* crossing, since those pops cannot
+fail. Drafting this audit, both readings were written down wrong before the
+mechanism was spelled out. A correction is new prose and is no more checked than
+what it replaces.
+
+**Citations are the audited surface too.** A `File.lean:line` that lands on real
+but unrelated code reads as checked: `iLogN` was cited at
+`InstructionsCore.lean:404`, inside `iExchange`. Basenames are ambiguous across
+the two models (`Gas.lean`, `Interpreter.lean`, `Transactions.lean`), so
+path-qualify (`SpecRef/Gas.lean`, `Evm/Gas.lean`). `check_mismatch_citations`
+enforces both.
 
 ## Claiming completeness
 
