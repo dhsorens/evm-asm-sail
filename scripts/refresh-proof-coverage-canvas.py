@@ -1277,6 +1277,182 @@ def check_anchors() -> None:
         )
 
 
+# `File.lean:line` in the mismatch ledger's prose. Optionally path-qualified;
+# the trailing range of a `549-558` span is ignored (only the start is checked).
+MM_CITE = re.compile(r"((?:[A-Za-z][A-Za-z0-9]*/)*[A-Z][A-Za-z0-9]*\.lean):(\d+)")
+# The identifier a citation belongs to, if the prose puts one next to it: the
+# last backticked identifier within the preceding 60 characters, not separated
+# from the citation by a sentence or clause break. A backticked *snippet* (it
+# has spaces) is not an owner, so `if entry.curr != value then k_sstore …`
+# falls through to the `execute_sstore` that introduced it.
+MM_OWNER = re.compile(r"`([A-Za-z_][\w'.]*)`[^`;.\n]{0,60}$")
+
+
+def _lean_files() -> dict[str, list[str]]:
+    """Every `.lean` path under the three trees, keyed by basename."""
+    out: dict[str, list[str]] = {}
+    for root in LEAN_ROOTS:
+        base = REPO / root
+        if not base.is_dir():
+            continue
+        for f in base.rglob("*.lean"):
+            if ".lake/build" in str(f):
+                continue
+            out.setdefault(f.name, []).append(str(f.relative_to(REPO)))
+    return out
+
+
+def check_mismatch_citations() -> None:
+    """Fail loudly on a ledger citation that resolves ambiguously or wrongly.
+
+    The mismatch ledger cites both specifications in prose, as
+    `File.lean:line`. Two things go wrong with that, and both make an
+    unchecked claim read like a checked one.
+
+    **The basename is ambiguous across the two models being compared.**
+    `Gas.lean`, `Interpreter.lean` and `Transactions.lean` each name a file
+    in SpecRef *and* in the extraction, so a bare basename can resolve to
+    the wrong specification and still land on plausible-looking code — the
+    same defect `check_assumptions` was built for after a citation resolved
+    in `EvmAsm/Rv64/`, a different Sail model entirely. MM-15 cited
+    `Gas.lean:114` and `Gas.lean:107` in one sentence, meaning two
+    different files. So a citation must resolve to exactly one file; if it
+    does not, qualify the path (`SpecRef/Gas.lean`, `Evm/Gas.lean`).
+
+    **The line drifts, or was wrong from birth.** `iLogN` was cited at
+    `InstructionsCore.lean:404` in two entries; 404 is inside `iExchange`,
+    a different opcode — and one that is itself the subject of MM-10. A
+    reader who follows the citation lands on real code and has no way to
+    tell. Five more were off by one to four lines, onto blank lines and
+    docstrings.
+
+    So: when the prose puts a backticked name next to a citation, the cited
+    line may not come *before* that name's declaration. That is weaker than
+    "the line is inside the declaration" on purpose — the ledger cites call
+    sites too, and a call site legitimately sits inside some *other*
+    declaration (MM-9 cites `refill_frame_state_gas` at Interpreter.lean:490,
+    where it is called from `process_message`, not declared). The weaker
+    rule still catches every defect this audit found.
+    """
+    if not MISMATCH_DOC.is_file():
+        return
+    files = _lean_files()
+    text = MISMATCH_DOC.read_text()
+    lines = text.splitlines()
+    problems: list[str] = []
+    decl_cache: dict[str, dict[str, int]] = {}
+
+    def decls(rel: str) -> dict[str, int]:
+        if rel not in decl_cache:
+            found: dict[str, int] = {}
+            for i, line in enumerate((REPO / rel).read_text().splitlines(), 1):
+                m = DECL.match(line)
+                if m:
+                    found.setdefault(m.group(1), i)
+            decl_cache[rel] = found
+        return decl_cache[rel]
+
+    for i, line in enumerate(lines, 1):
+        for m in MM_CITE.finditer(line):
+            cited, num = m.group(1), int(m.group(2))
+            base = cited.split("/")[-1]
+            hits = [
+                f
+                for f in files.get(base, [])
+                if f == cited or f.endswith("/" + cited)
+            ]
+            where = f"  mismatches.md:{i}: {cited}:{num}"
+            if not hits:
+                problems.append(f"{where} — names no file in the three trees")
+                continue
+            if len(hits) > 1:
+                problems.append(
+                    f"{where} — ambiguous across models ({', '.join(sorted(hits))}); "
+                    "qualify the path"
+                )
+                continue
+            rel = hits[0]
+            body = (REPO / rel).read_text().splitlines()
+            if num > len(body):
+                problems.append(f"{where} — file has {len(body)} lines")
+                continue
+            owner = MM_OWNER.search(line[: m.start()])
+            if not owner:
+                continue
+            name = owner.group(1)
+            decl = decls(rel).get(name)
+            if decl is not None and num < decl:
+                problems.append(
+                    f"{where} — cites `{name}`, declared at L{decl}; "
+                    f"L{num} is above it"
+                )
+
+    if problems:
+        raise SystemExit(
+            "docs/mismatches.md has citations that do not resolve:\n"
+            + "\n".join(problems)
+            + "\nA citation that lands on the wrong file or the wrong "
+            "declaration reads as checked. Fix it, or drop the line number."
+        )
+
+
+DISPO_ROW = re.compile(r"^\| \*([^*]+)\* \|[^|]*\|\s*((?:MM-\d+[,\s]*)+)\|", re.M)
+
+
+def check_mismatch_dispositions(entries: list[dict]) -> None:
+    """Fail loudly when the header's disposition table disagrees with the entries.
+
+    The table is the ledger's own legend, and a legend drifts the way the
+    opcode Counts table did before `check_counts`: silently, because nothing
+    recomputes it. The matrix audit found the same class one level up — a
+    row carrying the status word `stated`, which was not in the matrix's
+    legend at all — and here the header had gone the other way, declaring a
+    vocabulary (`evm-asm`, `evm-sail`, `extraction`, `fork`, `ambiguity`)
+    that no entry used while four words the entries *did* use (`assumption`,
+    `relation + assumption`, `closed by proof`, `deliberate scope
+    restriction`) were absent from it.
+    """
+    if not MISMATCH_DOC.is_file():
+        return
+    text = MISMATCH_DOC.read_text()
+    declared: dict[str, set[str]] = {}
+    for m in DISPO_ROW.finditer(text):
+        declared[m.group(1).strip()] = set(re.findall(r"MM-\d+", m.group(2)))
+    if not declared:
+        raise SystemExit(
+            "docs/mismatches.md: no disposition legend found. The header table "
+            "maps each disposition word to the entries that use it."
+        )
+    actual: dict[str, set[str]] = {}
+    for e in entries:
+        actual.setdefault(e["dispositionKind"], set()).add(e["id"])
+
+    problems: list[str] = []
+    for word in sorted(set(declared) | set(actual)):
+        d, a = declared.get(word, set()), actual.get(word, set())
+        if d == a:
+            continue
+        if not d:
+            problems.append(
+                f"  {', '.join(sorted(a))}: disposition {word!r} is not in the legend"
+            )
+            continue
+        if not a:
+            problems.append(f"  legend lists {word!r}, which no entry uses")
+            continue
+        for mm in sorted(d - a):
+            problems.append(f"  legend puts {mm} under {word!r}; the entry does not")
+        for mm in sorted(a - d):
+            problems.append(f"  {mm} says {word!r}; the legend omits it")
+
+    if problems:
+        raise SystemExit(
+            "docs/mismatches.md disposition legend disagrees with its entries:\n"
+            + "\n".join(problems)
+            + "\nUpdate the header table, or the entry's disposition word."
+        )
+
+
 def check_counts(data: dict) -> None:
     """Fail loudly when the Counts table disagrees with the rows above it.
 
@@ -1310,6 +1486,8 @@ def main() -> int:
     check_registry(data)
     check_matrix()
     check_assumptions()
+    check_mismatch_citations()
+    check_mismatch_dispositions(data["mismatches"])
     write_html(data)
     with_proof = sum(1 for o in data["opcodes"] if "proof" in o)
     print(

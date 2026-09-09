@@ -5,9 +5,32 @@ differences. Per the comparison methodology: when the specs disagree, the entry 
 written **before** any proof is adjusted around it.
 
 Fields: area · SpecRef behavior · `Evm` behavior · triggering state · expected EVM
-behavior (+ source) · fork · reachability · severity · likely cause · disposition
-(`evm-asm` / `evm-sail` / extraction / relation / fork / intentional abstraction /
-unreachable / ambiguity / needs investigation).
+behavior (+ source) · fork · reachability · severity · likely cause · disposition.
+Entries are heterogeneous by design — an entry omits a field it has nothing to say
+about — but the **disposition** word is the one the refresh script reads, so it comes
+from a fixed vocabulary:
+
+| disposition | meaning | entries |
+|---|---|---|
+| *intentional abstraction* | the two models cut the same behavior at different layers; paired in the relation rather than papered over | MM-1, MM-4, MM-5, MM-6, MM-7, MM-8, MM-9, MM-10, MM-11, MM-13, MM-14 |
+| *unreachable* | the divergent state cannot arise; the argument is recorded and, where a proof needs it, threaded as a hypothesis | MM-12, MM-17, MM-21 |
+| *relation* | a relation is deliberately weakened (usually one-directional) to admit the divergence | MM-16 |
+| *assumption* | carried as a hypothesis on the step theorems, ledgered in `Assumptions.lean` | MM-19 |
+| *relation + assumption* | both of the above | MM-20 |
+| *closed by proof* | the suspected divergence was disproven, or shown to preserve the relation | MM-18 |
+| *deliberate scope restriction* | out of scope here; upstream's to fix | MM-3 |
+| *needs investigation* | not yet resolved either way | MM-2, MM-15 |
+
+Citations are `File.lean:line`, path-qualified far enough to be unambiguous. That
+matters more here than it looks: `Gas.lean`, `Interpreter.lean` and
+`Transactions.lean` each name a file in **both** models, so a bare basename can
+resolve to the wrong specification and still read as checked. Write
+`SpecRef/Gas.lean:116` and `Evm/Gas.lean:107`. `check_mismatch_citations` in
+`scripts/refresh-proof-coverage-canvas.py` enforces this, and additionally rejects
+a line that sits *above* the declaration named beside it — so cite the `def` /
+`theorem` line, not the doc comment over it. Citing a call site is fine (MM-9
+points at where `process_message` calls `refill_frame_state_gas`); the check is
+one-sided on purpose.
 
 ---
 
@@ -18,7 +41,7 @@ unreachable / ambiguity / needs investigation).
   (InstructionsCore.lean:121; matches Python execution-specs statement order). An OOG
   throw therefore leaves a `Machine` whose stack has already lost its operands.
 - **`Evm`**: `execute` runs `validate_stack` (underflow/overflow, Machine.lean:168)
-  before the handler; the handler charges (`charge`, Gas.lean:536) *before* popping.
+  before the handler; the handler charges (`charge`, Evm/Gas.lean:537) *before* popping.
   On failure `exc_halt` zeroes gas, refills state gas, sets
   `frame_status := Exceptional k`, and the operands are still on the host stack.
 - **Trigger**: any ALU opcode with insufficient gas or insufficient stack.
@@ -47,9 +70,9 @@ unreachable / ambiguity / needs investigation).
 ## MM-5: Halt-kind divergence for charge-first handlers on double-fault states
 
 - **Area**: opcodes whose SpecRef handler charges gas **before** validating
-  the stack shape: `iPushN`, `iDupN`, `iSwapN` (InstructionsCore.lean:346–372)
-  and the charge-first env pushers (`iAddress`, `iOrigin`, `iCaller`, …,
-  InstructionsEnv.lean). Contrast the ALU family, which pops first — MM-1's
+  the stack shape: `iPushN` (InstructionsCore.lean:346), `iDupN` (:353),
+  `iSwapN` (:367), and the charge-first env pushers (`iAddress`, `iOrigin`,
+  `iCaller`, …, InstructionsEnv.lean). Contrast the ALU family, which pops first — MM-1's
   kind-alignment argument covers only pop-first handlers.
 - **SpecRef**: `charge_gas` runs first; a state that is simultaneously out of
   gas **and** stack-invalid throws `.outOfGas` before the depth/overflow check
@@ -89,7 +112,7 @@ unreachable / ambiguity / needs investigation).
 - **SpecRef**: memory is an unbounded `Bytes`; any offset is reachable if the
   quadratic expansion charge is affordable.
 - **`Evm`**: memory offsets/lengths live in a u32 space; after the expansion
-  charge succeeds, `memory_access` (Gas.lean:684) **fatal-errors**
+  charge succeeds, `memory_access` (Evm/Gas.lean:684) **fatal-errors**
   (`ExecutionInvalid`, a spec abort — not an EVM halt) when
   `start + size > 2^32 - 1`.
 - **Trigger**: a frame whose live gas can afford `mem_cost (2^27)` words
@@ -160,7 +183,7 @@ unreachable / ambiguity / needs investigation).
 - **SpecRef**: `iRevert` charges the expansion, sets `output`, and
   `throw .revert`. The refill runs at **frame teardown** —
   `process_message`'s `tryCatch` calls `refill_frame_state_gas`
-  (Interpreter.lean:490) on *every* error, revert included, restoring
+  (SpecRef/Interpreter.lean:490) on *every* error, revert included, restoring
   `stateGasLeft` from `message.stateGasReservoir`, zeroing
   `stateGasSpilled`, and adding the spill back to `gasLeft`.
 - **`Evm`**: `execute_revert` calls `refill_frame_state_gas` **inside the
@@ -205,7 +228,7 @@ unreachable / ambiguity / needs investigation).
 - **Two divergences stack up**:
   1. *Diagnostic kind*: `.invalidParameter why` vs `InvalidOpcode`. Both
      are exceptional halts — SpecRef's `EvmError.isHalt` is `true` for
-     `.invalidParameter` (Vm.lean:75), and the extraction zeroes the
+     `.invalidParameter` (SpecRef/Vm.lean:77), and the extraction zeroes the
      frame's gas — so the two agree on everything externally observable
      (all gas consumed, frame failed, no state change). Same class as MM-7.
   2. *Order*: because SpecRef charges before decoding and the extraction
@@ -242,14 +265,14 @@ unreachable / ambiguity / needs investigation).
 ## MM-11: LOG checks the static-context guard on the far side of the charge
 
 - **Area**: `LOG0` … `LOG4` (`0xa0`–`0xa4`).
-- **SpecRef**: `iLogN` (InstructionsCore.lean:404) pops offset, size and
+- **SpecRef**: `iLogN` (InstructionsCore.lean:414) pops offset, size and
   the `n` topics, charges
   `LOG_BASE + LOG_DATA_PER_BYTE * size + LOG_TOPIC * n + extend.cost`,
   extends memory, and **only then** tests `message.isStatic` and throws
   `.writeInStaticContext`.
-- **`Evm`**: `execute_log` (Execute.lean:1693) calls `guard_static`
-  **first** — before the pops, before any charge, before expansion — and
-  halts `WriteProtection`.
+- **`Evm`**: `execute_log` (Execute.lean:1685) calls `guard_static` as its
+  first effect (:1693) — before the pops, before any charge, before
+  expansion — and halts `WriteProtection`.
 - **Trigger**: a `LOG` in a static frame (inside `STATICCALL`) whose gas
   cannot cover the log charge. SpecRef reports `outOfGas`; the extraction
   reports `WriteProtection`. With sufficient gas the two agree on the
@@ -257,37 +280,67 @@ unreachable / ambiguity / needs investigation).
   exceptional halts consuming all frame gas, so the divergence is a step
   diagnostic rather than a chain observation — the same class as MM-5 and
   MM-10.
-- **The interesting part is that LOG is the *only* outlier.** Every other
-  write-guarded opcode checks static *first on both sides*: `iSstore`
-  (InstructionsCore.lean:456), `iTstore` (:504) and `iSelfdestruct`
-  (Interpreter.lean:283) all lead with
-  `if (← EvmM.getEvm).message.isStatic then throw .writeInStaticContext`,
-  matching `execute_sstore` / `execute_tstore` / `execute_selfdestruct`,
-  which all lead with `guard_static`. So this is not a systematic
-  layering decision — it is one handler out of four.
+- **The interesting part is where LOG sits among the write-guarded
+  handlers — and the population is seven, not four.** SpecRef throws
+  `.writeInStaticContext` at exactly seven sites: `iLogN`
+  (InstructionsCore.lean:426), `iSstore` (:456), `iTstore` (:504),
+  `iSelfdestruct` (SpecRef/Interpreter.lean:283), `iCreate` (:613),
+  `iCreate2` (:629) and `iCall` (:711). What decides which entry a handler
+  belongs to is where *SpecRef* puts its guard, because the extraction's
+  order is fixed for all of them — `execute` runs `validate_stack`, then
+  the handler runs, and the handler's charge follows its own guard:
+
+  | SpecRef's guard sits | handlers | crossing |
+  |---|---|---|
+  | before its pops | `iSstore`, `iTstore`, `iSelfdestruct`, `iCreate`, `iCreate2` | **MM-14** — the extraction's hoisted `validate_stack` reports `StackUnderflow` where SpecRef reports `.writeInStaticContext` |
+  | after its pops, before its charge | `iCall` | none — `run_call` tests the same condition in the same place |
+  | after its charge | `iLogN` | **this entry** — SpecRef reports `outOfGas` where the extraction reports `WriteProtection` |
+
+  So LOG is the only handler whose guard follows its *charge*, which is
+  what makes this entry's crossing unique to it — but it is **not** the
+  only handler whose guard position diverges: five more sit in MM-14's
+  row. Earlier revisions of this entry said "one handler out of four" and
+  counted the opcodes with landed proofs; the CALL/CREATE family is
+  MM-3-blocked, so an opcode-by-opcode sweep never reaches it. Counting
+  the guard sites in the source is what turns up the other three.
+- **`iCall` is the one place the two orders already agree**, and it is
+  worth recording as a negative result for the M3 tranche. SpecRef pops
+  all seven operands and *then* tests `isStatic && value ≠ 0`
+  (SpecRef/Interpreter.lean:711); `run_call` pops all seven and tests
+  `transfers_value && value_nonzero && message.is_static`
+  (Execute.lean:2439) — same position, same condition, both before any
+  charge. `CALLCODE` agrees for a different reason: SpecRef gives
+  `iCallcode` no guard at all, and `call_semantics .CallCode` sets
+  `transfers_value := false` (Execute.lean:2345), so the extraction's
+  test is dead there too. `DELEGATECALL` and `STATICCALL` carry no value
+  and neither side guards.
 - **Expected EVM behavior**: SpecRef matches upstream. EELS'
   `instructions/log.py` charges, extends memory, and *then* raises
   `WriteInStaticContext`, so the ordering SpecRef mirrors is the
-  execution-specs ordering; the extraction hoists the guard for
-  uniformity with its other write opcodes.
+  execution-specs ordering; the extraction puts its guard ahead of the
+  charge here as it does in its other single-opcode write handlers.
 - **Fork**: all (static calls since Byzantium). **Reachability**:
   trivially reachable. **Severity**: none at the chain observation
   boundary; a step-level diagnostic divergence.
-- **Likely cause**: intentional uniformity in the Sail model (`guard_static`
-  is the first statement of every write handler), against SpecRef's
-  statement-order fidelity to the Python.
-- **Disposition**: *intentional abstraction*, to be encoded the way MM-5 and
-  MM-10 were when the LOG slice lands: a new `ErrorRel` constructor pairing
-  `.writeInStaticContext` with `WriteProtection`, plus `WriteProtection` as a
-  fourth explicitly listed kind of `StepResultRel.haltedChargeFirst`. Both
-  are now in place and machine-checked by `logn_step_equiv`
+- **Likely cause**: the Sail model reaches for `guard_static` early in the
+  single-opcode write handlers, against SpecRef's statement-order fidelity
+  to the Python. Not uniformity, though — `run_create` calls
+  `guard_static` after four pops (Execute.lean:2003) and `run_call` does
+  not call it at all, inlining the conditional test instead. "The first
+  statement of every write handler" was the reading this entry and three
+  Lean docstrings carried; it holds for the three single-opcode handlers
+  and for no other.
+- **Disposition**: *intentional abstraction*, encoded the way MM-5 and
+  MM-10 were: `ErrorRel.writeInStaticContext` pairs the kinds, and
+  `WriteProtection` is a fourth explicitly listed kind of
+  `StepResultRel.haltedChargeFirst`. Machine-checked by `logn_step_equiv`
   (Opcodes/Log.lean), which covers the whole family — every arity's
   double-fault state included.
 
 ## MM-12: `pop_log_topics` accepts an out-of-range LOG arity silently
 
 - **Area**: the LOG family at arities outside `0…4`.
-- **SpecRef**: `iLogN n` (InstructionsCore.lean:404) pops `n` topics for
+- **SpecRef**: `iLogN n` (InstructionsCore.lean:414) pops `n` topics for
   **any** `n` — the operand block is `(List.range n).mapM stackPop`.
 - **`Evm`**: `pop_log_topics` (Execute.lean:135) matches `0`/`1`/`2`/`3`/`4`
   and closes with a catch-all `| _ => pure (LogTopics0 (), top)` that pops
@@ -297,8 +350,17 @@ unreachable / ambiguity / needs investigation).
   the cursor at different heights.
 - **Trigger**: an `Instruction.LOG n` with `n ≥ 5`. **Neither decoder
   builds one**: the extraction gates on `160 ≤b opcode && opcode ≤b 164`
-  (Interpreter.lean:133), and SpecRef enumerates `0xA0`–`0xA4` one arity
-  at a time (Interpreter.lean:345).
+  (Evm/Interpreter.lean:133), and SpecRef enumerates `0xA0`–`0xA4` one arity
+  at a time (SpecRef/Interpreter.lean:345).
+- **The extraction declares the bound it then fails to enforce.**
+  `pop_log_topics`' Sail signature carries the refinement type
+  `0 ≤ count ∧ count ≤ 4`, which the Lean backend erases into the
+  comment above the `def` (Execute.lean:134). So the catch-all is not a
+  considered semantic choice about `n ≥ 5` — it is filler the backend
+  must emit to make the `match` total, in a case the Sail type system
+  had already ruled out. That is the sharpest available argument for
+  `logn_step_equiv`'s `hn`, and a better one than the decoders' range:
+  the model itself states the precondition.
 - **Fork**: all. **Reachability**: *unreachable* — no decode step produces
   the AST value. **Severity**: none.
 - **Disposition**: *unreachable*; recorded because it is what justifies
@@ -320,9 +382,10 @@ unreachable / ambiguity / needs investigation).
 - **Why it is unobservable**: both readers return zero for an absent key
   (`getTransientStorage`'s `getD 0`, `transient_load`'s `getD default`),
   and **nothing on either side enumerates the map** — SpecRef touches
-  `transientStorage` only in get/set and the whole-map journal snapshot
-  (StateTracker.lean:337), the extraction only in load/store, the
-  whole-map journal frame, and `transient_reset` at transaction end. A
+  `transientStorage` only in get/set and the whole-map journal restore
+  (`restoreTxState`, StateTracker.lean:332), the extraction only in
+  load/store, the whole-map journal frame, and `transient_reset` at
+  transaction end. A
   row holding zero and an absent row are therefore indistinguishable
   through every observation either specification makes.
 - **Fork**: Cancun onward (EIP-1153). **Reachability**: trivially
@@ -337,14 +400,15 @@ unreachable / ambiguity / needs investigation).
 ## MM-14: SpecRef's static guard runs before the stack check, the extraction's after
 
 - **Area**: `TSTORE` (`0x5d`); the same crossing applies to `SSTORE`
-  (`0x55`) and `SELFDESTRUCT` (`0xff`).
+  (`0x55`), `SELFDESTRUCT` (`0xff`), `CREATE` (`0xf0`) and `CREATE2`
+  (`0xf5`) — five members, of which the last two are MM-3-blocked.
 - **SpecRef**: `iTstore` (InstructionsCore.lean:503) tests
   `message.isStatic` as its **first** statement — before either pop —
   and throws `.writeInStaticContext`. `iSstore` (:456) and
-  `iSelfdestruct` (Interpreter.lean:283) lead the same way.
+  `iSelfdestruct` (SpecRef/Interpreter.lean:283) lead the same way.
 - **`Evm`**: `execute_tstore` (Execute.lean:1500) also leads with
   `guard_static` — but `execute` hoists `validate_stack` *outside*
-  `execute_opcode` (Execute.lean:3801), so the stack check happens first
+  `execute_opcode` (Execute.lean:3809), so the stack check happens first
   on this side.
 - **Trigger**: a `TSTORE` in a static frame with fewer than two operands.
   SpecRef reports `.writeInStaticContext`, the extraction reports
@@ -368,12 +432,42 @@ unreachable / ambiguity / needs investigation).
 - **Disposition**: *intentional abstraction*, encoded the way MM-5 /
   MM-10 / MM-11 were: `StepResultRel.haltedStaticFirst`, pairing SpecRef
   `.writeInStaticContext` with the extraction's `StackUnderflow`. It
-  admits **only** `StackUnderflow` — every opcode in this class is
-  `n`-in/0-out, so overflow is unreachable. Machine-checked by
-  `tstore_step_equiv`, `sstore_step_equiv` (2026-09-03) and
-  `selfdestruct_step_equiv` (2026-09-08). **The class is now closed** —
-  those are all three of its members, and each pairs the two diagnostics
-  through `haltedStaticFirst`.
+  admits **only** `StackUnderflow` — every member proven so far is
+  `n`-in/0-out, so overflow is unreachable there. Machine-checked by
+  `tstore_step_equiv`, `sstore_step_equiv` and `selfdestruct_step_equiv`,
+  each pairing the two diagnostics through `haltedStaticFirst`.
+
+  **The class is not closed, and has two more members.** Membership is
+  decided by one question — does SpecRef's handler throw
+  `.writeInStaticContext` before its own pops? — because the extraction
+  runs `validate_stack` ahead of every handler regardless. Five handlers
+  do: `iSstore`, `iTstore` and `iSelfdestruct`, plus `iCreate`
+  (SpecRef/Interpreter.lean:613) and `iCreate2` (:629), which both lead
+  with the static throw before any of their three (resp. four) pops. So
+  a static frame carrying fewer than three operands reports
+  `.writeInStaticContext` on SpecRef and `StackUnderflow` on the
+  extraction for `CREATE` too. Neither can be proven while
+  `iCreate`/`iCreate2` are `partial def` (MM-3), so the rows stay
+  `unstated`; what changes is the claim, which said "the class is now
+  closed — those are all three of its members" and had counted the
+  landed proofs rather than the guard sites. MM-11's table has the full
+  population.
+
+  A separate observation about the same pair, which is *not* what causes
+  the crossing: `run_create` pops `value`, `off`, `len` and the optional
+  `salt` before calling `guard_static` (Execute.lean:2003), unlike the
+  three single-opcode write handlers, which lead with it. That does not
+  add a crossing of its own — `validate_stack` has already established
+  the height, so those pops cannot fail — but it does falsify the
+  reading that `guard_static` is the first statement of every write
+  handler, which MM-11 and three Lean docstrings carried.
+
+  `haltedStaticFirst`'s `StackUnderflow`-only restriction survives the
+  two new members: `CREATE` is 3-in/1-out and `CREATE2` 4-in/1-out, so
+  both shrink the stack and neither can overflow either. The restriction
+  rests on every member being net stack-decreasing, which is a weaker
+  and more durable fact than the `n`-in/0-out shape it was first stated
+  against.
 
   Worth recording how nearly SELFDESTRUCT's member was missed: an earlier
   draft of `Opcodes/Selfdestruct.lean`'s docstring claimed the crossing
@@ -393,8 +487,8 @@ all and SpecRef produces a stack entry that is not a word.
 - **Area**: `BLOBBASEFEE` (`0x4a`), and the blob-fee computation generally
   (`calculate_blob_gas_price` / `blob_base_fee`).
 - **The two computations agree.** SpecRef's `taylor_exponential`
-  (`taylorAux`, Gas.lean:114) and the extraction's
-  `fake_exponential_word` (`whileFuelM`, Gas.lean:107) are the same
+  (`taylorAux`, SpecRef/Gas.lean:116) and the extraction's
+  `fake_exponential_word` (`whileFuelM`, Evm/Gas.lean:107) are the same
   recurrence — `output += acc; acc := acc * numerator / (denominator * i)`
   from `acc = factor * denominator`, `BLOB_MIN_GASPRICE = 1`, terminating
   at `acc = 0`, dividing by `denominator` at the end. Amsterdam selects
@@ -423,7 +517,7 @@ all and SpecRef produces a stack entry that is not a word.
   `scripts/blob-fee-band.py` reproduces every number above.
 
   Inside that band `blob_base_fee`'s own precondition
-  (`fork ≥ Cancun && excess_blob_gas ≤ limit`, Gas.lean:268) is
+  (`fork ≥ Cancun && excess_blob_gas ≤ limit`, Evm/Gas.lean:268) is
   **satisfied**, so the fatal error is not the configuration guard firing
   — it is the recurrence overflowing a bound the profile claims is safe.
 - **Likely cause**: `blob_fee_word_exponent_limit = 256` (Defs.lean:132)
@@ -451,7 +545,10 @@ all and SpecRef produces a stack entry that is not a word.
   SpecRef would be the one that diverges. `Nat`-typed `U256`/`Uint`
   aliases mean SpecRef cannot express that check, so this is a modelling
   gap rather than a coding slip.
-- **Disposition**: *needs investigation* (the only entry in that class).
+- **Disposition**: *needs investigation* — with MM-2's residual
+  CALL/CREATE-family charges, one of the two entries still in that
+  class, and the only one where the two specifications disagree about
+  whether a block is executable at all.
   The agreement regime is now machine-checked: `blobbasefee_step_equiv`
   (Opcodes/Blobbasefee.lean) proves the two sides equal under
   `hword : price < 2 ^ 256`, which is exactly the band's lower edge. The
@@ -468,7 +565,7 @@ all and SpecRef produces a stack entry that is not a word.
   slot into `ts.storageWrites` whatever it held before, so a store of the
   value already there creates (or refreshes) a write row.
 - **`Evm`**: `execute_sstore` guards the write —
-  `if entry.curr != value then k_sstore …` (Execute.lean:1476) — so the
+  `if entry.curr != value then k_sstore …` (Execute.lean:1477) — so the
   same step leaves `storageTx` untouched. `k_sstore` itself is
   unconditional; the guard is in the handler.
 - **Trigger**: any `SSTORE` whose new value equals the slot's current
@@ -479,7 +576,7 @@ all and SpecRef produces a stack entry that is not a word.
   write, so no execution-visible quantity differs. What differs is
   *presence* in the transaction's write set, and presence is observable
   in principle: SpecRef's `accountHasStorage` reads
-  `storageWrites.get(address)` truthiness (StateTracker.lean:211), the
+  `storageWrites.get(address)` truthiness (StateTracker.lean:215), the
   extraction's `storage_has_writes` reads its overlay, and the
   block-access-list drain at transaction end walks the same structures.
   A slot written with its own value belongs in the BAL — execution-specs
@@ -506,7 +603,7 @@ all and SpecRef produces a stack entry that is not a word.
 - **`Evm`**: `debit_state_gas`'s spill leg goes through
   `state_gas_spill_add`, which `fatal_error ExecutionInvalid`s when the
   *recorded spill* would exceed `state_gas_spill_room`'s ceiling of `2^24`
-  (Gas.lean:549-558 — `eip7825_transaction_gas_limit`, Defs.lean:249), and
+  (Evm/Gas.lean:549-558 — `eip7825_transaction_gas_limit`, Defs.lean:249), and
   `record_refund` goes through `validated_refund_add`, which does the same
   when the running refund leaves `±gas_refund_bound = 199 · (2^64 − 1)`
   (Machine.lean:95, Defs.lean:724).
@@ -516,7 +613,7 @@ all and SpecRef produces a stack entry that is not a word.
 - **Trigger**: none reachable. Spilled state gas is bounded by the gas
   the frame has actually spent, hence by the transaction's gas limit,
   which is `2^24` on **both** sides (EIP-7825/EIP-8037:
-  `TX_MAX_GAS_LIMIT = 16777216`, Transactions.lean:518, and
+  `TX_MAX_GAS_LIMIT = 16777216`, SpecRef/Transactions.lean:518, and
   `eip7825_transaction_gas_limit`); under that same cap a transaction
   affords at most `2^24 / G_sstore_sentry ≈ 7291` `SSTORE`s
   (`G_sstore_sentry = 2301`), each moving the refund by at most
@@ -564,7 +661,7 @@ is one-directional in the same way `StorageRel` is.
   net to the original value, and the extraction never moves anything.
   The transfer *log* agrees too, and that half is now **proven**: SpecRef
   guards `emit_transfer_log` with `beneficiary != originator` in the
-  caller (Interpreter.lean:304 and :382) where the extraction guards
+  caller (SpecRef/Interpreter.lean:304 and :382) where the extraction guards
   `src == dst` inside the emitter, and
   [`transfer_equiv`](../EvmSpecsVerify/Relations/Transfer.lean) pairs the
   two spellings on the case that emits. What differs is only *presence*
@@ -575,7 +672,7 @@ is one-directional in the same way `StorageRel` is.
   `word_is_zero v` as well as `src == dst`, and that branch **is**
   independently reachable: `iSelfdestruct` calls
   `moveEther originator beneficiary originator_balance`
-  (Interpreter.lean:302) with no zero guard, so a `SELFDESTRUCT` from a
+  (SpecRef/Interpreter.lean:302) with no zero guard, so a `SELFDESTRUCT` from a
   zero-balance account reaches `moveEther a b 0`. SpecRef then runs both
   `modifyState`s: `a` survives (it is executing code, so its code hash is
   not empty), but `b`'s write is a no-op tuple, and if `b` is dead the
@@ -692,7 +789,7 @@ and the upstream comment says it is deliberate.
   accumulating". So a reverted `CREATE` leaves
   `txState.createdAccounts ∋ target` behind.
 - **`Evm`**: `created` is a field of the `accountTx` row, and
-  `state_journal_revert` (HostAxioms.lean:2041) restores the whole
+  `state_journal_revert` (HostAxioms.lean:2042) restores the whole
   `accountTx` list, so the flag goes back to `false` with the rest of the
   row.
 - **Trigger**: a `CREATE`/`CREATE2` whose frame later reverts, followed
@@ -706,7 +803,7 @@ and the upstream comment says it is deliberate.
   rolled its code back with everything else, so there is no code to
   execute. A *later* creation at the same address marks `created` on both
   sides. The neighbouring worry is also settled: `generic_create`
-  (Interpreter.lean:561) runs the `accountDeployable` collision test
+  (SpecRef/Interpreter.lean:561) runs the `accountDeployable` collision test
   *before* `process_create_message`, so `markAccountCreated` never fires
   on an occupied target — SpecRef cannot come to believe a pre-existing
   contract was created this transaction.
@@ -795,7 +892,7 @@ account halves agree; the storage halves do not.
   `returned pc = post.evm.pc` (conclusion, inside `BasePost`).
 - **Note (2026-09-07)**: SpecRef's two normal-halt handlers disagree with
   *each other* about this. `iStop` does `pcAdd 1` before clearing
-  `running`; `iSelfdestruct` (Interpreter.lean:282) leaves `pc`
+  `running`; `iSelfdestruct` (SpecRef/Interpreter.lean:282) leaves `pc`
   untouched. That is internal to SpecRef and **unobservable** — a halted
   frame's pc is not read past the frame boundary, which is why `StopPost`
   and `SelfdestructPost` mention neither pc nor stack — but it is worth
@@ -810,10 +907,10 @@ account halves agree; the storage halves do not.
 - **SpecRef**: per-opcode `GasCosts.OPCODE_*` (InstructionsCore.lean:41,
   InstructionsEnv.lean:30) plus a `StateGasCosts` dimension; storage/account constants
   are post-reprice values (e.g. `COLD_STORAGE_ACCESS = 3000`, `STORAGE_WRITE = 10000`,
-  `TX_BASE = 12000` — Gas.lean).
-- **`Evm`**: classic tier constants `G_*` (Gas.lean:425–509: `G_verylow = 3`,
+  `TX_BASE = 12000` — SpecRef/Gas.lean).
+- **`Evm`**: classic tier constants `G_*` (Evm/Gas.lean:425–509: `G_verylow = 3`,
   `G_cold_sload = 2100`, `G_sset = 20000`, …) plus Amsterdam state-gas constants
-  `G_amsterdam_*` (Gas.lean:487–507).
+  `G_amsterdam_*` (Evm/Gas.lean:487–507).
 - **Verified so far (2026-08-12)**: the ALU-family execution-gas constants agree —
   SpecRef `OPCODE_ADD/SUB/AND/… = 3` = `G_verylow`, `OPCODE_MUL/DIV/MOD/… = 5` = `G_low`,
   `OPCODE_ADDMOD/MULMOD = 8` = `G_mid`, `OPCODE_EXP_BASE = 10`/`PER_BYTE = 50` =
@@ -958,7 +1055,7 @@ account halves agree; the storage halves do not.
 ## MM-3: SpecRef dispatch is `partial` — no proof surface
 
 - **Area**: opcode dispatch (`opImplementation`, `executeLoop`, CALL/CREATE family;
-  Interpreter.lean:314 `mutual partial` block).
+  SpecRef/Interpreter.lean:314 `mutual partial` block).
 - **SpecRef**: `partial def` — no equation lemmas, no induction principle; nothing
   about dispatch or the step loop is provable, including `opImplementation … 0x01 = iAdd`.
 - **`Evm`**: fully total (`whileFuelM` with computed fuel; zero `partial def`).
@@ -966,7 +1063,7 @@ account halves agree; the storage halves do not.
   loop-level equivalence are blocked on the SpecRef side.
 - **Not a blocker for a handler-less arm.** INVALID has no handler `def`
   at all — `opImplementation`'s catch-all throws inline
-  (Interpreter.lean:360) — and this entry was read for a while as putting
+  (SpecRef/Interpreter.lean:360) — and this entry was read for a while as putting
   it out of reach alongside the CALL/CREATE family. It does not:
   `throw (.invalidOpcode op)` names nothing in the `partial mutual`
   block, so it runs and `invalid_step_equiv` targets it written out
@@ -991,7 +1088,7 @@ account halves agree; the storage halves do not.
   (3/4/7/7/6/6 against `opcode_stack_effect`'s `inputs`), and
   `call_semantics.takes_value` is set for `Call`/`CallCode` exactly —
   the two handlers carrying an insufficient-balance early exit that
-  pushes `0` without entering a frame (Interpreter.lean:747, :803).
+  pushes `0` without entering a frame (SpecRef/Interpreter.lean:747, :803).
   `DelegateCall` inherits the caller's value and `StaticCall` has none,
   so neither can fail that way and neither has the branch.
 - **Disposition**: *deliberate scope restriction* here + candidate upstream request to

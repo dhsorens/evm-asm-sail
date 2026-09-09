@@ -27,9 +27,12 @@ extends memory, and **then** tests `message.isStatic`. The extraction's
   fires before `guard_static`, so underflow wins on both sides and the
   kinds agree.
 
-LOG is the only outlier among the four write-guarded opcodes; SSTORE,
-TSTORE and SELFDESTRUCT check static first on both sides. SpecRef matches
-upstream here — EELS' `log.py` charges before raising.
+LOG is the only handler whose SpecRef guard follows its *charge*, which
+is what makes this `outOfGas` ↔ `WriteProtection` crossing unique to it.
+It is not the only handler whose guard *position* disagrees: CREATE and
+CREATE2 disagree in MM-14's direction. SpecRef matches upstream here —
+EELS' `log.py` charges before raising. The ledger's MM-11 entry tables
+all seven of SpecRef's static-guard sites.
 
 ## The topic operands
 

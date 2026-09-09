@@ -317,6 +317,73 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
       now fails the refresh on any row that claims a proof and yields no
       theorem.
 
+- [x] `docs/mismatches.md` audited against both models, and guarded. It
+      was the last living artifact nothing checked, and the audit found
+      one wrong claim repeated in five places plus eight citations that
+      pointed at the wrong line.
+
+      **The claim.** MM-11 said LOG was "the only outlier" among "four
+      write-guarded opcodes", and MM-14 said its class was "now closed —
+      those are all three of its members". SpecRef throws
+      `.writeInStaticContext` at **seven** sites, not four: `iLogN`,
+      `iSstore`, `iTstore`, `iSelfdestruct`, `iCreate`, `iCreate2` and
+      `iCall`. Counting the guard sites in the source rather than the
+      opcodes with landed proofs is what turns up the last three — they
+      are MM-3-blocked, so an opcode-by-opcode sweep never reaches them.
+      Two of them are new MM-14 members: `iCreate`/`iCreate2` guard
+      before their pops while the extraction's `run_create` guards after
+      them, which is this entry's crossing exactly. So MM-14 has five
+      members, three provable today. The same miscount had propagated
+      into three Lean docstrings (`Relations/Outcome.lean`,
+      `Representation/EvmGas.lean`, `Opcodes/Log.lean`), one more
+      (`Opcodes/Tstore.lean`) and PROGRESS itself; all corrected.
+
+      Two findings are **negative results**, which is why they were worth
+      chasing. `iCall` is the one place the two orders already agree —
+      both pop all seven operands and then test the same condition before
+      any charge — and CALLCODE agrees for a second reason
+      (`call_semantics .CallCode` sets `transfers_value := false`, so the
+      extraction's test is dead where SpecRef has no guard at all). And
+      `haltedStaticFirst`'s `StackUnderflow`-only restriction survives
+      the two new members, because both shrink the stack; the constructor
+      now rests on "every member is net stack-decreasing" rather than on
+      the `n`-in/0-out shape it was first stated against.
+
+      **The citations.** `iLogN` was cited at `InstructionsCore.lean:404`
+      in two entries; 404 is inside `iExchange`, a *different* opcode and
+      itself the subject of MM-10. Five more were off by one to four
+      lines onto blank lines and docstrings (`EvmError.isHalt`,
+      `accountHasStorage`, `state_journal_revert`, `taylorAux`,
+      `execute`), and `charge` and the SSTORE write guard were off by
+      one. Twenty more were bare basenames that resolve in **both**
+      models — `Gas.lean`, `Interpreter.lean`, `Transactions.lean` — the
+      hazard the assumptions audit found one level up; MM-15 cited
+      `Gas.lean:114` and `Gas.lean:107` in one sentence meaning two
+      different files. All are now path-qualified.
+
+      Smaller: MM-15 claimed to be "the only entry" in the
+      needs-investigation class, which MM-2 has also been in all along;
+      MM-13 called `restoreTxState` a snapshot; and the header's
+      disposition vocabulary listed five words no entry uses while
+      missing four that four entries do — the matrix audit's
+      legend-drift class, one level down.
+
+      One thing the audit *added* rather than corrected: the extraction's
+      `pop_log_topics` carries the Sail refinement type `count ≤ 4`,
+      which the Lean backend erases into a comment. So MM-12's catch-all
+      is filler the backend must emit to total the `match`, not a
+      considered choice about `n ≥ 5` — a sharper justification for
+      `logn_step_equiv`'s `hn` than the decoders' range.
+
+      `check_mismatch_citations` and `check_mismatch_dispositions` close
+      both classes: a citation must resolve to exactly one file across
+      the three trees, and a line cited next to a backticked name may not
+      sit above that name's declaration. The rule is deliberately weaker
+      than "inside the declaration" — the ledger cites call sites, and a
+      call site sits inside some *other* declaration (MM-9 cites
+      `refill_frame_state_gas` where `process_message` calls it) — but it
+      catches every defect found here.
+
 ### M2 — Shape validators across machinery (next tranche)
 
 **Where M2 stands (2026-09-08): 81 of 88 AST constructors are `full`.**
@@ -813,10 +880,13 @@ Residual for the remaining `unstated` rows:
   It was the last *handler* row outside the MM-3-blocked CALL/CREATE
   family (INVALID, below, has no handler to be a row for).
 
-  What it closes. **MM-14** is now a closed class: SELFDESTRUCT was its
-  third and last member, and the underflow outcome pairs SpecRef's
-  `.writeInStaticContext` with the extraction's `StackUnderflow` through
-  `haltedStaticFirst`. **MM-2's** last non-CALL/CREATE subset is verified
+  What it closes. **MM-14** gains its third *provable* member: the
+  underflow outcome pairs SpecRef's `.writeInStaticContext` with the
+  extraction's `StackUnderflow` through `haltedStaticFirst`. (This
+  originally read "MM-14 is now a closed class — SELFDESTRUCT was its
+  third and last member". The mismatch-ledger audit found two more,
+  `iCreate` and `iCreate2`; they are MM-3-blocked, which is why counting
+  landed proofs missed them.) **MM-2's** last non-CALL/CREATE subset is verified
   — the four constants agree, and `sdChargedEvm_gas` goes further and
   matches both gas *dimensions* after both charges. **MM-18** was already
   closed by proof; **MM-19** (the non-wrap bound) and **MM-20** (the
