@@ -130,6 +130,27 @@ needs no `BitVec` bridge (bitwise ops still do, on the `Evm` side).
 - [x] `Relations/Base.lean` + `Opcodes/Shapes/Alu.lean` — `BasePost` and wf lemmas
       extracted so Binop/Unop/Ternop are siblings (a shape file never imports
       another). Blueprint for later Env/Memory Posts.
+- [x] Every underflow outcome routed through `runS_execute_underflow`:
+      **31 of the 34** hand-written per-opcode proofs replaced by one
+      application each, −194 lines net, statements untouched so no call
+      site moved. Worth recording that the 34 turned out to be
+      *uniform* — three distinct conclusion shapes, differing only in
+      whether the memory slice was written `mem` or `⟨off, len, msf⟩` —
+      so there was no divergent variant hiding in the duplication.
+
+      The three exceptions are exactly the EIP-663 trio, and the reason
+      is the interesting part: `DUPN`/`SWAPN`/`EXCHANGE` compute their
+      stack effect in `SailM` rather than returning a `pure` pair — they
+      test `deep_stack_immediate_valid` and decode the immediate. An
+      **invalid** immediate yields `(0, 0)`, which *passes*
+      `validate_stack` deliberately, so the fault surfaces as the
+      handler's `InvalidOpcode` instead of a stack fault. That is MM-10's
+      mechanism, and it is now recorded as the generic lemma's scope
+      limit rather than left as three unexplained stragglers.
+
+      Also 29 doc anchors, all shifted by the deletions and all caught by
+      `check_anchors` rather than shipped.
+
 - [x] The CALL/CREATE family's **extraction half**, and
       `runS_execute_underflow`. The six remaining rows are blocked on
       *SpecRef's* side only: all six handlers are `partial def`, so there

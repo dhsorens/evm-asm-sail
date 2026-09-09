@@ -60,6 +60,20 @@ Methodology stays in `evm-spec-comparison`; coverage status stays in `docs/`.
   mid-bracket — keep in-`rw` proofs single-line (`by tac₁; tac₂`) or hoist a
   `have` above the `rw`.
 
+## Underflow is one lemma, not one per opcode
+
+`runS_execute_underflow` (Representation/EvmGas.lean) covers every opcode:
+`execute` reads the stack effect, runs the hoisted `validate_stack`, and
+on failure returns the carried tuple with gas zeroed — none of it
+opcode-dependent. A slice needs only its `opcode_stack_effect` equation.
+Do not write a bespoke underflow proof.
+
+The exception is the EIP-663 trio (`DUPN`/`SWAPN`/`EXCHANGE`), whose
+stack effect is a `SailM` computation decoding the immediate rather than
+a `pure` pair — and whose invalid-immediate case yields `(0, 0)` on
+purpose so the fault surfaces as `InvalidOpcode` (MM-10) instead of a
+stack fault.
+
 ## `do`-block join points defeat term-level factoring
 
 Two shapes of an extraction function that share a tail cannot share a
